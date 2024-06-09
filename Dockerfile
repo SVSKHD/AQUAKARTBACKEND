@@ -18,4 +18,4 @@ COPY . .
 EXPOSE 5300
 
 # Set the command to start the app with pm2
-CMD ["npm ", "start", "index.js", "--name", "app"]
+CMD ["pm2-runtime", "start", "index.js", "--name", "app"]
