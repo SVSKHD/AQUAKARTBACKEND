@@ -16,6 +16,10 @@ app.get('/', (req, res) => {
   res.json({"status":'Hello Aquakart'});
 });
 
+app.get('/v1', (req, res) => {
+    res.json({"status":'Hello Aquakart v1'});
+  });
+
 const PORT = process.env.PORT
 // Start server
 app.listen(PORT, () => {
