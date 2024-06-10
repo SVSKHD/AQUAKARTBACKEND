@@ -1,42 +1,7 @@
-import mongoose, { ObjectId } from "mongoose";
+import mongoose from "mongoose";
 
-const AquaProductSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, "please provide product name"],
-    trim: true,
-    maxlength: [120, "Product name should not be more than 120 characters"],
-  },
-  ShortName: {
-    type: String,
-  },
-  code: {
-    type: String,
-  },
-  discountPriceStatus: {
-    type: Boolean,
-    default: false,
-  },
-  discountPrice: {
-    type: Number,
-  },
-  keywords: {
-    type: String,
-  },
-  price: {
-    type: Number,
-    required: [true, "please provide product price"],
-    maxlength: [6, "Product price should not be more than 6 digits"],
-  },
-  description: {
-    type: String,
-    required: [true, "please provide product description"],
-  },
-  notes: {
-    type: String,
-    maxlength: [300, "Product Notes must not exceed 300"],
-  },
-  photos: [
+const BlogSchema = new mongoose.Schema({
+  titleImages: [
     {
       id: {
         type: String,
@@ -48,7 +13,24 @@ const AquaProductSchema = new mongoose.Schema({
       },
     },
   ],
-  arPhotos: [
+  title: {
+    type: String,
+    required: [true, "please provide product name"],
+    trim: true,
+    maxlength: [120, "Product name should not be more than 120 characters"],
+  },
+  description: {
+    type: String,
+    required: [true, "please provide product description"],
+  },
+  keywords: {
+    type: String,
+  },
+  notes: {
+    type: String,
+    maxlength: [300, "Product Notes must not exceed 300"],
+  },
+  photos: [
     {
       id: {
         type: String,
@@ -68,14 +50,9 @@ const AquaProductSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     ref: "AquaSubCategory",
   },
-  blog: {
+  product: {
     type: mongoose.Schema.ObjectId,
-    ref: "AquaBlog",
-  },
-  //this field was updated in order videos later
-  stock: {
-    type: Number,
-    required: [true, "please add a number in stock"],
+    ref: "AquaProduct",
   },
   brand: {
     type: String,
@@ -89,35 +66,36 @@ const AquaProductSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  product: {
+    type: mongoose.Schema.ObjectId,
+    ref: "AquaProduct",
+  },
   reviews: [
     {
       user: {
         type: mongoose.Schema.ObjectId,
         ref: "User",
+        required: true,
       },
       name: {
         type: String,
+        required: true,
       },
       rating: {
         type: Number,
+        required: true,
       },
       comment: {
         type: String,
+        required: true,
       },
     },
   ],
-  user: {
-    type: mongoose.Schema.ObjectId,
-    ref: "User",
-  },
   createdAt: {
     type: Date,
-    default: Date.now(),
+    default: Date.now,
   },
 });
 
-const AquaProduct =
-  mongoose.models.AquaProduct ||
-  mongoose.model("AquaProduct", AquaProductSchema);
-
-export default AquaProduct;
+module.exports =
+  mongoose.models.AquaBlog || mongoose.model("AquaBlog", BlogSchema);
