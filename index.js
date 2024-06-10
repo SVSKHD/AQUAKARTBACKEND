@@ -1,26 +1,9 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import cors from 'cors';
-import morgan from 'morgan';
-import dotenv from "dotenv"
+import app from './app.js';
+import mongooseConnect from './src/utils/db.js';
 
-const app = express();
+const PORT = process.env.PORT || 3000; // Default to port 3000 if PORT is not set
 
-// Middleware
-app.use(bodyParser.json());
-app.use(cors());
-app.use(morgan('dev'));
-dotenv.config()
-// Basic route
-app.get('/', (req, res) => {
-  res.json({"status":'Hello Aquakart'});
-});
-
-app.get('/v1', (req, res) => {
-    res.json({"status":'Hello Aquakart v1'});
-  });
-
-const PORT = process.env.PORT
+mongooseConnect(process.env.DB_URL)
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
