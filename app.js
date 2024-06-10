@@ -24,6 +24,6 @@ app.get('/v1', (req, res) => {
   res.json({ "status": 'Hello Aquakart v1' });
 });
 
-app.use('/v1/user', userRoutes)
+app.use('/v1', userRoutes)
 
 export default app;
