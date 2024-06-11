@@ -18,7 +18,9 @@ const userLogin = async (req, res) => {
     }
 
     const token = user.generateAuthToken();
-    const userDetails = await AquaEcomUser.findById(user._id).select("-password");
+    const userDetails = await AquaEcomUser.findById(user._id).select(
+      "-password",
+    );
     res.json({ token, user: userDetails });
   } catch (error) {
     console.error("Error during user login:", error);
@@ -46,7 +48,9 @@ const userRegister = async (req, res) => {
 
     await newUser.save();
     const token = newUser.generateAuthToken();
-    const userDetails = await AquaEcomUser.findById(newUser._id).select("-password");
+    const userDetails = await AquaEcomUser.findById(newUser._id).select(
+      "-password",
+    );
     res.status(201).json({ token, user: userDetails });
   } catch (error) {
     console.error("Error during user registration:", error);
@@ -84,7 +88,7 @@ const updateDetails = async (req, res) => {
     const user = await AquaEcomUser.findOneAndUpdate(
       { email },
       { $set: newDetails },
-      { new: true }
+      { new: true },
     );
 
     if (!user) {
