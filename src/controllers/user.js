@@ -1,6 +1,9 @@
 import AquaEcomUser from "../models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import sendEmail from "../notifications/email/send-email.js";
+import signupEmail from "../notifications/email/signupTemplate.js";
+import forgotPassword from "../notifications/email/forgotPassword.js";
 
 // User Login
 const userLogin = async (req, res) => {
@@ -51,6 +54,13 @@ const userRegister = async (req, res) => {
     const userDetails = await AquaEcomUser.findById(newUser._id).select(
       "-password",
     );
+    const emailContent = signupEmail(userDetails.email); // This function should return the HTML content of the email
+    const emailResult = await sendEmail({
+      email: userDetails.email,
+      subject: "Welcome to AquaKart!",
+      message: "Thanks for signing up with us!",
+      content: emailContent,
+    });
     res.status(201).json({ token, user: userDetails });
   } catch (error) {
     console.error("Error during user registration:", error);

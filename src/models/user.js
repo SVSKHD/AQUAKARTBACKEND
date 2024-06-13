@@ -54,6 +54,9 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  lastDetailsUpdatedDate:{
+    type:Date
+  },
   forgotPasswordDate: {
     type: Date,
   },
@@ -86,6 +89,7 @@ const UserSchema = new mongoose.Schema({
     gstPhone: { type: Number },
     gstAddres: { type: String },
   },
+  
   cart: [
     {
       // Define the structure of items in the cart
