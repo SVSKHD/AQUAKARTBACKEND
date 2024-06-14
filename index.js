@@ -1,6 +1,6 @@
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
-import cloudinary from "cloudinary"
+import cloudinary from "cloudinary";
 
 const PORT = process.env.PORT || 3000; // Default to port 3000 if PORT is not set
 

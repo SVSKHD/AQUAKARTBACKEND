@@ -1,22 +1,22 @@
 const orderEmail = (email, orderItems, paymentType, estimatedDelivery) => {
-    const orderItemsHTML = orderItems
-      .map(
-        (item) => `
+  const orderItemsHTML = orderItems
+    .map(
+      (item) => `
         <tr>
           <td>${item.name}</td>
           <td>${item.quantity} x ${item.price}</td>
           <td>${item.quantity * item.price}</td>
         </tr>
       `,
-      )
-      .join("");
-  
-    const totalAmount = orderItems.reduce(
-      (acc, item) => acc + item.quantity * item.price,
-      0,
-    );
-  
-    return `
+    )
+    .join("");
+
+  const totalAmount = orderItems.reduce(
+    (acc, item) => acc + item.quantity * item.price,
+    0,
+  );
+
+  return `
         <!DOCTYPE html>
         <html lang="en">
           <head>
@@ -89,6 +89,6 @@ const orderEmail = (email, orderItems, paymentType, estimatedDelivery) => {
           </body>
         </html>
       `;
-  };
-  
-  export default orderEmail;
+};
+
+export default orderEmail;

@@ -1,5 +1,5 @@
 const forgotPassword = (email, otp) => {
-    return `
+  return `
         <!DOCTYPE html>
         <html lang="en">
           <head>
@@ -73,6 +73,6 @@ const forgotPassword = (email, otp) => {
           </body>
         </html>
       `;
-  };
-  
-  export default forgotPassword;
+};
+
+export default forgotPassword;

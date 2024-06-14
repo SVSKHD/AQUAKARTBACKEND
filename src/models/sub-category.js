@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import AquaCategory from "./category";
 
 const AquaSubCategorySchema = new mongoose.Schema(
   {

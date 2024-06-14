@@ -1,5 +1,5 @@
 const signupEmail = (email) => {
-    return `
+  return `
         <!DOCTYPE html>
         <html lang="en">
           <head>
@@ -63,6 +63,6 @@ const signupEmail = (email) => {
           </body>
         </html>
       `;
-  };
-  
-  export default signupEmail;
+};
+
+export default signupEmail;
