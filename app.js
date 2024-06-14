@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import userRoutes from "./src/routes/user.js";
 import categoryRoutes from "./src/routes/category.js"
 import subCategoryRoutes from "./src/routes/sub-category.js"
+import productRoutes from "./src/routes/product.js"
 
 dotenv.config(); // Load environment variables
 
@@ -25,5 +26,6 @@ app.get("/v1", (req, res) => {
 app.use("/v1", userRoutes);
 app.use("/v1", categoryRoutes)
 app.use("/v1", subCategoryRoutes)
+app.use("/v1", productRoutes)
 
 export default app;
