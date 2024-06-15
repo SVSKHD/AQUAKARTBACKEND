@@ -97,5 +97,6 @@ const BlogSchema = new mongoose.Schema({
   },
 });
 
-module.exports =
-  mongoose.models.AquaBlog || mongoose.model("AquaBlog", BlogSchema);
+const AquaBlog = mongoose.models.AquaBlog || mongoose.model("AquaBlog", BlogSchema);
+
+export default AquaBlog
