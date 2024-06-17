@@ -106,12 +106,11 @@ const deleteCategory = async (req, res) => {
   }
 };
 
-
 const CategoryOperations = {
-addCategory,
-getAllCategories,
-getCategory,
-updateCategory,
-deleteCategory
-}
-export default CategoryOperations
+  addCategory,
+  getAllCategories,
+  getCategory,
+  updateCategory,
+  deleteCategory,
+};
+export default CategoryOperations;

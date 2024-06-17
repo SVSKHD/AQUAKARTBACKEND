@@ -5,12 +5,12 @@ const addSubCategory = async (req, res) => {
   try {
     const { title, description, photos, keywords, category } = req.body;
     if (!photos || photos.length === 0) {
-      throw new Error('No photos provided');
+      throw new Error("No photos provided");
     }
     const uploadedPhotos = [];
     for (const photo of photos) {
       const result = await cloudinary.v2.uploader.upload(photo, {
-        folder: 'subcategories', // You can specify the folder in Cloudinary
+        folder: "subcategories", // You can specify the folder in Cloudinary
       });
       uploadedPhotos.push({
         id: result.public_id,
@@ -27,17 +27,17 @@ const addSubCategory = async (req, res) => {
     await newSubCategory.save();
     return res.status(201).json({ success: true, data: newSubCategory });
   } catch (error) {
-    console.error('Error adding subcategory:', error);
+    console.error("Error adding subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const getAllSubCategories = async (req, res) => {
   try {
-    const subcategories = await AquaSubCategory.find({}).populate('category');
+    const subcategories = await AquaSubCategory.find({}).populate("category");
     return res.status(200).json({ success: true, data: subcategories });
   } catch (error) {
-    console.error('Error getting subcategories:', error);
+    console.error("Error getting subcategories:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -45,13 +45,15 @@ const getAllSubCategories = async (req, res) => {
 const getSubCategory = async (req, res) => {
   const { id } = req.params;
   try {
-    const subcategory = await AquaSubCategory.findById(id).populate('category');
+    const subcategory = await AquaSubCategory.findById(id).populate("category");
     if (!subcategory) {
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
     return res.status(200).json({ success: true, data: subcategory });
   } catch (error) {
-    console.error('Error getting subcategory:', error);
+    console.error("Error getting subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -65,7 +67,7 @@ const updateSubCategory = async (req, res) => {
       const uploadedPhotos = [];
       for (const photo of photos) {
         const result = await cloudinary.v2.uploader.upload(photo, {
-          folder: 'subcategories',
+          folder: "subcategories",
         });
         uploadedPhotos.push({
           id: result.public_id,
@@ -74,13 +76,19 @@ const updateSubCategory = async (req, res) => {
       }
       updatedData.photos = uploadedPhotos;
     }
-    const subcategory = await AquaSubCategory.findByIdAndUpdate(id, updatedData, { new: true }).populate('category');
+    const subcategory = await AquaSubCategory.findByIdAndUpdate(
+      id,
+      updatedData,
+      { new: true },
+    ).populate("category");
     if (!subcategory) {
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
     return res.status(200).json({ success: true, data: subcategory });
   } catch (error) {
-    console.error('Error updating subcategory:', error);
+    console.error("Error updating subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -90,11 +98,13 @@ const deleteSubCategory = async (req, res) => {
   try {
     const subcategory = await AquaSubCategory.findByIdAndDelete(id);
     if (!subcategory) {
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
     return res.status(200).json({ success: true, data: subcategory });
   } catch (error) {
-    console.error('Error deleting subcategory:', error);
+    console.error("Error deleting subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -107,4 +117,4 @@ const SubCategoryOperations = {
   deleteSubCategory,
 };
 
-export default SubCategoryOperations
+export default SubCategoryOperations;
