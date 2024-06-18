@@ -12,6 +12,7 @@ import blogRoutes from "./src/routes/blog.js";
 import phonePeGatewayRoutes from "./src/routes/phonepegatway.js";
 // crm route imports
 import invoiceRoutes from "./src/routes/crm/invoice.js";
+import paymentLinkRoutes from "./src/routes/crm/paymentLink.js"
 
 dotenv.config(); // Load environment variables
 
@@ -34,6 +35,7 @@ app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 // crm routes
 app.use("/v1/crm", invoiceRoutes);
+app.use("/v1/crm", paymentLinkRoutes)
 //get all users for admin
 //get all orders
 //get ecom status
