@@ -10,6 +10,7 @@ router.get("/category-status", (req, res) => {
 
 router.get("/allcategories", CategoryOperations.getAllCategories);
 router.get("/category/:id", CategoryOperations.getCategory);
+router.get("/category/title/:title",CategoryOperations.getCategoryByTitle)
 router.get("/category-remove/:id", CategoryOperations.deleteCategory);
 router.post(
   "/category-add",

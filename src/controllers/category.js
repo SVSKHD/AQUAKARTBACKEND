@@ -59,6 +59,27 @@ const getCategory = async (req, res) => {
   }
 };
 
+const getCategoryByTitle = async (req, res) => {
+  const { title } = req.params;
+  console.log("Category title:", title);
+
+  try {
+    const category = await AquaCategory.findOne({ title });
+    if (!category) {
+      return res.status(404).json({ success: false, message: "Category not found" });
+    }
+    // Uncomment the next line if you want to fetch related products
+    // const products = await AquaProduct.find({ category: category._id });
+    return res.status(200).json({ success: true, data: category });
+  } catch (error) {
+    console.error("Error getting category:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+
+
 const updateCategory = async (req, res) => {
   const { id } = req.params;
   const { title, description, photos, keywords } = req.body;
@@ -112,6 +133,7 @@ const CategoryOperations = {
   addCategory,
   getAllCategories,
   getCategory,
+  getCategoryByTitle,
   updateCategory,
   deleteCategory,
 };
