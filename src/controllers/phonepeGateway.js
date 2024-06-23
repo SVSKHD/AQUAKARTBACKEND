@@ -32,7 +32,7 @@ const payPhonepe = async (req, res) => {
 
     const merchantTransactionId = passedPayload.transactionId;
     const data = {
-      merchantId: process.env.MERCHANTID,
+      merchantId: process.env.PHONEPE_MERCHANTID,
       merchantTransactionId,
       merchantUserId: passedPayload.user,
       name: getUserById.name || createUserName(getUserById.email),

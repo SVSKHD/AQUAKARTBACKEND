@@ -1,3 +1,6 @@
+// Load environment variables first
+import './config.js';
+
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
 import cloudinary from "cloudinary";
@@ -10,6 +13,7 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
