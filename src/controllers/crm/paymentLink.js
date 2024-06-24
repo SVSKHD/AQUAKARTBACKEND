@@ -31,9 +31,9 @@ const createPaymentLink = async (req, res) => {
       merchantUserId: email,
       name: name,
       amount: amount * 100, // Amount in paise
-      redirectUrl: `https://yourdomain.com/api/order/${merchantTransactionId}`,
+      redirectUrl: `https://aquakart.co.in/${merchantTransactionId}`,
       redirectMode: "POST",
-      callbackUrl: `https://yourdomain.com/api/order/${merchantTransactionId}`,
+      callbackUrl: `https://aquakart.co.in/${merchantTransactionId}`,
       mobileNumber: phone,
       paymentInstrument: {
         type: "PAY_PAGE",
