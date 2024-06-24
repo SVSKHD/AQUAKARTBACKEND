@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import AquaEcomUser from "../models/user.js";
+import AquaAdminUser from "../models/crm/adminUser.js";
 
 const isLoggedIn = async (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -37,7 +38,7 @@ const checkAdmin = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
-    const user = await AquaEcomUser.findById(decoded._id);
+    const user = await AquaAdminUser.findById(decoded._id);
 
     if (!user) {
       return res.status(401).json({ message: "User not found" });
