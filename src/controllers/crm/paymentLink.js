@@ -3,38 +3,34 @@ import crypto from "crypto";
 import axios from "axios";
 
 const createPaymentLink = async (req, res) => {
-  const { user, paymentDetails } = req.body;
+  const { name, phone, email, amount } = req.body;
+
   try {
-    if (!user) {
-      return res
-        .status(404)
-        .send({ message: "user information is required", success: false });
+    if (!name || !phone || !email || !amount) {
+      return res.status(400).send({
+        message: "Name, phone, email, and amount are required",
+        success: false,
+      });
     }
 
-    let order = new AquaOrder({
-      ...passedPayload,
-      userName:
-        getUserById.firstName ||
-        getUserById.name ||
-        createUserName(getUserById.email),
-    });
-    await order.save(); // Save the order with proper await
+    // Create a unique transaction ID
+    const merchantTransactionId = `TRANS_${Date.now()}`;
 
-    const merchantTransactionId = passedPayload.transactionId;
     const data = {
       merchantId: process.env.MERCHANTID,
       merchantTransactionId,
-      merchantUserId: passedPayload.user,
-      name: paymentDetails.user.name,
-      amount: paymentDetails.totalAmount * 100,
-      redirectUrl: `https://aquakart.co.in/api/order/${merchantTransactionId}`,
+      merchantUserId: email,
+      name: name,
+      amount: amount * 100, // Amount in paise
+      redirectUrl: `https://yourdomain.com/api/order/${merchantTransactionId}`,
       redirectMode: "POST",
-      callbackUrl: `https://aquakart.co.in/api/order/${merchantTransactionId}`,
-      mobileNumber: passedPayload.number,
+      callbackUrl: `https://yourdomain.com/api/order/${merchantTransactionId}`,
+      mobileNumber: phone,
       paymentInstrument: {
         type: "PAY_PAGE",
       },
     };
+
     const payload = JSON.stringify(data);
     const payloadMain = Buffer.from(payload).toString("base64");
     const keyIndex = 1;
@@ -57,8 +53,20 @@ const createPaymentLink = async (req, res) => {
     };
 
     const response = await axios.request(options);
+    const responseData = response.data.data.instrumentResponse.redirectInfo;
+
     return res.json({
-      url: response.data.data.instrumentResponse.redirectInfo.url,
+      success: true,
+      code: "SUCCESS",
+      message: "Your request has been successfully completed.",
+      data: {
+        transactionId: merchantTransactionId,
+        amount: amount,
+        merchantId: process.env.MERCHANTID,
+        upiIntent: responseData.upiIntent,
+        payLink: responseData.url,
+        mobileNumber: phone,
+      },
     });
   } catch (error) {
     console.error(error);
