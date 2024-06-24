@@ -1,14 +1,15 @@
 import AquaPayment from "../../models/crm/paymentLink.js";
 import crypto from "crypto";
 import axios from "axios";
+import mongoose from "mongoose";
 
 const createPaymentLink = async (req, res) => {
-  const { name, phone, email, amount } = req.body;
+  const { name, phone, email, amount, invoiceId } = req.body;
 
   try {
-    if (!name || !phone || !email || !amount) {
+    if (!name || !phone || !email || !amount || !invoiceId) {
       return res.status(400).send({
-        message: "Name, phone, email, and amount are required",
+        message: "Name, phone, email, amount, and invoiceId are required",
         success: false,
       });
     }
@@ -53,19 +54,39 @@ const createPaymentLink = async (req, res) => {
     };
 
     const response = await axios.request(options);
-    const responseData = response.data.data.instrumentResponse.redirectInfo;
+    const responseData = response.data.data;
+
+    // Save the payment link to the database
+    const newPayment = new AquaPayment({
+      invoiceId: mongoose.Types.ObjectId(invoiceId),
+      paymentLink: responseData.payLink,
+      paymentStatus: false,
+      paymentinfo: {
+        transactionId: responseData.transactionId,
+        amount: responseData.amount,
+        merchantId: responseData.merchantId,
+        upiIntent: responseData.upiIntent,
+        mobileNumber: responseData.mobileNumber,
+      },
+      userDetails: {
+        phone: phone,
+        name: name,
+      },
+    });
+
+    await newPayment.save();
 
     return res.json({
       success: true,
       code: "SUCCESS",
       message: "Your request has been successfully completed.",
       data: {
-        transactionId: merchantTransactionId,
-        amount: amount,
-        merchantId: process.env.MERCHANTID,
+        transactionId: responseData.transactionId,
+        amount: responseData.amount / 100, // Converting back to original amount
+        merchantId: responseData.merchantId,
         upiIntent: responseData.upiIntent,
-        payLink: responseData.url,
-        mobileNumber: phone,
+        payLink: responseData.payLink,
+        mobileNumber: responseData.mobileNumber,
       },
     });
   } catch (error) {
