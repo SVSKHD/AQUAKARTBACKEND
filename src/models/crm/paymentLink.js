@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 
 const AquaPaymentSchema = new mongoose.Schema({
-  invoiceId: {
-    type: mongoose.Schema.ObjectId,
+  referenceId: {
+    type: String,
     ref: "AquaInvoice",
+  },
+  invoiceId: {
+    type: String,
     required: true,
   },
   paymentLink: {

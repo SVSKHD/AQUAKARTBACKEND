@@ -8,7 +8,7 @@ router.get("/payment-api-link-status", (req,res)=>{
     res.json({"message":"Aquakart v1 status is active"})
 })
 
-router.post("/phonepe/payment-link",PaymentOperations.payPhonepe)
+router.post("/phonepe/payment-link",PaymentOperations.createPaymentLink)
 
 
 
