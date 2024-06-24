@@ -4,7 +4,7 @@ import paymentOperations from "../../controllers/phonepeGateway.js"
 
 
 const router = express.Router()
-router.get("/status", (req,res)=>{
+router.get("/payment-api-link-status", (req,res)=>{
     res.json({"message":"Aquakart v1 status is active"})
 })
 
