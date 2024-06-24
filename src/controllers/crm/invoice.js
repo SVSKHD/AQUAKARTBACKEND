@@ -41,8 +41,8 @@ const deleteInvoice = async (req, res) => {
 };
 const getInvoices = async (req, res) => {
   try {
-    const invoices = await AquaInvoice.find({});
-    return res.status(200).json({ statu: true, data: invoices });
+    const invoices = await AquaInvoice.find({}).sort({ date: -1 });
+    return res.status(200).json({ status: true, data: invoices });
   } catch (error) {
     return res
       .status(400)
