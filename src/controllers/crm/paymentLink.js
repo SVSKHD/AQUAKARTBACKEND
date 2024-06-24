@@ -14,6 +14,14 @@ const createPaymentLink = async (req, res) => {
       });
     }
 
+    // Validate invoiceId
+    if (!mongoose.Types.ObjectId.isValid(invoiceId)) {
+      return res.status(400).send({
+        message: "Invalid invoiceId",
+        success: false,
+      });
+    }
+
     // Create a unique transaction ID
     const merchantTransactionId = `TRANS_${Date.now()}`;
 
@@ -38,6 +46,11 @@ const createPaymentLink = async (req, res) => {
     const string = payloadMain + "/pg/v1/pay" + process.env.PHONEPE_KEY;
     const sha256 = crypto.createHash("sha256").update(string).digest("hex");
     const checksum = sha256 + "###" + keyIndex;
+
+    // Log the payload for debugging purposes
+    console.log("Payload:", payload);
+    console.log("Payload Main (Base64):", payloadMain);
+    console.log("Checksum:", checksum);
 
     const prod_URL = "https://api.phonepe.com/apis/hermes/pg/v1/pay";
     const options = {
