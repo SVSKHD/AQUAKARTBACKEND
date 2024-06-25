@@ -42,7 +42,7 @@ app.use("/v1/notify", SendWhatsAppMessage);
 // crm routes
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
-app.use("/v1/crm", AdminCategoryRoutes)
+// app.use("/v1/crm", AdminCategoryRoutes)
 app.use("/v1/crm/user" , AdminUserRoutes)
 // get all users for admin
 // get all orders

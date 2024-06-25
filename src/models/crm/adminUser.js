@@ -110,7 +110,7 @@ AdminUserSchema.methods.generateAuthToken = function () {
   const token = jwt.sign(
     { _id: this._id, email: this.email, role: this.role },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "1h" }
   );
   return token;
 };
