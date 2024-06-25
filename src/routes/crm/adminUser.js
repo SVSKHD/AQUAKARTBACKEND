@@ -10,7 +10,7 @@ router.get("/status", (req,res)=>{
 
 router.post("/signup",AquaAdminUserOperations.signup)
 router.post("/login", AquaAdminUserOperations.login)
-// router.post("/create-user",userAuth.checkAdmin)
+router.post("/create-user",userAuth.checkAdmin)
 
 
 export default router
