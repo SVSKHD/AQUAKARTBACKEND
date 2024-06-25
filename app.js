@@ -18,6 +18,7 @@ import SendWhatsAppMessage from "./src/routes/sendWhatsppMessage.js";
 import invoiceRoutes from "./src/routes/crm/invoice.js";
 import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
 import AdminUserRoutes from "./src/routes/crm/adminUser.js"
+import AdminCategoryRoutes from "./src/routes/crm/category.js"
 const app = express();
 
 // Middleware
@@ -41,6 +42,7 @@ app.use("/v1/notify", SendWhatsAppMessage);
 // crm routes
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
+app.use("/v1/crm", AdminCategoryRoutes)
 app.use("/v1/crm/user" , AdminUserRoutes)
 // get all users for admin
 // get all orders

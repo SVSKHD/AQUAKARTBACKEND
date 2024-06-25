@@ -1,5 +1,6 @@
 import express from "express"
 import AquaAdminUserOperations from "../../controllers/crm/adminUser.js"
+import userAuth from "../../middleware/user.js"
 
 
 const router = express.Router()
