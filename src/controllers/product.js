@@ -218,12 +218,13 @@ const getProduct = async (req, res) => {
   const { id } = req.params;
   try {
     const product = await AquaProduct.findById(id).populate("category");
+    const relatedProducts = await AquaProduct.find({category:product.category})
     if (!product) {
       return res
         .status(404)
         .json({ success: false, message: "product not found" });
     }
-    return res.status(200).json({ success: true, data: product });
+    return res.status(200).json({ success: true, data: product, related:relatedProducts });
   } catch (error) {
     console.error("Error getting product:", error);
     return res.status(500).json({ success: false, message: error.message });
