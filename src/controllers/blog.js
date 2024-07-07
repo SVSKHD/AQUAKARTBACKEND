@@ -18,7 +18,8 @@ const getBlogById = async (req, res) => {
   const { id } = req.params;
   try {
     const blogById = await AquaBlog.findById(id);
-    return res.status(200).json({ success: true, data: blogById });
+    const relatedProducts = await AquaProduct.find({category:blogById.category})
+    return res.status(200).json({ success: true, data: blogById, relatedProduct:relatedProducts});
   } catch (error) {
     return res
       .status(400)
