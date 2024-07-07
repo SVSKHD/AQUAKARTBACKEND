@@ -36,7 +36,6 @@ const UserSchema = new mongoose.Schema({
   // login creds info
   email: {
     type: String,
-    required: true,
     unique: true,
     trim: true,
     index: true,
@@ -51,8 +50,7 @@ const UserSchema = new mongoose.Schema({
     trim: true,
   },
   password: {
-    type: String,
-    required: true,
+    type: String
   },
   lastDetailsUpdatedDate: {
     type: Date,
@@ -63,7 +61,10 @@ const UserSchema = new mongoose.Schema({
   lastPasswordUpdated: {
     type: Date,
   },
-  otp: {
+  EmailOtp:{
+    type:Number
+  },
+  MobileOtp: {
     type: Number,
   },
   phone: {
@@ -99,7 +100,6 @@ const UserSchema = new mongoose.Schema({
   ],
   orders: [
     {
-      // Define the structure of user orders
       orderId: mongoose.Schema.Types.ObjectId, // Reference to the order
       orderDate: Date,
     },

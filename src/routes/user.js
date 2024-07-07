@@ -9,6 +9,8 @@ router.get("/user-status", (req, res) => {
 });
 
 router.post("/login", userController.userLogin);
+router.post("/phone/login", userController.userPhoneLogin)
+router.post("/verify/phone/otp", userController.verifyPhoneLogin)
 router.post("/signup", userController.userRegister);
 router.post("/forget-password", userController.userForgetPassword);
 router.post(

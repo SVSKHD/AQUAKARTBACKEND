@@ -10,7 +10,8 @@ router.get("invoice-status", async (req, res) => {
 
 router.get("/all-invoices",userAuth.checkAdmin,InvoiceOperations.getInvoices)
 router.get("/invoice/:id",InvoiceOperations.getInvoice)
-router.get("/invoice/:id", userAuth.checkAdmin , InvoiceOperations.deleteInvoice)
+router.get("/invoice/customer/:id", userAuth.checkAdmin , InvoiceOperations.deleteInvoice)
+router.get("/invoice/:id", userAuth.checkAdmin , userAuth.checkAdmin ,InvoiceOperations.deleteInvoice)
 router.post("/create/invoice", userAuth.checkAdmin , InvoiceOperations.createInvoice)
 router.put("/update/invoice/:id" , userAuth.checkAdmin , InvoiceOperations.updateInvoice)
 

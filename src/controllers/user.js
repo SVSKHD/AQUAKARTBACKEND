@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import sendEmail from "../notifications/email/send-email.js";
 import signupEmail from "../notifications/email/signupTemplate.js";
 import forgotPassword from "../notifications/email/forgotPassword.js";
+import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 
 // User Login
 const userLogin = async (req, res) => {
@@ -28,6 +29,75 @@ const userLogin = async (req, res) => {
   } catch (error) {
     console.error("Error during user login:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+const userPhoneLogin = async (req, res) => {
+  const { phone } = req.body;
+
+  function generateRandomSixDigitNumber() {
+    const randomNumber = Math.floor(100000 + Math.random() * 900000);
+    return randomNumber;
+  }
+
+  try {
+    const sixDigitNumber = generateRandomSixDigitNumber();
+
+    // Check if the user already exists
+    let user = await AquaEcomUser.findOne({ phone });
+
+    let message;
+    if (user) {
+      // If user exists, send a login OTP
+      user.mobileOtp = sixDigitNumber;
+      message = `Welcome back to Aquakart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+    } else {
+      // If user does not exist, create a new user and send a signup OTP
+      user = new AquaEcomUser({ phone, mobileOtp: sixDigitNumber });
+      message = `Welcome to Aquakart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+    }
+
+    // Send the OTP message
+    const otpData = await sendWhatsAppMessage(phone, message);
+
+    if (otpData.success) {
+      // Save the user with the OTP
+      await user.save();
+      res.status(200).json({ success: true, otp: sixDigitNumber, otpMessage: otpData.message });
+    } else {
+      res.status(400).json({ success: false, message: "Failed to send OTP", otpMessage: otpData.message });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const verifyPhoneLogin = async (req, res) => {
+  const { phone, otp } = req.body;
+
+  try {
+    // Find the user by phone number
+    const user = await AquaEcomUser.findOne({ phone });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "User not found" });
+    }
+
+    // Check if the provided OTP matches the stored OTP
+    if (user.mobileOtp !== otp) {
+      return res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
+
+    // Generate the auth token
+    const token = user.generateAuthToken();
+
+    // Fetch user details excluding the password
+    const userDetails = await AquaEcomUser.findById(user._id).select("-password");
+
+    // Send the response
+    res.status(200).json({ success: true, token, user: userDetails });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -132,6 +202,8 @@ const checkLogin = async (req, res) => {
 
 const userController = {
   userLogin,
+  userPhoneLogin,
+  verifyPhoneLogin,
   userRegister,
   userForgetPassword,
   updateDetails,
