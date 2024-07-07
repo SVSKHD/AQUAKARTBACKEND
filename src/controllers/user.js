@@ -42,17 +42,17 @@ const userPhoneLogin = async (req, res) => {
 
   try {
     const sixDigitNumber = generateRandomSixDigitNumber();
-
+    let userExist = ''
     // Check if the user already exists
     let user = await AquaEcomUser.findOne({ phone });
 
     let message;
     if (user) {
-      // If user exists, send a login OTP
+      userExist=true
       user.mobileOtp = sixDigitNumber;
       message = `Welcome back to Aquakart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
     } else {
-      // If user does not exist, create a new user and send a signup OTP
+      userExist=false
       user = new AquaEcomUser({ phone, mobileOtp: sixDigitNumber });
       message = `Welcome to Aquakart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
     }
@@ -63,7 +63,7 @@ const userPhoneLogin = async (req, res) => {
     if (otpData.success) {
       // Save the user with the OTP
       await user.save();
-      res.status(200).json({ success: true, otp: sixDigitNumber, otpMessage: otpData.message });
+      res.status(200).json({ success: true, otp: sixDigitNumber, otpMessage: otpData.message, userExist:userExist });
     } else {
       res.status(400).json({ success: false, message: "Failed to send OTP", otpMessage: otpData.message });
     }
