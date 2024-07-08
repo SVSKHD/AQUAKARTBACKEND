@@ -1,4 +1,6 @@
 import AquaOrder from "../models/orders.js";
+import AquaEcomUser from "../models/user.js";
+import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
@@ -86,6 +88,27 @@ const deleteOrder = async (req, res) => {
   }
 };
 
+const createCodOrder = async(req,res)=>{
+try {
+  const ordercreated = new AquaOrder(req.body)
+  await ordercreated.save()
+  const user = await AquaEcomUser.findById(req.body.user);
+  if (!ordercreated) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Please try again" });
+  }
+  const message = `Welcome to Aquakart Family, We have succesfully Recieved the order `
+  sendWhatsAppMessage(user.phone, message)
+} catch (error) {
+  res.status(500).json({
+    success: false,
+    message: "There is a problem in created in order, please try again later.",
+    error: error.message, // It's helpful to send back a specific error message
+  });
+}
+}
+
 const OrderOperations = {
   getAllOrders,
   getSingleOrderIdByUserId,
@@ -93,6 +116,7 @@ const OrderOperations = {
   createOrder,
   updateOrder,
   deleteOrder,
+  createCodOrder
 };
 
 export default OrderOperations;

@@ -13,6 +13,7 @@ import subCategoryRoutes from "./src/routes/sub-category.js";
 import productRoutes from "./src/routes/product.js";
 import blogRoutes from "./src/routes/blog.js";
 import phonePeGatewayRoutes from "./src/routes/phonepegatway.js";
+import orderRoutes from "./src/routes/orders.js"
 import SendWhatsAppMessage from "./src/routes/sendWhatsppMessage.js";
 // crm route imports
 import invoiceRoutes from "./src/routes/crm/invoice.js";
@@ -37,6 +38,7 @@ app.use("/v1", subCategoryRoutes);
 app.use("/v1", productRoutes);
 app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
+app.use("/v1", orderRoutes)
 app.use("/v1/notify", SendWhatsAppMessage);
 
 // crm routes
