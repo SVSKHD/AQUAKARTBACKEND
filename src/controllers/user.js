@@ -63,7 +63,7 @@ const userPhoneLogin = async (req, res) => {
     if (otpData.success) {
       // Save the user with the OTP
       await user.save();
-      res.status(200).json({ success: true, otp: sixDigitNumber, otpMessage: otpData.message, userExist:userExist });
+      res.status(200).json({ success: true, otpMessage: otpData.message, userExist:userExist });
     } else {
       res.status(400).json({ success: false, message: "Failed to send OTP", otpMessage: otpData.message });
     }
