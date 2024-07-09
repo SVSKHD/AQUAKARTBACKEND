@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import sendEmail from "../notifications/email/send-email.js";
 import signupEmail from "../notifications/email/signupTemplate.js";
+import signupOtpTemplate from "../notifications/email/signupOtp.js"
 import forgotPassword from "../notifications/email/forgotPassword.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 
@@ -32,6 +33,59 @@ const userLogin = async (req, res) => {
   }
 };
 
+
+
+const userEmailOtpLogin = async (req, res) => {
+  const { email } = req.body;
+
+  function generateRandomSixDigitNumber() {
+    const randomNumber = Math.floor(100000 + Math.random() * 900000);
+    return randomNumber;
+  }
+
+  try {
+    const sixDigitNumber = generateRandomSixDigitNumber();
+    let userExist = false;
+    // Check if the user already exists
+    let user = await AquaEcomUser.findOne({ email });
+
+    let subject, message, content;
+    if (user) {
+      userExist = true;
+      user.emailOtp = sixDigitNumber;
+      subject = "Your Login OTP for AquaKart";
+      message = `Welcome back to AquaKart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+      content = signupOtpTemplate(email,"koushik",sixDigitNumber);
+    } else {
+      userExist = false;
+      user = new AquaEcomUser({ email, emailOtp: sixDigitNumber });
+      subject = "Your Signup OTP for AquaKart";
+      message = `Welcome to AquaKart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+      content = signupOtpTemplate(email, "koushik", sixDigitNumber);
+    }
+
+    // Send the OTP email
+    const emailResult = await sendEmail({
+      email: user.email,
+      subject: subject,
+      message: message,
+      content: content,
+    });
+
+    if (emailResult.success) {
+      // Save the user with the OTP
+      await user.save();
+      res.status(200).json({ success: true, emailMessage: emailResult.message, userExist: userExist });
+    } else {
+      res.status(400).json({ success: false, message: "Failed to send OTP", emailMessage: emailResult.message });
+    }
+  } catch (error) {
+    console.error("Error during email OTP login:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
 const userPhoneLogin = async (req, res) => {
   const { phone } = req.body;
 
@@ -59,6 +113,7 @@ const userPhoneLogin = async (req, res) => {
 
     // Send the OTP message
     const otpData = await sendWhatsAppMessage(phone, message);
+
 
     if (otpData.success) {
       // Save the user with the OTP
@@ -202,6 +257,7 @@ const checkLogin = async (req, res) => {
 
 const userController = {
   userLogin,
+  userEmailOtpLogin,  
   userPhoneLogin,
   verifyPhoneLogin,
   userRegister,

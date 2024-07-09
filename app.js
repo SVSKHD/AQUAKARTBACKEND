@@ -15,6 +15,7 @@ import blogRoutes from "./src/routes/blog.js";
 import phonePeGatewayRoutes from "./src/routes/phonepegatway.js";
 import orderRoutes from "./src/routes/orders.js"
 import SendWhatsAppMessage from "./src/routes/sendWhatsppMessage.js";
+import SendEmail from "./src/routes/sendEmail.js" 
 // crm route imports
 import invoiceRoutes from "./src/routes/crm/invoice.js";
 import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
@@ -40,6 +41,7 @@ app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 app.use("/v1", orderRoutes)
 app.use("/v1/notify", SendWhatsAppMessage);
+app.use("/v1/email", SendEmail)
 
 // crm routes
 app.use("/v1/crm", invoiceRoutes);
