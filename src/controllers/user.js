@@ -165,7 +165,7 @@ const verifyEmailLogin = async (req, res) => {
 
   try {
     // Find the user by phone number
-    const user = await AquaEcomUser.findOne({ phone });
+    const user = await AquaEcomUser.findOne({ email });
 
     if (!user) {
       return res.status(400).json({ success: false, message: "User not found" });
