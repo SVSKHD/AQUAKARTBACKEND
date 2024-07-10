@@ -12,6 +12,7 @@ router.post("/login", userController.userLogin);
 router.post("/phone/login", userController.userPhoneLogin)
 router.post("/verify/phone/otp", userController.verifyPhoneLogin)
 router.post("/email/login", userController.userEmailOtpLogin)
+router.post("/verify/email/otp", userController.verifyEmailLogin)
 router.post("/signup", userController.userRegister);
 router.post("/forget-password", userController.userForgetPassword);
 router.post(

@@ -160,6 +160,35 @@ const verifyPhoneLogin = async (req, res) => {
   }
 };
 
+const verifyEmailLogin = async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+    // Find the user by phone number
+    const user = await AquaEcomUser.findOne({ phone });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "User not found" });
+    }
+
+    // Check if the provided OTP matches the stored OTP
+    if (user.emailOtp !== otp) {
+      return res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
+
+    // Generate the auth token
+    const token = user.generateAuthToken();
+
+    // Fetch user details excluding the password
+    const userDetails = await AquaEcomUser.findById(user._id).select("-password");
+
+    // Send the response
+    res.status(200).json({ success: true, token, user: userDetails });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // User Registration
 const userRegister = async (req, res) => {
   const { email, password, firstName, lastName, phone } = req.body;
@@ -264,6 +293,7 @@ const userController = {
   userEmailOtpLogin,  
   userPhoneLogin,
   verifyPhoneLogin,
+  verifyEmailLogin,
   userRegister,
   userForgetPassword,
   updateDetails,
