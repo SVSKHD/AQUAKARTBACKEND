@@ -46,6 +46,10 @@ const userEmailOtpLogin = async (req, res) => {
   try {
     const sixDigitNumber = generateRandomSixDigitNumber();
     let userExist = false;
+
+    // Extract the name from the email
+    const name = email.split('@')[0];
+
     // Check if the user already exists
     let user = await AquaEcomUser.findOne({ email });
 
@@ -54,14 +58,14 @@ const userEmailOtpLogin = async (req, res) => {
       userExist = true;
       user.emailOtp = sixDigitNumber;
       subject = "Your Login OTP for AquaKart";
-      message = `Welcome back to AquaKart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
-      content = signupOtpTemplate(email,"koushik",sixDigitNumber);
+      message = `Welcome back to AquaKart, ${name}! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+      content = signupOtpTemplate(email, name, sixDigitNumber);
     } else {
       userExist = false;
       user = new AquaEcomUser({ email, emailOtp: sixDigitNumber });
       subject = "Your Signup OTP for AquaKart";
-      message = `Welcome to AquaKart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
-      content = signupOtpTemplate(email, "koushik", sixDigitNumber);
+      message = `Welcome to AquaKart, ${name}! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+      content = signupOtpTemplate(email, name, sixDigitNumber);
     }
 
     // Send the OTP email
