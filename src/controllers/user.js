@@ -270,6 +270,33 @@ const updateDetails = async (req, res) => {
   }
 };
 
+const updateIdentifierDetails = async (req, res) => {
+  const { identifier, newDetails } = req.body;
+
+  try {
+    // Define the search criteria based on the identifier type
+    const searchCriteria = 
+      identifier.includes('@') 
+        ? { email: identifier } 
+        : { phone: identifier };
+
+    const user = await AquaEcomUser.findOneAndUpdate(
+      searchCriteria,
+      { $set: newDetails },
+      { new: true },
+    );
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Error during updating user details:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // Check Login
 const checkLogin = async (req, res) => {
   try {
@@ -297,6 +324,7 @@ const userController = {
   userRegister,
   userForgetPassword,
   updateDetails,
+  updateIdentifierDetails,
   checkLogin,
 };
 

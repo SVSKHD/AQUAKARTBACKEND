@@ -12,6 +12,16 @@ const getOrdersByUserId = async (req, res) => {
   }
 };
 
+const getOrdersById = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const orders = await AquaOrder.findById(id)
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: "No orders found" });
+  }
+};
+
 const getSingleOrderIdByUserId = async (req, res) => {
   const { userId, orderId } = req.params;
   try {
@@ -98,8 +108,12 @@ try {
       .status(400)
       .json({ success: false, message: "Please try again" });
   }
-  const message = `Welcome to Aquakart Family, We have succesfully Recieved the order `
-  sendWhatsAppMessage(user.phone, message)
+  // const message = `Welcome to Aquakart Family, We have succesfully Recieved the order `
+  // if(user.phone){
+  //   sendWhatsAppMessage(user.phone, message)
+  // }
+  return res.status(200).json({ success: true, data: ordercreated });
+
 } catch (error) {
   res.status(500).json({
     success: false,
@@ -113,6 +127,7 @@ const OrderOperations = {
   getAllOrders,
   getSingleOrderIdByUserId,
   getOrdersByUserId,
+  getOrdersById,
   createOrder,
   updateOrder,
   deleteOrder,
