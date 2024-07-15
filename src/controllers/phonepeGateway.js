@@ -37,9 +37,9 @@ const payPhonepe = async (req, res) => {
       merchantUserId: passedPayload.user,
       name: getUserById.name || createUserName(getUserById.email),
       amount: passedPayload.totalAmount * 100,
-      redirectUrl: `https://aquakart.co.in/api/order/${merchantTransactionId}`,
+      redirectUrl: `https://api.aquakart.co.in/v1/order/${merchantTransactionId}`,
       redirectMode: "POST",
-      callbackUrl: `https://aquakart.co.in/api/order/${merchantTransactionId}`,
+      callbackUrl: `https://api.aquakart.co.in/v1/order/${merchantTransactionId}`,
       mobileNumber: passedPayload.number,
       paymentInstrument: {
         type: "PAY_PAGE",
@@ -79,8 +79,13 @@ const payPhonepe = async (req, res) => {
   }
 };
 
+const handlePhonePeOrder = async(req,res)=>{
+  console.log("req", req.body)
+}
+
 const paymentOperations = {
   payPhonepe,
+  handlePhonePeOrder
 };
 
 export default paymentOperations;
