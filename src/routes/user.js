@@ -16,9 +16,9 @@ router.post("/verify/email/otp", userController.verifyEmailLogin)
 router.post("/signup", userController.userRegister);
 router.post("/forget-password", userController.userForgetPassword);
 router.post(
-  "/update-details",
+  "/user/update-details",
   userAuth.isLoggedIn,
-  userController.updateDetails,
+  userController.updateIdentifierDetails,
 );
 router.post("/check-login", userAuth.isLoggedIn, userController.checkLogin);
 

@@ -250,7 +250,8 @@ const userForgetPassword = async (req, res) => {
 
 // Update User Details
 const updateDetails = async (req, res) => {
-  const { email, newDetails } = req.body;
+  console.log("req", req.body)
+  const { email,phone, newDetails } = req.body;
 
   try {
     const user = await AquaEcomUser.findOneAndUpdate(
@@ -280,10 +281,25 @@ const updateIdentifierDetails = async (req, res) => {
         ? { email: identifier } 
         : { phone: identifier };
 
+    // Check if the new phone number or email already exists for another user
+    if (newDetails.phone) {
+      const phoneExists = await AquaEcomUser.findOne({ phone: newDetails.phone });
+      if (phoneExists && phoneExists._id.toString() !== req.user._id) {
+        return res.status(400).json({ message: "Phone number already in use" });
+      }
+    }
+
+    if (newDetails.email) {
+      const emailExists = await AquaEcomUser.findOne({ email: newDetails.email });
+      if (emailExists && emailExists._id.toString() !== req.user._id) {
+        return res.status(400).json({ message: "Email already in use" });
+      }
+    }
+
     const user = await AquaEcomUser.findOneAndUpdate(
       searchCriteria,
       { $set: newDetails },
-      { new: true },
+      { new: true }
     );
 
     if (!user) {
