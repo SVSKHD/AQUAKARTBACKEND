@@ -167,6 +167,7 @@ const handlePhonePeOrder = async(req,res)=>{
             });
           }
 }
+}
 
 const paymentOperations = {
   payPhonepe,
