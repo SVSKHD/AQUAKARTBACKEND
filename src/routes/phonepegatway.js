@@ -10,5 +10,5 @@ router.get(async (req, res) => {
 });
 
 router.post("/pay-phonepe", userAuth.isLoggedIn, paymentOperations.payPhonepe);
-
+router.post("/phonepe-callback", paymentOperations.handlePhonePeOrder)
 export default router;

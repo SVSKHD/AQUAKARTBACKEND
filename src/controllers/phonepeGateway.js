@@ -79,8 +79,93 @@ const payPhonepe = async (req, res) => {
   }
 };
 
+function getUserIdFromTransactionId(transactionId) {
+  const parts = transactionId.split("-");
+  return parts[1];
+}
+
+// const handlePhonePeOrder = async(req,res)=>{
+  // console.log("req", req.body)
+  // const { transactionId, merchantId } = req.body;
+  // const userId = getUserIdFromTransactionId(transactionId);
+  // const checksum =
+  //     crypto
+  //       .createHash("sha256")
+  //       .update(
+  //         `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
+  //       )
+  //       .digest("hex") + "###1";
+
+  //   const options = {
+  //     method: "GET",
+  //     url: `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`,
+  //     headers: {
+  //       accept: "application/json",
+  //       "Content-Type": "application/json",
+  //       "X-VERIFY": checksum,
+  //       "X-MERCHANT-ID": merchantId,
+  //     },
+  //   };
+  //   const apiResponse = await axios.request(options);
+  //   if (apiResponse.data) {
+  //     const orderData = {
+  //       paymentStatus: "Paid",
+  //       paymentInstrument: apiResponse.data.data.paymentInstrument,
+  //       paymentGatewayDetails: apiResponse.data,
+  //       orderType: "Payment Method(Phone-Pe-Gateway)",
+  //     };
+
+  //     const updatedOrder = await AquaOrder.findOneAndUpdate(
+  //       { transactionId },
+  //       orderData,
+  //       { new: true },
+  //     );
+  //     if (updatedOrder) {
+  //       res.writeHead(302, {
+  //         Location: `aquakart.co.in/order/${updatedOrder.transactionId}`,
+  //       });
+  //     }
+// }
+
 const handlePhonePeOrder = async(req,res)=>{
   console.log("req", req.body)
+  const { transactionId, merchantId } = req.body;
+  const userId = getUserIdFromTransactionId(transactionId);
+  const checksum =
+      crypto
+        .createHash("sha256")
+        .update(
+          `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
+        )
+        .digest("hex") + "###1";
+        const options = {
+          method: "GET",
+          url: `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`,
+          headers: {
+            accept: "application/json",
+            "Content-Type": "application/json",
+            "X-VERIFY": checksum,
+            "X-MERCHANT-ID": merchantId,
+          },
+        };
+        const apiResponse = await axios.request(options);
+        if (apiResponse.data) {
+          const orderData = {
+            paymentStatus: "Paid",
+            paymentInstrument: apiResponse.data.data.paymentInstrument,
+            paymentGatewayDetails: apiResponse.data,
+            orderType: "Payment Method(Phone-Pe-Gateway)",
+          };
+          const updatedOrder = await AquaOrder.findOneAndUpdate(
+            { transactionId },
+            orderData,
+            { new: true },
+          );
+          if (updatedOrder) {
+            res.writeHead(302, {
+              Location: `aquakart.co.in/order/${updatedOrder.transactionId}`,
+            });
+          }
 }
 
 const paymentOperations = {
