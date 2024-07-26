@@ -5,7 +5,7 @@ import userAuth from "../middleware/user.js";
 
 const router = express.Router();
 
-router.get(async (req, res) => {
+router.get("/",async (req, res) => {
   res.json({ message: "Phone Pe Status v1 active" });
 });
 
