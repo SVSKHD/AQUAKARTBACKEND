@@ -2,6 +2,8 @@ import AquaOrder from "../models/orders.js";
 import AquaEcomUser from "../models/user.js"; // Ensure you have the correct path
 import crypto from "crypto";
 import axios from "axios";
+import sendEmail from "../notifications/email/send-email.js";
+import orderTemplate from "../notifications/email/orderTemplate.js" 
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;
@@ -126,48 +128,77 @@ function getUserIdFromTransactionId(transactionId) {
   //     }
 // }
 
-const handlePhonePeOrder = async(req,res)=>{
-  console.log("req", req.body)
-  const { transactionId, merchantId } = req.body;
-  const userId = getUserIdFromTransactionId(transactionId);
-  const checksum =
+const handlePhonePeOrder = async (req, res) => {
+  console.log("req", req.body);
+  try {
+    const { transactionId, merchantId } = req.body;
+    const userId = getUserIdFromTransactionId(transactionId); // Ensure this function is defined
+
+    const checksum =
       crypto
         .createHash("sha256")
         .update(
           `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
         )
         .digest("hex") + "###1";
-        const options = {
-          method: "GET",
-          url: `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`,
-          headers: {
-            accept: "application/json",
-            "Content-Type": "application/json",
-            "X-VERIFY": checksum,
-            "X-MERCHANT-ID": merchantId,
-          },
-        };
-        const apiResponse = await axios.request(options);
-        if (apiResponse.data) {
-          const orderData = {
-            paymentStatus: "Paid",
-            paymentInstrument: apiResponse.data.data.paymentInstrument,
-            paymentGatewayDetails: apiResponse.data,
-            orderType: "Payment Method(Phone-Pe-Gateway)",
-          };
-          const updatedOrder = await AquaOrder.findOneAndUpdate(
-            { transactionId },
-            orderData,
-            { new: true },
-          );
-          if (updatedOrder) {
-            res.writeHead(302, {
-              Location: `aquakart.co.in/order/${updatedOrder.transactionId}`,
-            });
-          }
-}
-}
 
+    const options = {
+      method: "GET",
+      url: `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`,
+      headers: {
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": checksum,
+        "X-MERCHANT-ID": merchantId,
+      },
+    };
+
+    const apiResponse = await axios.request(options);
+    if (apiResponse.data) {
+      const orderData = {
+        paymentStatus: "Paid",
+        paymentInstrument: apiResponse.data.data.paymentInstrument,
+        paymentGatewayDetails: apiResponse.data,
+        orderType: "Payment Method(Phone-Pe-Gateway)",
+      };
+
+      const updatedOrder = await AquaOrder.findOneAndUpdate(
+        { transactionId },
+        orderData,
+        { new: true },
+      );
+
+      if (updatedOrder) {
+        const fetchedUser = await AquaEcomUser.findById(updatedOrder.user);
+        if (fetchedUser) {
+          const emailContent = orderTemplate(
+            fetchedUser.email,
+            updatedOrder.items,
+            updatedOrder.paymentStatus,
+            updatedOrder.estimatedDelivery,
+          ); // This function should return the HTML content of the email
+          await sendEmail({
+            email: fetchedUser.email,
+            subject: `Thank You for Your Order!  - Aquakart`,
+            message: "Happy Shopping",
+            content: emailContent,
+          });
+        }
+        res.writeHead(302, {
+          Location: `/order/${updatedOrder.transactionId}`,
+        });
+        res.end(JSON.stringify({ user: fetchedUser }));
+      } else {
+        throw new Error("Order not found");
+      }
+    } else {
+      res.status(400).json({ error: "Payment not successful" });
+    }
+  } catch (error) {
+    console.error("Error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
 const paymentOperations = {
   payPhonepe,
   handlePhonePeOrder
