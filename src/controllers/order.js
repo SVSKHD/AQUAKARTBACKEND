@@ -12,6 +12,16 @@ const getOrdersByUserId = async (req, res) => {
   }
 };
 
+const getOrderByTransactionId = async(req,res)=>{
+  const { id } = req.params;
+  try {
+    const orders = await AquaOrder.findOne({ transactionId: id });
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: "No orders found" });
+  }
+}
+
 const getOrdersById = async (req, res) => {
   const { id } = req.params;
   try {
@@ -128,6 +138,7 @@ const OrderOperations = {
   getSingleOrderIdByUserId,
   getOrdersByUserId,
   getOrdersById,
+  getOrderByTransactionId,
   createOrder,
   updateOrder,
   deleteOrder,
