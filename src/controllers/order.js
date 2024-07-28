@@ -118,10 +118,10 @@ try {
       .status(400)
       .json({ success: false, message: "Please try again" });
   }
-  // const message = `Welcome to Aquakart Family, We have succesfully Recieved the order `
-  // if(user.phone){
-  //   sendWhatsAppMessage(user.phone, message)
-  // }
+  const message = `Welcome to Aquakart Family, We have succesfully Recieved the order ${ordercreated}`
+  if(user.phone){
+    sendWhatsAppMessage(user.phone, message)
+  }
   return res.status(200).json({ success: true, data: ordercreated });
 
 } catch (error) {
