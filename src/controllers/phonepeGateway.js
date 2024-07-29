@@ -163,7 +163,7 @@ const handlePhonePeOrder = async (req, res) => {
       };
 
       const updatedOrder = await AquaOrder.findOneAndUpdate(
-        { transactionId },
+        { merchantId },
         orderData,
         { new: true },
       );
