@@ -32,7 +32,6 @@ const payPhonepe = async (req, res) => {
     });
     await order.save(); // Save the order with proper await
 
-    console.log(order)
     const merchantTransactionId = passedPayload.transactionId;
     const data = {
       merchantId: process.env.PHONEPE_MERCHANTID,
@@ -55,7 +54,7 @@ const payPhonepe = async (req, res) => {
     const sha256 = crypto.createHash("sha256").update(string).digest("hex");
     const checksum = sha256 + "###" + keyIndex;
 
-    const prod_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox/pg/v1/pay";
+    const prod_URL = "https://api.phonepe.com/apis/hermes/pg/v1/pay";
     const options = {
       method: "POST",
       url: prod_URL,
@@ -70,22 +69,11 @@ const payPhonepe = async (req, res) => {
     };
 
     const response = await axios.request(options);
-
-    // Check for TOO_MANY_REQUESTS response
-    if (response.data && response.data.code === 'TOO_MANY_REQUESTS') {
-      return res.status(429).json({
-        success: false,
-        code: 'TOO_MANY_REQUESTS',
-        message: 'Too many requests. Please try again.',
-        data: {},
-      });
-    }
-
     return res.json({
       url: response.data.data.instrumentResponse.redirectInfo.url,
     });
   } catch (error) {
-    // console.error(error);
+    console.error(error);
     res.status(500).send({
       message: error.message,
       success: false,
