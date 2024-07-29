@@ -250,14 +250,14 @@ const userForgetPassword = async (req, res) => {
 
 // Update User Details
 const updateDetails = async (req, res) => {
-  console.log("req", req.body)
-  const { email,phone, newDetails } = req.body;
+  const { id } = req.params;
+  const { newDetails } = req.body;
 
   try {
-    const user = await AquaEcomUser.findOneAndUpdate(
-      { email },
+    const user = await AquaEcomUser.findByIdAndUpdate(
+      id,
       { $set: newDetails },
-      { new: true },
+      { new: true }
     );
 
     if (!user) {

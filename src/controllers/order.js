@@ -118,7 +118,7 @@ try {
       .status(400)
       .json({ success: false, message: "Please try again" });
   }
-  const message = `Welcome to Aquakart Family, We have succesfully Recieved the order ${ordercreated}`
+  const message = `Welcome to Aquakart Family, We have succesfully Recieved the order "${ordercreated.orderId}"`
   if(user.phone){
     sendWhatsAppMessage(user.phone, message)
   }
