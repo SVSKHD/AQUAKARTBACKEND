@@ -41,7 +41,7 @@ const payPhonepe = async (req, res) => {
       amount: passedPayload.totalAmount * 100,
       redirectUrl: `https://aquakart.co.in/order/${merchantTransactionId}`,
       redirectMode: "POST",
-      callbackUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
+      callbackUrl: `https://aquakart.co.in/api/check-pay`,
       mobileNumber: passedPayload.number,
       paymentInstrument: {
         type: "PAY_PAGE",
