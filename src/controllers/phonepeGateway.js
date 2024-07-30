@@ -153,7 +153,7 @@ const handlePhonePeOrder = async (req, res) => {
     };
 
     const apiResponse = await axios.request(options);
-    if (apiResponse.data) {
+    if (apiResponse.data && apiResponse.data.code==="PAYMENT_SUCCESS") {
       const orderData = {
         paymentStatus: "Paid",
         paymentInstrument: apiResponse.data.data.paymentInstrument,
@@ -162,7 +162,7 @@ const handlePhonePeOrder = async (req, res) => {
       };
 
       const updatedOrder = await AquaOrder.findOneAndUpdate(
-        { merchantId },
+        { transactionId },
         orderData,
         { new: true },
       );
