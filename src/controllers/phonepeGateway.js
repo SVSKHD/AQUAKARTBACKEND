@@ -129,9 +129,8 @@ function getUserIdFromTransactionId(transactionId) {
 // }
 
 const handlePhonePeOrder = async (req, res) => {
-  console.log("req", req.body);
   try {
-    const { transactionId, merchantId } = req.body;
+    const { transactionId, merchantId } = req.params;
     const userId = getUserIdFromTransactionId(transactionId); // Ensure this function is defined
 
     const checksum =
