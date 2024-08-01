@@ -39,7 +39,7 @@ const payPhonepe = async (req, res) => {
       merchantUserId: passedPayload.user,
       name: getUserById.name || createUserName(getUserById.email),
       amount: passedPayload.totalAmount * 100,
-      redirectUrl: `https://aquakart.co.in/order/processing`,
+      redirectUrl: `https://aquakart.co.in/order/${merchantTransactionId}`,
       redirectMode: "REDIRECT",
       callbackUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
       mobileNumber: passedPayload.number,
@@ -82,9 +82,11 @@ const payPhonepe = async (req, res) => {
 };
 
 const handlePhoneOrderCheck = async (req, res) => {
-  const { transactionId, merchantId } = req.body.data;
+  const { id } = req.params
+  const transactionId = id
+  const merchantId = process.env.PHONEPE_MERCHANTID
 
-  console.log(merchantId);
+  console.log(id);
   const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
   const checksum =
     crypto
@@ -126,9 +128,9 @@ const handlePhoneOrderCheck = async (req, res) => {
       const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
 
       if (response.data.code === "PAYMENT_SUCCESS") {
-        res.redirect(redirectUrl);
+        res.status(200).json({order:updatedOrder})
       } else if (response.data.code === "PAYMENT_ERROR") {
-        res.redirect(redirectUrl);
+        res.status(200).json({order:updatedOrder})
       } else {
         res
           .status(400)
