@@ -39,7 +39,7 @@ const payPhonepe = async (req, res) => {
       merchantUserId: passedPayload.user,
       name: getUserById.name || createUserName(getUserById.email),
       amount: passedPayload.totalAmount * 100,
-      redirectUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
+      redirectUrl: `https://aquakart.co.in/order/${merchantTransactionId}`,
       redirectMode: "REDIRECT",
       callbackUrl:`https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
       mobileNumber: passedPayload.number,
