@@ -1,5 +1,5 @@
 // Load environment variables first
-import './config.js';
+import "./config.js";
 
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";

@@ -3,7 +3,7 @@ import AquaEcomUser from "../models/user.js"; // Ensure you have the correct pat
 import crypto from "crypto";
 import axios from "axios";
 import sendEmail from "../notifications/email/send-email.js";
-import orderTemplate from "../notifications/email/orderTemplate.js" 
+import orderTemplate from "../notifications/email/orderTemplate.js";
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;
@@ -39,9 +39,9 @@ const payPhonepe = async (req, res) => {
       merchantUserId: passedPayload.user,
       name: getUserById.name || createUserName(getUserById.email),
       amount: passedPayload.totalAmount * 100,
-      redirectUrl: `https://aquakart.co.in/order/${merchantTransactionId}`,
-      redirectMode: "REDIRECT",
-      callbackUrl:`https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
+      redirectUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
+      redirectMode: "POST",
+      callbackUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
       mobileNumber: passedPayload.number,
       paymentInstrument: {
         type: "PAY_PAGE",
@@ -81,19 +81,18 @@ const payPhonepe = async (req, res) => {
   }
 };
 
-
-
-
-
 const handlePhoneOrderCheck = async (req, res) => {
   const { transactionId, merchantId } = req.body.data;
 
   console.log(merchantId);
   const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
-  const checksum = crypto
-    .createHash("sha256")
-    .update(`/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`)
-    .digest("hex") + "###1";
+  const checksum =
+    crypto
+      .createHash("sha256")
+      .update(
+        `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
+      )
+      .digest("hex") + "###1";
 
   console.log("checksum", checksum);
 
@@ -111,7 +110,8 @@ const handlePhoneOrderCheck = async (req, res) => {
 
     if (response.data) {
       const orderData = {
-        paymentStatus: response.data.code === "PAYMENT_SUCCESS" ? "Paid" : "Failed",
+        paymentStatus:
+          response.data.code === "PAYMENT_SUCCESS" ? "Paid" : "Failed",
         paymentInstrument: response.data.data.paymentInstrument,
         paymentGatewayDetails: response.data,
         orderType: "Payment Method(Phone-Pe-Gateway)",
@@ -120,7 +120,7 @@ const handlePhoneOrderCheck = async (req, res) => {
       const updatedOrder = await AquaOrder.findOneAndUpdate(
         { transactionId },
         orderData,
-        { new: true }
+        { new: true },
       );
 
       const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
@@ -130,7 +130,9 @@ const handlePhoneOrderCheck = async (req, res) => {
       } else if (response.data.code === "PAYMENT_ERROR") {
         res.redirect(redirectUrl);
       } else {
-        res.status(400).json({ success: false, message: "Unknown payment status" });
+        res
+          .status(400)
+          .json({ success: false, message: "Unknown payment status" });
       }
 
       console.log(response.data.data.paymentInstrument);
@@ -141,10 +143,9 @@ const handlePhoneOrderCheck = async (req, res) => {
   }
 };
 
-
 const paymentOperations = {
   payPhonepe,
-  handlePhoneOrderCheck
+  handlePhoneOrderCheck,
 };
 
 export default paymentOperations;

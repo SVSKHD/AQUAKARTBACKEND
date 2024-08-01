@@ -1,5 +1,5 @@
 const signupOtpTemplate = (email, username, otp) => {
-    return `
+  return `
           <!DOCTYPE html>
           <html lang="en">
             <head>
@@ -89,6 +89,6 @@ const signupOtpTemplate = (email, username, otp) => {
             </body>
           </html>
         `;
-  };
-  
-  export default signupOtpTemplate;
+};
+
+export default signupOtpTemplate;

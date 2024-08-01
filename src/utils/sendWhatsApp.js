@@ -8,9 +8,9 @@ const sendWhatsAppMessage = async (no, message) => {
     const response = await axios.post(`${BASE}/api/send/text`, {
       accessToken: KEY,
       mobile: `91${no}`,
-      text: message || "Aquakart Welcomes you"
+      text: message || "Aquakart Welcomes you",
     });
-    console.log("response", response)
+    console.log("response", response);
     if (response.data.success) {
       return { success: true, message: "Message sent successfully" };
     } else {

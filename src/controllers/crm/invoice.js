@@ -60,7 +60,7 @@ const getInvoice = async (req, res) => {
     if (name) query["customerDetails.name"] = new RegExp(name, "i"); // Case-insensitive regex search
     if (phone) query["customerDetails.phone"] = phone;
     if (invoiceNo) query.invoiceNo = invoiceNo;
-    console.log("invoice", query)
+    console.log("invoice", query);
     // Find the invoices based on the dynamic query
     const invoices = await AquaInvoice.find(query);
 

@@ -154,7 +154,7 @@ const updateProduct = async (req, res) => {
         reviews,
         user,
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     res.status(200).json({
@@ -223,10 +223,14 @@ const getProduct = async (req, res) => {
         .status(404)
         .json({ success: false, message: "product not found" });
     }
-    let relatedProducts = await AquaProduct.find({ category: product.category });
-    relatedProducts = relatedProducts.filter(p => p.id !== product.id);
+    let relatedProducts = await AquaProduct.find({
+      category: product.category,
+    });
+    relatedProducts = relatedProducts.filter((p) => p.id !== product.id);
 
-    return res.status(200).json({ success: true, data: product, related: relatedProducts });
+    return res
+      .status(200)
+      .json({ success: true, data: product, related: relatedProducts });
   } catch (error) {
     console.error("Error getting product:", error);
     return res.status(500).json({ success: false, message: error.message });
@@ -237,6 +241,6 @@ const ProductOperations = {
   getProduct,
   addProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
 };
 export default ProductOperations;

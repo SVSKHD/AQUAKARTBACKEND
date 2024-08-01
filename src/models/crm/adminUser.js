@@ -110,7 +110,7 @@ AdminUserSchema.methods.generateAuthToken = function () {
   const token = jwt.sign(
     { _id: this._id, email: this.email, role: this.role },
     process.env.JWT_SECRET,
-    { expiresIn: "30d" }
+    { expiresIn: "30d" },
   );
   return token;
 };
@@ -121,6 +121,7 @@ AdminUserSchema.methods.validatePassword = async function (password) {
 };
 
 const AquaAdminUser =
-  mongoose.models.AquaAdminUser || mongoose.model("AquaAdminUser", AdminUserSchema);
+  mongoose.models.AquaAdminUser ||
+  mongoose.model("AquaAdminUser", AdminUserSchema);
 
 export default AquaAdminUser;

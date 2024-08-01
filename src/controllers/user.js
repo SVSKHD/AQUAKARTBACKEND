@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import sendEmail from "../notifications/email/send-email.js";
 import signupEmail from "../notifications/email/signupTemplate.js";
-import signupOtpTemplate from "../notifications/email/signupOtp.js"
+import signupOtpTemplate from "../notifications/email/signupOtp.js";
 import forgotPassword from "../notifications/email/forgotPassword.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 
@@ -33,8 +33,6 @@ const userLogin = async (req, res) => {
   }
 };
 
-
-
 const userEmailOtpLogin = async (req, res) => {
   const { email } = req.body;
 
@@ -48,7 +46,7 @@ const userEmailOtpLogin = async (req, res) => {
     let userExist = false;
 
     // Extract the name from the email
-    const name = email.split('@')[0];
+    const name = email.split("@")[0];
 
     // Check if the user already exists
     let user = await AquaEcomUser.findOne({ email });
@@ -79,16 +77,27 @@ const userEmailOtpLogin = async (req, res) => {
     if (emailResult.success) {
       // Save the user with the OTP
       await user.save();
-      res.status(200).json({ success: true, emailMessage: emailResult.message, userExist: userExist });
+      res
+        .status(200)
+        .json({
+          success: true,
+          emailMessage: emailResult.message,
+          userExist: userExist,
+        });
     } else {
-      res.status(400).json({ success: false, message: "Failed to send OTP", emailMessage: emailResult.message });
+      res
+        .status(400)
+        .json({
+          success: false,
+          message: "Failed to send OTP",
+          emailMessage: emailResult.message,
+        });
     }
   } catch (error) {
     console.error("Error during email OTP login:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 const userPhoneLogin = async (req, res) => {
   const { phone } = req.body;
@@ -100,17 +109,17 @@ const userPhoneLogin = async (req, res) => {
 
   try {
     const sixDigitNumber = generateRandomSixDigitNumber();
-    let userExist = ''
+    let userExist = "";
     // Check if the user already exists
     let user = await AquaEcomUser.findOne({ phone });
 
     let message;
     if (user) {
-      userExist=true
+      userExist = true;
       user.mobileOtp = sixDigitNumber;
       message = `Welcome back to Aquakart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
     } else {
-      userExist=false
+      userExist = false;
       user = new AquaEcomUser({ phone, mobileOtp: sixDigitNumber });
       message = `Welcome to Aquakart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
     }
@@ -118,13 +127,24 @@ const userPhoneLogin = async (req, res) => {
     // Send the OTP message
     const otpData = await sendWhatsAppMessage(phone, message);
 
-
     if (otpData.success) {
       // Save the user with the OTP
       await user.save();
-      res.status(200).json({ success: true, otpMessage: otpData.message, userExist:userExist });
+      res
+        .status(200)
+        .json({
+          success: true,
+          otpMessage: otpData.message,
+          userExist: userExist,
+        });
     } else {
-      res.status(400).json({ success: false, message: "Failed to send OTP", otpMessage: otpData.message });
+      res
+        .status(400)
+        .json({
+          success: false,
+          message: "Failed to send OTP",
+          otpMessage: otpData.message,
+        });
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -139,7 +159,9 @@ const verifyPhoneLogin = async (req, res) => {
     const user = await AquaEcomUser.findOne({ phone });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: "User not found" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User not found" });
     }
 
     // Check if the provided OTP matches the stored OTP
@@ -151,7 +173,9 @@ const verifyPhoneLogin = async (req, res) => {
     const token = user.generateAuthToken();
 
     // Fetch user details excluding the password
-    const userDetails = await AquaEcomUser.findById(user._id).select("-password");
+    const userDetails = await AquaEcomUser.findById(user._id).select(
+      "-password",
+    );
 
     // Send the response
     res.status(200).json({ success: true, token, user: userDetails });
@@ -168,7 +192,9 @@ const verifyEmailLogin = async (req, res) => {
     const user = await AquaEcomUser.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: "User not found" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User not found" });
     }
 
     // Check if the provided OTP matches the stored OTP
@@ -180,7 +206,9 @@ const verifyEmailLogin = async (req, res) => {
     const token = user.generateAuthToken();
 
     // Fetch user details excluding the password
-    const userDetails = await AquaEcomUser.findById(user._id).select("-password");
+    const userDetails = await AquaEcomUser.findById(user._id).select(
+      "-password",
+    );
 
     // Send the response
     res.status(200).json({ success: true, token, user: userDetails });
@@ -257,7 +285,7 @@ const updateDetails = async (req, res) => {
     const user = await AquaEcomUser.findByIdAndUpdate(
       id,
       { $set: newDetails },
-      { new: true }
+      { new: true },
     );
 
     if (!user) {
@@ -276,21 +304,24 @@ const updateIdentifierDetails = async (req, res) => {
 
   try {
     // Define the search criteria based on the identifier type
-    const searchCriteria = 
-      identifier.includes('@') 
-        ? { email: identifier } 
-        : { phone: identifier };
+    const searchCriteria = identifier.includes("@")
+      ? { email: identifier }
+      : { phone: identifier };
 
     // Check if the new phone number or email already exists for another user
     if (newDetails.phone) {
-      const phoneExists = await AquaEcomUser.findOne({ phone: newDetails.phone });
+      const phoneExists = await AquaEcomUser.findOne({
+        phone: newDetails.phone,
+      });
       if (phoneExists && phoneExists._id.toString() !== req.user._id) {
         return res.status(400).json({ message: "Phone number already in use" });
       }
     }
 
     if (newDetails.email) {
-      const emailExists = await AquaEcomUser.findOne({ email: newDetails.email });
+      const emailExists = await AquaEcomUser.findOne({
+        email: newDetails.email,
+      });
       if (emailExists && emailExists._id.toString() !== req.user._id) {
         return res.status(400).json({ message: "Email already in use" });
       }
@@ -299,7 +330,7 @@ const updateIdentifierDetails = async (req, res) => {
     const user = await AquaEcomUser.findOneAndUpdate(
       searchCriteria,
       { $set: newDetails },
-      { new: true }
+      { new: true },
     );
 
     if (!user) {
@@ -333,7 +364,7 @@ const checkLogin = async (req, res) => {
 
 const userController = {
   userLogin,
-  userEmailOtpLogin,  
+  userEmailOtpLogin,
   userPhoneLogin,
   verifyPhoneLogin,
   verifyEmailLogin,

@@ -1,17 +1,15 @@
-import express from "express"
-import AquaAdminUserOperations from "../../controllers/crm/adminUser.js"
-import userAuth from "../../middleware/user.js"
+import express from "express";
+import AquaAdminUserOperations from "../../controllers/crm/adminUser.js";
+import userAuth from "../../middleware/user.js";
 
+const router = express.Router();
 
-const router = express.Router()
+router.get("/status", (req, res) => {
+  res.json({ message: "Admin user v1 Status is Active" });
+});
 
-router.get("/status", (req,res)=>{
-    res.json({"message":"Admin user v1 Status is Active"})
-})
+router.post("/signup", AquaAdminUserOperations.signup);
+router.post("/login", AquaAdminUserOperations.login);
+router.post("/create-user", userAuth.checkAdmin);
 
-router.post("/signup",AquaAdminUserOperations.signup)
-router.post("/login", AquaAdminUserOperations.login)
-router.post("/create-user",userAuth.checkAdmin)
-
-
-export default router
+export default router;

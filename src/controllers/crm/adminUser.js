@@ -58,9 +58,8 @@ const login = async (req, res) => {
   }
 };
 
-
-const AquaAdminUserOperations={
-signup,
-login
-}
-export default AquaAdminUserOperations
+const AquaAdminUserOperations = {
+  signup,
+  login,
+};
+export default AquaAdminUserOperations;

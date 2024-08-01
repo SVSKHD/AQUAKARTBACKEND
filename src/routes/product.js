@@ -8,8 +8,16 @@ router.get("/product-status", (req, res) => {
 });
 router.get("/all-products", ProductOperations.getProducts);
 router.get("/product/:id", ProductOperations.getProduct);
-router.post("/product-add", userAuth.checkAdmin, ProductOperations.addProduct)
-router.put("/product-update/:id", userAuth.checkAdmin, ProductOperations.updateProduct)
-router.get("/product-delete/:id", userAuth.checkAdmin, ProductOperations.deleteProduct)
+router.post("/product-add", userAuth.checkAdmin, ProductOperations.addProduct);
+router.put(
+  "/product-update/:id",
+  userAuth.checkAdmin,
+  ProductOperations.updateProduct,
+);
+router.get(
+  "/product-delete/:id",
+  userAuth.checkAdmin,
+  ProductOperations.deleteProduct,
+);
 
 export default router;

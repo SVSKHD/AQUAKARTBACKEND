@@ -8,27 +8,28 @@ const createPaymentLink = async (req, res) => {
   try {
     if (!name || !phone || !email || !amount || !invoiceId || !referenceId) {
       return res.status(400).send({
-        message: "Name, phone, email, amount, invoiceId, and referenceId are required",
+        message:
+          "Name, phone, email, amount, invoiceId, and referenceId are required",
         success: false,
       });
     }
 
     // Create a unique transaction ID
     const merchantTransactionId = `AQTRPAYLINK_${Date.now()}`;
-    const orderId = `AQTR_ODPAYLINK-${Date.now()}`
+    const orderId = `AQTR_ODPAYLINK-${Date.now()}`;
 
     const data = {
-      "merchantId":process.env.PHONEPE_MERCHANTID,
-      "transactionId":merchantTransactionId,
-      "merchantOrderId":merchantTransactionId,
-      "amount":amount*100,
-      "mobileNumber":phone,
-      "message":"paylink for 1 order",
-      "expiresIn":3600,
-      "storeId":"store1",
-      "terminalId":"terminal1",
-      "shortName":"DemoCustomer",
-      "subMerchantId":"DemoMerchant",
+      merchantId: process.env.PHONEPE_MERCHANTID,
+      transactionId: merchantTransactionId,
+      merchantOrderId: merchantTransactionId,
+      amount: amount * 100,
+      mobileNumber: phone,
+      message: "paylink for 1 order",
+      expiresIn: 3600,
+      storeId: "store1",
+      terminalId: "terminal1",
+      shortName: "DemoCustomer",
+      subMerchantId: "DemoMerchant",
     };
 
     const payload = JSON.stringify(data);
@@ -37,7 +38,7 @@ const createPaymentLink = async (req, res) => {
     const string = payloadMain + "/v3/payLink/init" + process.env.PHONEPE_KEY;
     const sha256 = crypto.createHash("sha256").update(string).digest("hex");
     const checksum = sha256 + "###" + keyIndex;
-    console.log("checksub", checksum , payloadMain)
+    console.log("checksub", checksum, payloadMain);
 
     const prod_URL = "https://mercury-t2.phonepe.com/v3/payLink/init";
     const options = {
@@ -58,8 +59,8 @@ const createPaymentLink = async (req, res) => {
 
     // Save the payment link to the database
     const newPayment = new AquaPayment({
-      referenceId: referenceId,  // Use the string directly
-      invoiceId: invoiceId,  // Use the string directly
+      referenceId: referenceId, // Use the string directly
+      invoiceId: invoiceId, // Use the string directly
       paymentLink: responseData.payLink,
       paymentStatus: false,
       paymentinfo: {
@@ -67,7 +68,7 @@ const createPaymentLink = async (req, res) => {
         amount: responseData.amount,
         merchantId: responseData.merchantId,
         upiIntent: responseData.upiIntent,
-        payUrl:responseData.payLink,
+        payUrl: responseData.payLink,
         mobileNumber: responseData.mobileNumber,
       },
       userDetails: {

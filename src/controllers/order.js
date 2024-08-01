@@ -12,7 +12,7 @@ const getOrdersByUserId = async (req, res) => {
   }
 };
 
-const getOrderByTransactionId = async(req,res)=>{
+const getOrderByTransactionId = async (req, res) => {
   const { id } = req.params;
   try {
     const orders = await AquaOrder.findOne({ transactionId: id });
@@ -20,12 +20,12 @@ const getOrderByTransactionId = async(req,res)=>{
   } catch (error) {
     return res.status(400).json({ success: false, message: "No orders found" });
   }
-}
+};
 
 const getOrdersById = async (req, res) => {
   const { id } = req.params;
   try {
-    const orders = await AquaOrder.findById(id)
+    const orders = await AquaOrder.findById(id);
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     return res.status(400).json({ success: false, message: "No orders found" });
@@ -108,30 +108,30 @@ const deleteOrder = async (req, res) => {
   }
 };
 
-const createCodOrder = async(req,res)=>{
-try {
-  const ordercreated = new AquaOrder(req.body)
-  await ordercreated.save()
-  const user = await AquaEcomUser.findById(req.body.user);
-  if (!ordercreated) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Please try again" });
+const createCodOrder = async (req, res) => {
+  try {
+    const ordercreated = new AquaOrder(req.body);
+    await ordercreated.save();
+    const user = await AquaEcomUser.findById(req.body.user);
+    if (!ordercreated) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Please try again" });
+    }
+    const message = `Welcome to Aquakart Family, We have succesfully Recieved the order "${ordercreated.orderId}"`;
+    if (user.phone) {
+      sendWhatsAppMessage(user.phone, message);
+    }
+    return res.status(200).json({ success: true, data: ordercreated });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message:
+        "There is a problem in created in order, please try again later.",
+      error: error.message, // It's helpful to send back a specific error message
+    });
   }
-  const message = `Welcome to Aquakart Family, We have succesfully Recieved the order "${ordercreated.orderId}"`
-  if(user.phone){
-    sendWhatsAppMessage(user.phone, message)
-  }
-  return res.status(200).json({ success: true, data: ordercreated });
-
-} catch (error) {
-  res.status(500).json({
-    success: false,
-    message: "There is a problem in created in order, please try again later.",
-    error: error.message, // It's helpful to send back a specific error message
-  });
-}
-}
+};
 
 const OrderOperations = {
   getAllOrders,
@@ -142,7 +142,7 @@ const OrderOperations = {
   createOrder,
   updateOrder,
   deleteOrder,
-  createCodOrder
+  createCodOrder,
 };
 
 export default OrderOperations;

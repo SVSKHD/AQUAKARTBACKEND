@@ -50,7 +50,7 @@ const UserSchema = new mongoose.Schema({
     trim: true,
   },
   password: {
-    type: String
+    type: String,
   },
   lastDetailsUpdatedDate: {
     type: Date,
@@ -61,8 +61,8 @@ const UserSchema = new mongoose.Schema({
   lastPasswordUpdated: {
     type: Date,
   },
-  EmailOtp:{
-    type:Number
+  EmailOtp: {
+    type: Number,
   },
   MobileOtp: {
     type: Number,
@@ -132,7 +132,7 @@ UserSchema.methods.generateAuthToken = function () {
   const token = jwt.sign(
     { _id: this._id, email: this.email, role: this.role },
     process.env.JWT_SECRET,
-    { expiresIn: "30d" }
+    { expiresIn: "30d" },
   );
   return token;
 };

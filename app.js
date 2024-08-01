@@ -1,4 +1,4 @@
-import './config.js';
+import "./config.js";
 
 import express from "express";
 import bodyParser from "body-parser";
@@ -26,13 +26,19 @@ const app = express();
 
 // Middleware for parsing JSON and urlencoded form data
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb', parameterLimit: 10000 }));
+app.use(
+  bodyParser.urlencoded({
+    extended: true,
+    limit: "10mb",
+    parameterLimit: 10000,
+  }),
+);
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://aquakart.co.in'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: ["http://localhost:3000", "https://aquakart.co.in"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
@@ -44,7 +50,7 @@ app.use(upload.any());
 
 // Middleware to make form data accessible across routes
 app.use((req, res, next) => {
-  if (req.method === 'POST' || req.method === 'PUT') {
+  if (req.method === "POST" || req.method === "PUT") {
     req.formData = req.body;
   }
   next();
@@ -54,9 +60,9 @@ app.get("/v1", (req, res) => {
   res.json({ status: "Hello Aquakart v1" });
 });
 
-app.get("/v1/status",(req,res)=>{
-res.json({status:active})
-})
+app.get("/v1/status", (req, res) => {
+  res.json({ status: active });
+});
 
 // ecom routes
 app.use("/v1", userRoutes);
