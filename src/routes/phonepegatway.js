@@ -1,5 +1,4 @@
 import express from "express";
-import axios from "axios";
 import paymentOperations from "../controllers/phonepeGateway.js";
 import userAuth from "../middleware/user.js";
 
