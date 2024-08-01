@@ -108,7 +108,6 @@ const handlePhoneOrderCheck = async (req, res) => {
       },
     });
 
-    console.log("response->", response.data);
 
     if (response.data) {
       const orderData = {
@@ -131,6 +130,8 @@ const handlePhoneOrderCheck = async (req, res) => {
         res.status(200).json({order:updatedOrder})
       } else if (response.data.code === "PAYMENT_ERROR") {
         res.status(200).json({order:updatedOrder})
+      } else if(response.data.code="PAYMENT_PENDING"){
+         res.status(200).json({order:updatedOrder})
       } else {
         res
           .status(400)
