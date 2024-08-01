@@ -1,4 +1,3 @@
-// Load environment variables first
 import './config.js';
 
 import express from "express";
@@ -28,7 +27,15 @@ const app = express();
 // Middleware for parsing JSON and urlencoded form data
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb', parameterLimit: 10000 }));
-app.use(cors());
+
+// CORS configuration
+const corsOptions = {
+  origin: ['http://localhost:3000', 'https://aquakart.co.in'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(morgan("dev"));
 
 // Multer setup for multipart/form-data (e.g., file uploads)
@@ -46,6 +53,10 @@ app.use((req, res, next) => {
 app.get("/v1", (req, res) => {
   res.json({ status: "Hello Aquakart v1" });
 });
+
+app.get("/v1/status",(req,res)=>{
+res.json({status:active})
+})
 
 // ecom routes
 app.use("/v1", userRoutes);
