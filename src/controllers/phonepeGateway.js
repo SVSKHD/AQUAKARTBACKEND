@@ -39,9 +39,8 @@ const payPhonepe = async (req, res) => {
       merchantUserId: passedPayload.user,
       name: getUserById.name || createUserName(getUserById.email),
       amount: passedPayload.totalAmount * 100,
-      redirectUrl: `https://aquakart.co.in/order/${merchantTransactionId}`,
-      redirectMode: "POST",
-      callbackUrl: `https://aquakart.co.in/api/check-pay`,
+      redirectUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
+      redirectMode: "REDIRECT",
       mobileNumber: passedPayload.number,
       paymentInstrument: {
         type: "PAY_PAGE",
@@ -85,122 +84,67 @@ function getUserIdFromTransactionId(transactionId) {
   return parts[1];
 }
 
-// const handlePhonePeOrder = async(req,res)=>{
-  // console.log("req", req.body)
-  // const { transactionId, merchantId } = req.body;
-  // const userId = getUserIdFromTransactionId(transactionId);
-  // const checksum =
-  //     crypto
-  //       .createHash("sha256")
-  //       .update(
-  //         `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
-  //       )
-  //       .digest("hex") + "###1";
 
-  //   const options = {
-  //     method: "GET",
-  //     url: `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`,
-  //     headers: {
-  //       accept: "application/json",
-  //       "Content-Type": "application/json",
-  //       "X-VERIFY": checksum,
-  //       "X-MERCHANT-ID": merchantId,
-  //     },
-  //   };
-  //   const apiResponse = await axios.request(options);
-  //   if (apiResponse.data) {
-  //     const orderData = {
-  //       paymentStatus: "Paid",
-  //       paymentInstrument: apiResponse.data.data.paymentInstrument,
-  //       paymentGatewayDetails: apiResponse.data,
-  //       orderType: "Payment Method(Phone-Pe-Gateway)",
-  //     };
+const handlePhoneOrderCheck = async (req, res) => {
+  const { transactionId, merchantId } = req.body.data;
 
-  //     const updatedOrder = await AquaOrder.findOneAndUpdate(
-  //       { transactionId },
-  //       orderData,
-  //       { new: true },
-  //     );
-  //     if (updatedOrder) {
-  //       res.writeHead(302, {
-  //         Location: `aquakart.co.in/order/${updatedOrder.transactionId}`,
-  //       });
-  //     }
-// }
+  console.log(merchantId);
+  const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
+  const checksum = crypto
+    .createHash("sha256")
+    .update(`/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`)
+    .digest("hex") + "###1";
 
-const handlePhonePeOrder = async (req, res) => {
+  console.log("checksum", checksum);
+
   try {
-    const { transactionId, merchantId } = req.params;
-    const userId = getUserIdFromTransactionId(transactionId); // Ensure this function is defined
-
-    const checksum =
-      crypto
-        .createHash("sha256")
-        .update(
-          `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
-        )
-        .digest("hex") + "###1";
-
-    const options = {
-      method: "GET",
-      url: `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`,
+    const response = await axios.get(url, {
       headers: {
-        accept: "application/json",
         "Content-Type": "application/json",
         "X-VERIFY": checksum,
         "X-MERCHANT-ID": merchantId,
+        accept: "application/json",
       },
-    };
+    });
 
-    const apiResponse = await axios.request(options);
-    if (apiResponse.data && apiResponse.data.code==="PAYMENT_SUCCESS") {
+    console.log("response->", response.data);
+
+    if (response.data) {
       const orderData = {
-        paymentStatus: "Paid",
-        paymentInstrument: apiResponse.data.data.paymentInstrument,
-        paymentGatewayDetails: apiResponse.data,
+        paymentStatus: response.data.code === "PAYMENT_SUCCESS" ? "Paid" : "Failed",
+        paymentInstrument: response.data.data.paymentInstrument,
+        paymentGatewayDetails: response.data,
         orderType: "Payment Method(Phone-Pe-Gateway)",
       };
 
       const updatedOrder = await AquaOrder.findOneAndUpdate(
         { transactionId },
         orderData,
-        { new: true },
+        { new: true }
       );
 
-      if (updatedOrder) {
-        const fetchedUser = await AquaEcomUser.findById(updatedOrder.user);
-        if (fetchedUser) {
-          const emailContent = orderTemplate(
-            fetchedUser.email,
-            updatedOrder.items,
-            updatedOrder.paymentStatus,
-            updatedOrder.estimatedDelivery,
-          ); // This function should return the HTML content of the email
-          await sendEmail({
-            email: fetchedUser.email,
-            subject: `Thank You for Your Order!  - Aquakart`,
-            message: "Happy Shopping",
-            content: emailContent,
-          });
-        }
-        res.writeHead(302, {
-          Location: `/order/${updatedOrder.transactionId}`,
-        });
-        res.end(JSON.stringify({ user: fetchedUser }));
+      const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
+
+      if (response.data.code === "PAYMENT_SUCCESS") {
+        res.redirect(redirectUrl);
+      } else if (response.data.code === "PAYMENT_ERROR") {
+        res.redirect(redirectUrl);
       } else {
-        throw new Error("Order not found");
+        res.status(400).json({ success: false, message: "Unknown payment status" });
       }
-    } else {
-      res.status(400).json({ error: "Payment not successful" });
+
+      console.log(response.data.data.paymentInstrument);
     }
   } catch (error) {
-    console.error("Error:", error.message);
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
+
+
 const paymentOperations = {
   payPhonepe,
-  handlePhonePeOrder
+  handlePhoneOrderCheck
 };
 
 export default paymentOperations;
