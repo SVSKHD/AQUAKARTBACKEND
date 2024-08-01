@@ -79,10 +79,9 @@ const payPhonepe = async (req, res) => {
     });
   }
 };
-function getUserIdFromTransactionId(transactionId) {
-  const parts = transactionId.split("-");
-  return parts[1];
-}
+
+
+
 
 
 const handlePhoneOrderCheck = async (req, res) => {
