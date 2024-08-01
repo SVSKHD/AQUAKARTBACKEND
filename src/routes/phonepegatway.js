@@ -11,5 +11,5 @@ router.get("/", async (req, res) => {
 
 router.post("/pay-phonepe", paymentOperations.payPhonepe);
 
-router.post("/phonepe-verify/:id", paymentOperations.handlePhoneOrderCheck);
+router.get("/phonepe-verify/:id", paymentOperations.handlePhoneOrderCheck);
 export default router;
