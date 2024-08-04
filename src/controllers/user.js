@@ -278,27 +278,29 @@ const userForgetPassword = async (req, res) => {
 
 // Update User Details
 const updateDetails = async (req, res) => {
-  const { id } = req.params;
+  const id = req.params.id;
   const { newDetails } = req.body;
 
+
   try {
-    const user = await AquaEcomUser.findByIdAndUpdate(
-      id,
-      { $set: newDetails },
-      { new: true },
-    );
+    const user = await AquaEcomUser.findById(id);
 
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
 
-    res.status(200).json(user);
+    const updatedUser = await AquaEcomUser.findByIdAndUpdate(
+      id,
+      { $set: newDetails },
+      { new: true }
+    );
+
+    return res.status(200).json(updatedUser);
   } catch (error) {
     console.error("Error during updating user details:", error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
-
 const updateIdentifierDetails = async (req, res) => {
   const { identifier, newDetails } = req.body;
 

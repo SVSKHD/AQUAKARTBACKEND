@@ -18,7 +18,7 @@ router.post("/forget-password", userController.userForgetPassword);
 router.post(
   "/user/update-details/:id",
   userAuth.isLoggedIn,
-  userController.updateDetails,
+  userController.updateDetails
 );
 router.post("/check-login", userAuth.isLoggedIn, userController.checkLogin);
 

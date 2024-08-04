@@ -61,6 +61,9 @@ const UserSchema = new mongoose.Schema({
   lastPasswordUpdated: {
     type: Date,
   },
+  dob:{
+    type:Date
+  },
   EmailOtp: {
     type: Number,
   },
