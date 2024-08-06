@@ -18,5 +18,10 @@ router.get(
   userAuth.isLoggedIn,
   OrderOperations.getOrderByTransactionId,
 );
+//admin routes
+router.get("/admin/orders",userAuth.checkAdmin, OrderOperations.AdminGetOrders)
+// update orders
+// delete orders
+
 
 export default router;

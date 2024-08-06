@@ -70,6 +70,12 @@ const UserSchema = new mongoose.Schema({
   MobileOtp: {
     type: Number,
   },
+  verificationOtp:{
+    type:Number
+  }, 
+  profileUpdated:{
+   type:Date
+  },
   phone: {
     type: Number,
     unique: true,
@@ -118,9 +124,15 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 2,
   },
+  referral: [
+    {
+      userId: mongoose.Schema.Types.ObjectId, // Reference to the referred user
+      userSignupDate: Date,
+    }
+  ],
   selectedAddress: addressSchema,
   addresses: [addressSchema],
-});
+},{timestamps:true});
 
 // Pre-save hook to hash password
 UserSchema.pre("save", async function (next) {

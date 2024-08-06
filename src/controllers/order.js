@@ -133,6 +133,40 @@ const createCodOrder = async (req, res) => {
   }
 };
 
+
+
+
+const AdminGetOrders = async (req, res) => {
+  try {
+    const { id, transactionId, orderId, date } = req.params;
+
+    // Construct the query object
+    const query = {};
+    if (id) query._id = mongoose.Types.ObjectId(id);
+    if (transactionId) query.transactionId = transactionId;
+    if (orderId) query.orderId = orderId;
+    if (date) {
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 1);
+
+      query.createdAt = {
+        $gte: startDate,
+        $lt: endDate,
+      };
+    }
+
+    // Fetch orders based on the query
+    const orders = await AquaOrder.find(query).populate('user items.productId');
+
+    // Send the response
+    res.status(200).json({ orders });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
 const OrderOperations = {
   getAllOrders,
   getSingleOrderIdByUserId,
@@ -143,6 +177,8 @@ const OrderOperations = {
   updateOrder,
   deleteOrder,
   createCodOrder,
+  //admin routes
+  AdminGetOrders
 };
 
 export default OrderOperations;
