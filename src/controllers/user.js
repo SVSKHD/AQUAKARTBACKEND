@@ -77,21 +77,17 @@ const userEmailOtpLogin = async (req, res) => {
     if (emailResult.success) {
       // Save the user with the OTP
       await user.save();
-      res
-        .status(200)
-        .json({
-          success: true,
-          emailMessage: emailResult.message,
-          userExist: userExist,
-        });
+      res.status(200).json({
+        success: true,
+        emailMessage: emailResult.message,
+        userExist: userExist,
+      });
     } else {
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "Failed to send OTP",
-          emailMessage: emailResult.message,
-        });
+      res.status(400).json({
+        success: false,
+        message: "Failed to send OTP",
+        emailMessage: emailResult.message,
+      });
     }
   } catch (error) {
     console.error("Error during email OTP login:", error);
@@ -130,21 +126,17 @@ const userPhoneLogin = async (req, res) => {
     if (otpData.success) {
       // Save the user with the OTP
       await user.save();
-      res
-        .status(200)
-        .json({
-          success: true,
-          otpMessage: otpData.message,
-          userExist: userExist,
-        });
+      res.status(200).json({
+        success: true,
+        otpMessage: otpData.message,
+        userExist: userExist,
+      });
     } else {
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "Failed to send OTP",
-          otpMessage: otpData.message,
-        });
+      res.status(400).json({
+        success: false,
+        message: "Failed to send OTP",
+        otpMessage: otpData.message,
+      });
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -281,7 +273,6 @@ const updateDetails = async (req, res) => {
   const id = req.params.id;
   const { newDetails } = req.body;
 
-
   try {
     const user = await AquaEcomUser.findById(id);
 
@@ -292,7 +283,7 @@ const updateDetails = async (req, res) => {
     const updatedUser = await AquaEcomUser.findByIdAndUpdate(
       id,
       { $set: newDetails },
-      { new: true }
+      { new: true },
     );
 
     return res.status(200).json(updatedUser);

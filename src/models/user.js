@@ -9,130 +9,133 @@ const addressSchema = new mongoose.Schema({
   postalCode: String,
 });
 
-const UserSchema = new mongoose.Schema({
-  // user id unique for every one
-  id: { type: String },
-  // reset info and required info
-  resetPasswordOtp: { type: Number },
-  resetPasswordDate: { type: Date },
-  confirmationOtp: { type: Number },
-  confirmationOtpDate: { type: Date },
-  // mobile confirmation
-  mobileOtp: { type: Number },
-  ismobileLoginConfirmation: { type: Boolean },
-  isMobileConfirmationDate: { type: Date },
-  // social credentials
-  isGoogleLogin: { type: Boolean },
-  isFaceBookLogin: { type: Boolean },
-  isTwitterLogin: { type: Boolean },
-  googleData: { type: Object },
-  facebookData: { type: Object },
-  twitterData: { type: Object },
-  // email verifications
-  emailOtp: { type: Number },
-  isEmailVerfied: { type: Boolean },
-  // user signedup date
-  userSignedupDate: { type: Date, default: Date.now },
-  // login creds info
-  email: {
-    type: String,
-    unique: true,
-    trim: true,
-    index: true,
-    lowercase: true,
-  },
-  firstName: {
-    type: String,
-    trim: true,
-  },
-  lastName: {
-    type: String,
-    trim: true,
-  },
-  password: {
-    type: String,
-  },
-  lastDetailsUpdatedDate: {
-    type: Date,
-  },
-  forgotPasswordDate: {
-    type: Date,
-  },
-  lastPasswordUpdated: {
-    type: Date,
-  },
-  dob:{
-    type:Date
-  },
-  EmailOtp: {
-    type: Number,
-  },
-  MobileOtp: {
-    type: Number,
-  },
-  verificationOtp:{
-    type:Number
-  }, 
-  profileUpdated:{
-   type:Date
-  },
-  phone: {
-    type: Number,
-    unique: true,
-    sparse: true,
-  },
-  alternativeEmail: {
-    type: String,
-    trim: true,
-  },
-  photo: {
-    id: {
+const UserSchema = new mongoose.Schema(
+  {
+    // user id unique for every one
+    id: { type: String },
+    // reset info and required info
+    resetPasswordOtp: { type: Number },
+    resetPasswordDate: { type: Date },
+    confirmationOtp: { type: Number },
+    confirmationOtpDate: { type: Date },
+    // mobile confirmation
+    mobileOtp: { type: Number },
+    ismobileLoginConfirmation: { type: Boolean },
+    isMobileConfirmationDate: { type: Date },
+    // social credentials
+    isGoogleLogin: { type: Boolean },
+    isFaceBookLogin: { type: Boolean },
+    isTwitterLogin: { type: Boolean },
+    googleData: { type: Object },
+    facebookData: { type: Object },
+    twitterData: { type: Object },
+    // email verifications
+    emailOtp: { type: Number },
+    isEmailVerfied: { type: Boolean },
+    // user signedup date
+    userSignedupDate: { type: Date, default: Date.now },
+    // login creds info
+    email: {
+      type: String,
+      unique: true,
+      trim: true,
+      index: true,
+      lowercase: true,
+    },
+    firstName: {
+      type: String,
+      trim: true,
+    },
+    lastName: {
+      type: String,
+      trim: true,
+    },
+    password: {
       type: String,
     },
-    secure_url: {
-      type: String,
+    lastDetailsUpdatedDate: {
+      type: Date,
     },
-  },
-  gstDetails: {
-    gstEmail: { type: String },
-    gstNo: { type: String },
-    gstPhone: { type: Number },
-    gstAddres: { type: String },
-  },
+    forgotPasswordDate: {
+      type: Date,
+    },
+    lastPasswordUpdated: {
+      type: Date,
+    },
+    dob: {
+      type: Date,
+    },
+    EmailOtp: {
+      type: Number,
+    },
+    MobileOtp: {
+      type: Number,
+    },
+    verificationOtp: {
+      type: Number,
+    },
+    profileUpdated: {
+      type: Date,
+    },
+    phone: {
+      type: Number,
+      unique: true,
+      sparse: true,
+    },
+    alternativeEmail: {
+      type: String,
+      trim: true,
+    },
+    photo: {
+      id: {
+        type: String,
+      },
+      secure_url: {
+        type: String,
+      },
+    },
+    gstDetails: {
+      gstEmail: { type: String },
+      gstNo: { type: String },
+      gstPhone: { type: Number },
+      gstAddres: { type: String },
+    },
 
-  cart: [
-    {
-      // Define the structure of items in the cart
-      productId: mongoose.Schema.Types.ObjectId, // Reference to the product
-      quantity: Number,
+    cart: [
+      {
+        // Define the structure of items in the cart
+        productId: mongoose.Schema.Types.ObjectId, // Reference to the product
+        quantity: Number,
+      },
+    ],
+    orders: [
+      {
+        orderId: mongoose.Schema.Types.ObjectId, // Reference to the order
+        orderDate: Date,
+      },
+    ],
+    wishes: [
+      {
+        // Define the structure of user wishes
+        productId: mongoose.Schema.Types.ObjectId, // Reference to the product
+        addedDate: Date,
+      },
+    ],
+    role: {
+      type: Number,
+      default: 2,
     },
-  ],
-  orders: [
-    {
-      orderId: mongoose.Schema.Types.ObjectId, // Reference to the order
-      orderDate: Date,
-    },
-  ],
-  wishes: [
-    {
-      // Define the structure of user wishes
-      productId: mongoose.Schema.Types.ObjectId, // Reference to the product
-      addedDate: Date,
-    },
-  ],
-  role: {
-    type: Number,
-    default: 2,
+    referral: [
+      {
+        userId: mongoose.Schema.Types.ObjectId, // Reference to the referred user
+        userSignupDate: Date,
+      },
+    ],
+    selectedAddress: addressSchema,
+    addresses: [addressSchema],
   },
-  referral: [
-    {
-      userId: mongoose.Schema.Types.ObjectId, // Reference to the referred user
-      userSignupDate: Date,
-    }
-  ],
-  selectedAddress: addressSchema,
-  addresses: [addressSchema],
-},{timestamps:true});
+  { timestamps: true },
+);
 
 // Pre-save hook to hash password
 UserSchema.pre("save", async function (next) {

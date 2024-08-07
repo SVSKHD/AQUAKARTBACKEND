@@ -35,7 +35,6 @@ const OrderSchema = new mongoose.Schema(
     items: [OrderItemSchema],
     totalAmount: Number,
     paymentMethod: String,
-    transactionId: String,
     paymentStatus: {
       type: String,
       enum: ["Paid", "Pending", "Failed", "Processing"],
@@ -61,7 +60,7 @@ const OrderSchema = new mongoose.Schema(
     shippingMethod: String,
     shippingCost: Number,
     estimatedDelivery: Date,
-    isOderDelivery: {
+    isOrderDelivery: {
       type: Boolean,
     },
     isOrderDeliveryDate: {
@@ -91,6 +90,16 @@ const OrderSchema = new mongoose.Schema(
       ],
       default: "Processing",
     },
+    refund: {
+      type: Boolean,
+      default: false,
+    },
+    refundStatus: {
+      type: String,
+      enum: ["Not Initiated", "Initiated", "Processing", "Completed", "Failed"],
+      default: "Not Initiated",
+    },
+    deliveryDate: Date,
     discounts: Number,
     taxes: Number,
     notes: String,

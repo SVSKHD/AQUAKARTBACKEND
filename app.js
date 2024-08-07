@@ -5,6 +5,7 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import morgan from "morgan";
 import multer from "multer";
+import path from "path";
 
 // routes
 import userRoutes from "./src/routes/user.js";
@@ -25,14 +26,8 @@ import AdminCategoryRoutes from "./src/routes/crm/category.js";
 const app = express();
 
 // Middleware for parsing JSON and urlencoded form data
-app.use(bodyParser.json());
-app.use(
-  bodyParser.urlencoded({
-    extended: true,
-    limit: "10mb",
-    parameterLimit: 10000,
-  }),
-);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // CORS configuration
 const corsOptions = {
@@ -45,15 +40,28 @@ app.use(cors(corsOptions));
 app.use(morgan("dev"));
 
 // Multer setup for multipart/form-data (e.g., file uploads)
-const upload = multer();
-app.use(upload.any());
+const storage = multer.diskStorage({
+  destination: "./uploads/", // Specify your upload directory
+  filename: (req, file, cb) => {
+    cb(
+      null,
+      `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`,
+    );
+  },
+});
 
-// Middleware to make form data accessible across routes
-app.use((req, res, next) => {
-  if (req.method === "POST" || req.method === "PUT") {
-    req.formData = req.body;
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+});
+
+// Example route with file upload
+app.post("/v1/upload", upload.single("photo"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send("No file uploaded.");
   }
-  next();
+
+  res.send("File uploaded successfully.");
 });
 
 app.get("/v1", (req, res) => {
@@ -61,7 +69,7 @@ app.get("/v1", (req, res) => {
 });
 
 app.get("/v1/status", (req, res) => {
-  res.json({ status: active });
+  res.json({ status: "active" });
 });
 
 // ecom routes

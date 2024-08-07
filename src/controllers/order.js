@@ -133,9 +133,6 @@ const createCodOrder = async (req, res) => {
   }
 };
 
-
-
-
 const AdminGetOrders = async (req, res) => {
   try {
     const { id, transactionId, orderId, date } = req.params;
@@ -157,7 +154,7 @@ const AdminGetOrders = async (req, res) => {
     }
 
     // Fetch orders based on the query
-    const orders = await AquaOrder.find(query).populate('user items.productId');
+    const orders = await AquaOrder.find(query).populate("user items.productId");
 
     // Send the response
     res.status(200).json({ orders });
@@ -178,7 +175,7 @@ const OrderOperations = {
   deleteOrder,
   createCodOrder,
   //admin routes
-  AdminGetOrders
+  AdminGetOrders,
 };
 
 export default OrderOperations;

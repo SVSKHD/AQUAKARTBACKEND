@@ -2,28 +2,49 @@ import AquaCategory from "../models/category.js";
 import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
 
+const streamUpload = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.v2.uploader.upload_stream(
+      { folder: "categories" },
+      (error, result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(error);
+        }
+      },
+    );
+    stream.end(buffer);
+  });
+};
+
 const addCategory = async (req, res) => {
   try {
-    const { title, description, photos, keywords } = req.body;
+    const { title, description, keywords } = req.body;
+    const photos = req.files;
+
     if (!photos || photos.length === 0) {
-      throw new Error("No photos provided");
+      return res
+        .status(400)
+        .json({ success: false, message: "No photos provided" });
     }
+
     const uploadedPhotos = [];
     for (const photo of photos) {
-      const result = await cloudinary.v2.uploader.upload(photo, {
-        folder: "categories", // You can specify the folder in Cloudinary
-      });
+      const result = await streamUpload(photo.buffer);
       uploadedPhotos.push({
         id: result.public_id,
         secure_url: result.secure_url,
       });
     }
+
     const newCategory = new AquaCategory({
       title,
       description,
       photos: uploadedPhotos,
       keywords,
     });
+
     await newCategory.save();
     return res.status(201).json({ success: true, data: newCategory });
   } catch (error) {

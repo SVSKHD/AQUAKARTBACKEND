@@ -82,9 +82,9 @@ const payPhonepe = async (req, res) => {
 };
 
 const handlePhoneOrderCheck = async (req, res) => {
-  const { id } = req.params
-  const transactionId = id
-  const merchantId = process.env.PHONEPE_MERCHANTID
+  const { id } = req.params;
+  const transactionId = id;
+  const merchantId = process.env.PHONEPE_MERCHANTID;
 
   console.log(id);
   const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
@@ -108,7 +108,6 @@ const handlePhoneOrderCheck = async (req, res) => {
       },
     });
 
-
     if (response.data) {
       const orderData = {
         paymentStatus:
@@ -127,11 +126,11 @@ const handlePhoneOrderCheck = async (req, res) => {
       const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
 
       if (response.data.code === "PAYMENT_SUCCESS") {
-        res.status(200).json({order:updatedOrder})
+        res.status(200).json({ order: updatedOrder });
       } else if (response.data.code === "PAYMENT_ERROR") {
-        res.status(200).json({order:updatedOrder})
-      } else if(response.data.code="PAYMENT_PENDING"){
-         res.status(200).json({order:updatedOrder})
+        res.status(200).json({ order: updatedOrder });
+      } else if ((response.data.code = "PAYMENT_PENDING")) {
+        res.status(200).json({ order: updatedOrder });
       } else {
         res
           .status(400)

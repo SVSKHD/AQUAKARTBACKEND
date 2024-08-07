@@ -19,9 +19,12 @@ router.get(
   OrderOperations.getOrderByTransactionId,
 );
 //admin routes
-router.get("/admin/orders",userAuth.checkAdmin, OrderOperations.AdminGetOrders)
+router.get(
+  "/admin/orders",
+  userAuth.checkAdmin,
+  OrderOperations.AdminGetOrders,
+);
 // update orders
 // delete orders
-
 
 export default router;

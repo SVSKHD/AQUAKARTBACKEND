@@ -37,7 +37,11 @@ const checkAdmin = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+
+    if (!decoded._id) {
+      return res.status(401).json({ message: "Invalid token payload" });
+    }
+
     const user = await AquaAdminUser.findById(decoded._id);
 
     if (!user) {
@@ -48,8 +52,10 @@ const checkAdmin = async (req, res, next) => {
       return res.status(403).json({ message: "Admin access required" });
     }
 
+    req.user = user;
     next();
   } catch (err) {
+    console.error("Token verification error:", err); // Debug log
     res.status(401).json({ message: "Token is not valid" });
   }
 };
