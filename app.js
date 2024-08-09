@@ -1,11 +1,9 @@
 import "./config.js";
-
 import express from "express";
-import bodyParser from "body-parser";
 import cors from "cors";
 import morgan from "morgan";
 import multer from "multer";
-import path from "path";
+import fileUpload from "express-fileupload";
 
 // routes
 import userRoutes from "./src/routes/user.js";
@@ -25,9 +23,14 @@ import AdminCategoryRoutes from "./src/routes/crm/category.js";
 
 const app = express();
 
-// Middleware for parsing JSON and urlencoded form data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+  })
+);
 
 // CORS configuration
 const corsOptions = {
@@ -37,32 +40,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(morgan("dev"));
+app.use(morgan("tiny"));
 
-// Multer setup for multipart/form-data (e.g., file uploads)
-const storage = multer.diskStorage({
-  destination: "./uploads/", // Specify your upload directory
-  filename: (req, file, cb) => {
-    cb(
-      null,
-      `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`,
-    );
-  },
-});
 
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
-});
 
-// Example route with file upload
-app.post("/v1/upload", upload.single("photo"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send("No file uploaded.");
-  }
-
-  res.send("File uploaded successfully.");
-});
+// Middleware to apply multer to specific routes
+// const uploadMiddleware = upload.fields([{ name: 'photos' }, { name: 'arPhotos' }]);
 
 app.get("/v1", (req, res) => {
   res.json({ status: "Hello Aquakart v1" });
@@ -72,11 +55,17 @@ app.get("/v1/status", (req, res) => {
   res.json({ status: "active" });
 });
 
+app.post("/v1",(req,res)=>{
+  const data = req.body;
+  console.log("res", data);
+  res.status(200).json(data);
+});
+
 // ecom routes
 app.use("/v1", userRoutes);
 app.use("/v1", categoryRoutes);
 app.use("/v1", subCategoryRoutes);
-app.use("/v1", productRoutes);
+app.use("/v1", productRoutes); // Ensure the correct path
 app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 app.use("/v1", orderRoutes);
