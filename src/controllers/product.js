@@ -1,25 +1,78 @@
 import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
+import mongoose from "mongoose";
 
-const streamUpload = (buffer, folder) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.v2.uploader.upload_stream(
-      { folder },
-      (error, result) => {
-        if (result) {
-          resolve(result);
-        } else {
-          reject(error);
+const CreateProduct = async (req, res, next) => {
+  try {
+    // Ensure files are uploaded
+    if (!req.files || !req.files.photos) {
+      return next(new CustomError("Images are required", 401));
+    }
+
+    // Initialize the image array
+    let imageArray = [];
+
+    // Upload photos to Cloudinary
+    for (let index = 0; index < req.files.photos.length; index++) {
+ 
+
+      let result = await cloudinary.v2.uploader.upload(
+        req.files.photos[index].tempFilePath,
+        {
+          folder: "products",
         }
-      }
-    );
-    stream.end(buffer);
-  });
+      );
+
+      imageArray.push({
+        id: result.public_id,
+        secure_url: result.secure_url,
+      });
+    }
+
+    // Add the uploaded images to the request body
+    req.body.photos = imageArray;
+
+    // Assign the current user to the product
+    req.body.user = req.user;
+
+    // Trim and validate ObjectId fields
+    const category = req.body.category ? req.body.category.trim() : null;
+    const subCategory = req.body.subCategory ? req.body.subCategory.trim() : null;
+    const blog = req.body.blog ? req.body.blog.trim() : null;
+
+    if (category && !mongoose.Types.ObjectId.isValid(category)) {
+      return next(new CustomError("Invalid category ID format", 400));
+    }
+
+    if (subCategory && !mongoose.Types.ObjectId.isValid(subCategory)) {
+      return next(new CustomError("Invalid subCategory ID format", 400));
+    }
+
+    if (blog && !mongoose.Types.ObjectId.isValid(blog)) {
+      return next(new CustomError("Invalid blog ID format", 400));
+    }
+
+    req.body.category = category;
+    req.body.subCategory = subCategory;
+    req.body.blog = blog;
+
+    // Create the product in the database
+    const product = await AquaProduct.create(req.body);
+
+    // Send response
+    res.status(200).json({
+      success: true,
+      product,
+    });
+  } catch (error) {
+    console.error("Error creating product:", error);
+    res.status(500).json({
+      success: false,
+      message: "Product creation failed",
+      error: error.message || error,
+    });
+  }
 };
-const CreateProduct = async(req,res)=>{
-const {title, description} = req.body
-console.log("title", title, description)
-}
 
 const updateProduct = async (req, res) => {
   try {
@@ -177,24 +230,6 @@ const getProduct = async (req, res) => {
 const ProductOperations = {
   getProducts,
   getProduct,
-  addProduct:async (req, res) => {
-    try {
-      const { title, description, price, category } = req.body;
-      console.log("req",req.body)
-      // Basic validation
-      if (!title || !description || !price || !category) {
-        return res.status(400).json({ success: false, message: "All fields are required" });
-      }
-
-   
-
-     
-      res.status(201).json({ success: true, data: title });
-    } catch (error) {
-      console.error("Error adding product:", error);
-      res.status(500).json({ success: false, message: "Server error" });
-    }
-  },
   CreateProduct,
   updateProduct,
   deleteProduct,
