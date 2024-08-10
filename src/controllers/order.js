@@ -1,6 +1,9 @@
 import AquaOrder from "../models/orders.js";
 import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
+import sendEmail from "../notifications/email/send-email.js";
+import orderEmail  from "../notifications/email/orderTemplate.js"
+import moment from "moment"
 
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
@@ -110,6 +113,7 @@ const deleteOrder = async (req, res) => {
 
 const createCodOrder = async (req, res) => {
   try {
+    let emailResult = false
     const ordercreated = new AquaOrder(req.body);
     await ordercreated.save();
     const user = await AquaEcomUser.findById(req.body.user);
@@ -122,7 +126,22 @@ const createCodOrder = async (req, res) => {
     if (user.phone) {
       sendWhatsAppMessage(user.phone, message);
     }
-    return res.status(200).json({ success: true, data: ordercreated });
+    if (user.email){
+     const orderTime = moment(ordercreated.estimatedDelivery).format('DD-MM-YY') 
+     const order = orderEmail(user.email, ordercreated.items, ordercreated.orderStatus, orderTime)
+     const message = "Thank you for your order! We’re thrilled to have you as part of the Aquakart family. Your purchase is now in good hands, and our team is on it, ensuring that everything flows smoothly."
+    // Send the OTP email
+    const emailResult = await sendEmail({
+      email: user.email,
+      subject: "Aquakart - COD Order Confirmation",
+      message: message,
+      content: order,
+    });
+     if(emailResult){
+      return res.status(200).json({ success: true, data: ordercreated, emailResult:true });
+     }
+    }
+    return res.status(200).json({ success: true, data: ordercreated, emailResult:false });
   } catch (error) {
     res.status(500).json({
       success: false,
