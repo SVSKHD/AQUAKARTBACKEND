@@ -2,7 +2,25 @@ import AquaOrder from "../models/orders.js";
 import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import sendEmail from "../notifications/email/send-email.js";
-import orderEmail  from "../notifications/email/orderTemplate.js"
+import orderEmail  from "../utils/emailTemplates/orderEmail.js"
+import moment from "moment";
+
+
+
+
+
+const formatCurrencyINR = (amount) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+  }).format(amount);
+};
+
+
+const formattedDeliveryDate = (date) =>{
+ return moment(date).format("DD-MM-YYYY")
+}
 
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
@@ -111,39 +129,49 @@ const deleteOrder = async (req, res) => {
 };
 
 const createCodOrder = async (req, res) => {
+
+
   try {
     const ordercreated = new AquaOrder(req.body);
     await ordercreated.save();
+
     const user = await AquaEcomUser.findById(req.body.user);
     if (!ordercreated) {
       return res
         .status(400)
         .json({ success: false, message: "Please try again" });
     }
-    const message = `Welcome to Aquakart Family, We have succesfully Recieved the order "${ordercreated.orderId}"`;
+
+    const message = `Welcome to Aquakart Family, We have successfully received the order "${ordercreated.orderId}"`;
+
+    // Send WhatsApp message if user has a phone number
     if (user.phone) {
       sendWhatsAppMessage(user.phone, message);
     }
     if (user.email){
-     const order = orderEmail(ordercreated, user.email)
-     const message = "Thank you for your order! We’re thrilled to have you as part of the Aquakart family. Your purchase is now in good hands, and our team is on it, ensuring that everything flows smoothly."
-    // Send the OTP email
-    const emailResult = await sendEmail({
-      email: user.email,
-      subject: "Aquakart - COD Order Confirmation",
-      message: message,
-      content: order,
-    });
-     if(emailResult){
-      return res.status(200).json({ success: true, data: ordercreated, emailResult:true });
-     }
+      const priceInr = `${formatCurrencyINR(ordercreated.totalAmount)}/-`
+      const deliveryDate = formattedDeliveryDate(ordercreated.estimatedDelivery)
+      const content = orderEmail(ordercreated,user.email, priceInr, deliveryDate)
+      const emailResult = await sendEmail({
+        email: user.email,
+        subject: "Cash on Delivery Order Confirmation",
+        message: "Cash on Delivery Order Confirmation - Hello Aquakart",
+        content: content,
+      });
+      
+      if(emailResult){
+        return res.status(200).json({ success: true, data: ordercreated, emailResult: true });
+      }
     }
-    return res.status(200).json({ success: true, data: ordercreated, emailResult:false });
+
+    // Send email if the user has an email address
+  
+    return res.status(200).json({ success: true, data: ordercreated, emailResult: false });
   } catch (error) {
     res.status(500).json({
       success: false,
       message:
-        "There is a problem in created in order, please try again later.",
+        "There was a problem creating the order, please try again later.",
       error: error.message, // It's helpful to send back a specific error message
     });
   }
