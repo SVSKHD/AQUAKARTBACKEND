@@ -3,7 +3,6 @@ import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail  from "../notifications/email/orderTemplate.js"
-import moment from "moment"
 
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
@@ -127,8 +126,7 @@ const createCodOrder = async (req, res) => {
       sendWhatsAppMessage(user.phone, message);
     }
     if (user.email){
-     const orderTime = moment(ordercreated.estimatedDelivery).format('DD-MM-YY') 
-     const order = orderEmail(user.email, ordercreated.items, ordercreated.orderStatus, orderTime)
+     const order = orderEmail(order, user.email)
      const message = "Thank you for your order! We’re thrilled to have you as part of the Aquakart family. Your purchase is now in good hands, and our team is on it, ensuring that everything flows smoothly."
     // Send the OTP email
     const emailResult = await sendEmail({

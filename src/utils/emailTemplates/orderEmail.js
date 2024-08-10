@@ -1,20 +1,29 @@
-const orderEmail = (email, orderItems, paymentType, estimatedDelivery) => {
-    const orderItemsHTML = orderItems
+const orderEmail = (order, email) => {
+    const {items, paymentMethod, estimatedDelivery } = order;
+    
+    const orderItemsHTML = items
       .map(
         (item) => `
         <tr>
           <td>${item.name}</td>
-          <td>${item.quantity} x ${item.price}</td>
-          <td>${item.quantity * item.price}</td>
+          <td>${item.quantity} x ₹${item.price}</td>
+          <td>₹${item.quantity * item.price}</td>
         </tr>
       `,
       )
       .join("");
   
-    const totalAmount = orderItems.reduce(
+    const totalAmount = items.reduce(
       (acc, item) => acc + item.quantity * item.price,
       0,
     );
+  
+    const formattedDeliveryDate = new Date(estimatedDelivery).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   
     return `
         <!DOCTYPE html>
@@ -74,9 +83,9 @@ const orderEmail = (email, orderItems, paymentType, estimatedDelivery) => {
                             ${orderItemsHTML}
                           </tbody>
                         </table>
-                        <p><strong>Total Amount: ${totalAmount}</strong></p>
-                        <p><strong>Estimated Delivery : ${estimatedDelivery}</strong></p>
-                        <p>Payment Method: <strong>${paymentType}</strong></p>
+                        <p><strong>Total Amount: ₹${totalAmount}</strong></p>
+                        <p><strong>Estimated Delivery : ${formattedDeliveryDate}</strong></p>
+                        <p>Payment Method: <strong>${paymentMethod}</strong></p>
                         <p>Your order will be shipped to the email address registered: <strong>${email}</strong></p>
                         <hr>
                         <p>If you have any questions, please contact our support team or visit <a href="https://aquakart.co.in/">our website</a>.</p>
