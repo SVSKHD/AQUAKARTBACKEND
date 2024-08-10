@@ -1,4 +1,4 @@
-import formatCurrencyINR from "../../utils/currency.js";  // Adjust the import path as necessary
+import formatCurrencyINR from "../../utils/currency.js"; // Adjust the import path as necessary
 
 const orderEmail = (order, email, totalAmount, estimatedDelivery) => {
   const { items, paymentMethod } = order;
@@ -12,11 +12,9 @@ const orderEmail = (order, email, totalAmount, estimatedDelivery) => {
         <td>${item.quantity} x ${formatCurrencyINR(item.price)}</td>
         <td>${formatCurrencyINR(item.quantity * item.price)}</td>
       </tr>
-    `
+    `,
     )
     .join("");
-
-
 
   // Return the final email HTML
   return `

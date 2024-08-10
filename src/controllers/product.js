@@ -14,13 +14,11 @@ const CreateProduct = async (req, res, next) => {
 
     // Upload photos to Cloudinary
     for (let index = 0; index < req.files.photos.length; index++) {
- 
-
       let result = await cloudinary.v2.uploader.upload(
         req.files.photos[index].tempFilePath,
         {
           folder: "products",
-        }
+        },
       );
 
       imageArray.push({
@@ -37,7 +35,9 @@ const CreateProduct = async (req, res, next) => {
 
     // Trim and validate ObjectId fields
     const category = req.body.category ? req.body.category.trim() : null;
-    const subCategory = req.body.subCategory ? req.body.subCategory.trim() : null;
+    const subCategory = req.body.subCategory
+      ? req.body.subCategory.trim()
+      : null;
     const blog = req.body.blog ? req.body.blog.trim() : null;
 
     if (category && !mongoose.Types.ObjectId.isValid(category)) {

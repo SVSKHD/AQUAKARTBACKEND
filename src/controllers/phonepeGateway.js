@@ -3,7 +3,8 @@ import AquaEcomUser from "../models/user.js"; // Ensure you have the correct pat
 import crypto from "crypto";
 import axios from "axios";
 import sendEmail from "../notifications/email/send-email.js";
-import orderTemplate from "../notifications/email/orderTemplate.js";
+import orderEmail from "../utils/emailTemplates/orderEmail.js";
+import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;
@@ -96,8 +97,6 @@ const handlePhoneOrderCheck = async (req, res) => {
       )
       .digest("hex") + "###1";
 
-  console.log("checksum", checksum);
-
   try {
     const response = await axios.get(url, {
       headers: {
@@ -123,21 +122,47 @@ const handlePhoneOrderCheck = async (req, res) => {
         { new: true },
       );
 
+      const user = await AquaEcomUser.findById(updatedOrder.user);
+      if (user) {
+        const phone = user.phone;
+        const email = user.email;
+        if (phone) {
+          const message = `Welcome to Aquakart Family, We have successfully received the order "${updatedOrder.orderId}"`;
+          sendWhatsAppMessage(phone, message);
+        }
+        if (email) {
+          const priceInr = `${formatCurrencyINR(ordercreated.totalAmount)}/-`;
+          const deliveryDate = formattedDeliveryDate(
+            ordercreated.estimatedDelivery,
+          );
+          const content = orderEmail(
+            updatedOrder,
+            email,
+            priceInr,
+            deliveryDate,
+          );
+          const emailResult = await sendEmail({
+            email: user.email,
+            subject: "Cash on Delivery Order Confirmation",
+            message: "Cash on Delivery Order Confirmation - Hello Aquakart",
+            content: content,
+          });
+        }
+      }
+
       const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
 
       if (response.data.code === "PAYMENT_SUCCESS") {
-        res.status(200).json({ order: updatedOrder });
+        res.status(200).json({ success: true, data: updatedOrder });
       } else if (response.data.code === "PAYMENT_ERROR") {
-        res.status(200).json({ order: updatedOrder });
+        res.status(200).json({ success: true, data: updatedOrder });
       } else if ((response.data.code = "PAYMENT_PENDING")) {
-        res.status(200).json({ order: updatedOrder });
+        res.status(200).json({ success: true, data: updatedOrder });
       } else {
         res
           .status(400)
           .json({ success: false, message: "Unknown payment status" });
       }
-
-      console.log(response.data.data.paymentInstrument);
     }
   } catch (error) {
     console.error(error);

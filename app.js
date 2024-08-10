@@ -29,7 +29,7 @@ app.use(
   fileUpload({
     useTempFiles: true,
     tempFileDir: "/tmp/",
-  })
+  }),
 );
 
 // CORS configuration
@@ -42,8 +42,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(morgan("tiny"));
 
-
-
 // Middleware to apply multer to specific routes
 // const uploadMiddleware = upload.fields([{ name: 'photos' }, { name: 'arPhotos' }]);
 
@@ -55,7 +53,7 @@ app.get("/v1/status", (req, res) => {
   res.json({ status: "active" });
 });
 
-app.post("/v1",(req,res)=>{
+app.post("/v1", (req, res) => {
   const data = req.body;
   console.log("res", data);
   res.status(200).json(data);

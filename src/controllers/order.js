@@ -2,25 +2,20 @@ import AquaOrder from "../models/orders.js";
 import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import sendEmail from "../notifications/email/send-email.js";
-import orderEmail  from "../utils/emailTemplates/orderEmail.js"
+import orderEmail from "../utils/emailTemplates/orderEmail.js";
 import moment from "moment";
 
-
-
-
-
 const formatCurrencyINR = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
     minimumFractionDigits: 2,
   }).format(amount);
 };
 
-
-const formattedDeliveryDate = (date) =>{
- return moment(date).format("DD-MM-YYYY")
-}
+const formattedDeliveryDate = (date) => {
+  return moment(date).format("DD-MM-YYYY");
+};
 
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
@@ -129,8 +124,6 @@ const deleteOrder = async (req, res) => {
 };
 
 const createCodOrder = async (req, res) => {
-
-
   try {
     const ordercreated = new AquaOrder(req.body);
     await ordercreated.save();
@@ -148,25 +141,36 @@ const createCodOrder = async (req, res) => {
     if (user.phone) {
       sendWhatsAppMessage(user.phone, message);
     }
-    if (user.email){
-      const priceInr = `${formatCurrencyINR(ordercreated.totalAmount)}/-`
-      const deliveryDate = formattedDeliveryDate(ordercreated.estimatedDelivery)
-      const content = orderEmail(ordercreated,user.email, priceInr, deliveryDate)
+    if (user.email) {
+      const priceInr = `${formatCurrencyINR(ordercreated.totalAmount)}/-`;
+      const deliveryDate = formattedDeliveryDate(
+        ordercreated.estimatedDelivery,
+      );
+      const content = orderEmail(
+        ordercreated,
+        user.email,
+        priceInr,
+        deliveryDate,
+      );
       const emailResult = await sendEmail({
         email: user.email,
         subject: "Cash on Delivery Order Confirmation",
         message: "Cash on Delivery Order Confirmation - Hello Aquakart",
         content: content,
       });
-      
-      if(emailResult){
-        return res.status(200).json({ success: true, data: ordercreated, emailResult: true });
+
+      if (emailResult) {
+        return res
+          .status(200)
+          .json({ success: true, data: ordercreated, emailResult: true });
       }
     }
 
     // Send email if the user has an email address
-  
-    return res.status(200).json({ success: true, data: ordercreated, emailResult: false });
+
+    return res
+      .status(200)
+      .json({ success: true, data: ordercreated, emailResult: false });
   } catch (error) {
     res.status(500).json({
       success: false,
