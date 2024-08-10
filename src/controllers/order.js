@@ -112,7 +112,6 @@ const deleteOrder = async (req, res) => {
 
 const createCodOrder = async (req, res) => {
   try {
-    let emailResult = false
     const ordercreated = new AquaOrder(req.body);
     await ordercreated.save();
     const user = await AquaEcomUser.findById(req.body.user);
