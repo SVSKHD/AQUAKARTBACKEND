@@ -4,6 +4,7 @@ import "./config.js";
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
 import cloudinary from "cloudinary";
+import generateSwaggerDocs from "./swagger-autogen.js";
 
 const PORT = process.env.PORT || 3000; // Default to port 3000 if PORT is not set
 
@@ -15,6 +16,11 @@ cloudinary.config({
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+generateSwaggerDocs().then(() => {
+  // Start server after Swagger docs are generated
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}).catch(error => {
+  console.error("Error generating Swagger documentation, server not started:", error);
 });

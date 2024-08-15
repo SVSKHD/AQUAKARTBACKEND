@@ -17,8 +17,6 @@ COPY . .
 # Expose the port the app runs on
 EXPOSE 5300
 
-# Generate Swagger documentation before starting the app
-RUN node swagger-autogen.js
 
 # Set the command to start the app with pm2
 CMD ["pm2-runtime", "start", "index.js", "--name", "app"]

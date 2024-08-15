@@ -1,3 +1,4 @@
 {
-  "ext": ".js, .jsx, .yaml, .json"
+  "ignore": ["swagger-output.json", "swagger-autogen.js"],
+  "ext": "js,jsx,yaml,json"
 }

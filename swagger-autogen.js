@@ -1,5 +1,6 @@
 import swaggerAutogen from "swagger-autogen";
 
+// Swagger configuration
 const doc = {
   info: {
     title: "Aquakart API",
@@ -21,9 +22,14 @@ const doc = {
 const outputFile = "./swagger-output.json"; // Output file for generated documentation
 const endpointsFiles = ["./app.js"]; // File where your endpoints are defined
 
-// Run swagger-autogen
-swaggerAutogen()(outputFile, endpointsFiles).then(async () => {
-  // After the documentation is generated, dynamically import the app.js module
-  const { default: app } = await import("./app.js"); // Dynamically import your app.js
-  app(); // This will start the app
-});
+// Function to generate Swagger documentation
+const generateSwaggerDocs = async () => {
+  try {
+    await swaggerAutogen()(outputFile, endpointsFiles);
+    console.log("Swagger documentation generated.");
+  } catch (error) {
+    console.error("Error generating Swagger documentation:", error);
+  }
+};
+
+export default generateSwaggerDocs;
