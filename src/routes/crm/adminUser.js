@@ -12,4 +12,11 @@ router.post("/signup", AquaAdminUserOperations.signup);
 router.post("/login", AquaAdminUserOperations.login);
 router.post("/create-user", userAuth.checkAdmin);
 
+// get all ecom users
+router.get(
+  "/get-all-users",
+  userAuth.checkAdmin,
+  AquaAdminUserOperations.getAllEcomUsers,
+);
+
 export default router;

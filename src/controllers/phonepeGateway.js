@@ -8,6 +8,7 @@ import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;
+  console.log(req.body);
 
   const createUserName = (email) => {
     if (email) {
