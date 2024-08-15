@@ -2,8 +2,10 @@ import "./config.js";
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import multer from "multer";
 import fileUpload from "express-fileupload";
+import swaggerUi from "swagger-ui-express";
+import { promises as fs } from "fs"; // Importing fs promises API to read files asynchronously
+import path from "path"; // For resolving file paths
 
 // routes
 import userRoutes from "./src/routes/user.js";
@@ -43,9 +45,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(morgan("tiny"));
 
-// Middleware to apply multer to specific routes
-// const uploadMiddleware = upload.fields([{ name: 'photos' }, { name: 'arPhotos' }]);
-
+// Routes
 app.get("/v1", (req, res) => {
   res.json({ status: "Hello Aquakart v1" });
 });
@@ -64,7 +64,7 @@ app.post("/v1", (req, res) => {
 app.use("/v1", userRoutes);
 app.use("/v1", categoryRoutes);
 app.use("/v1", subCategoryRoutes);
-app.use("/v1", productRoutes); // Ensure the correct path
+app.use("/v1", productRoutes);
 app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 app.use("/v1", orderRoutes);
@@ -76,6 +76,21 @@ app.use("/v1/subscription", Subscritions);
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
 app.use("/v1/crm/user", AdminUserRoutes);
-// app.use("/v1/crm", AdminCategoryRoutes); // Uncomment if needed
+
+// Load the Swagger JSON dynamically using fs and path
+const swaggerSetup = async () => {
+  try {
+    const swaggerPath = path.resolve("./swagger-output.json"); // Resolve the JSON file path
+    const swaggerData = await fs.readFile(swaggerPath, "utf8"); // Read the JSON file as a string
+    const swaggerDocument = JSON.parse(swaggerData); // Parse the string to JSON
+
+    // Setup Swagger UI
+    app.use("/v1/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  } catch (error) {
+    console.error("Error loading Swagger JSON:", error);
+  }
+};
+
+swaggerSetup(); // Setup Swagger UI with the JSON file
 
 export default app;

@@ -21,7 +21,7 @@ const subscribe = async (req, res) => {
     await sendEmail({
       email: newSubscription.email,
       subject: "Email Subscription",
-      message: message,
+      message: "Email Subscription",
       content: content,
     });
 
