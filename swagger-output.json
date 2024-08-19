@@ -397,7 +397,7 @@
         }
       }
     },
-    "/v1/category/title/{title}": {
+    "/v1/category-title/{title}": {
       "get": {
         "description": "",
         "parameters": [
@@ -606,6 +606,30 @@
         "parameters": [
           {
             "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/v1/subcategory-title/{title}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "title",
             "in": "path",
             "required": true,
             "type": "string"

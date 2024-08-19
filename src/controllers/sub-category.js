@@ -58,6 +58,22 @@ const getSubCategory = async (req, res) => {
   }
 };
 
+const getSubCategoryByTitle = async(req,res)=>{
+  const { title } = req.params;
+  try {
+    const subcategory = await AquaSubCategory.findOne({title}).populate("category");
+    if (!subcategory) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
+    }
+    return res.status(200).json({ success: true, data: subcategory });
+  } catch (error) {
+    console.error("Error getting subcategory:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 const updateSubCategory = async (req, res) => {
   const { id } = req.params;
   const { title, description, photos, keywords, category } = req.body;
@@ -113,6 +129,7 @@ const SubCategoryOperations = {
   addSubCategory,
   getAllSubCategories,
   getSubCategory,
+  getSubCategoryByTitle,
   updateSubCategory,
   deleteSubCategory,
 };
