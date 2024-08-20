@@ -227,9 +227,34 @@ const getProduct = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+const getProductByTitle = async (req, res) => {
+  const { title } = req.params;
+  try {
+    const product = await AquaProduct.findOne({ title }).populate("category");
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "product not found" });
+    }
+    let relatedProducts = await AquaProduct.find({
+      category: product.category,
+    });
+    relatedProducts = relatedProducts.filter((p) => p.id !== product.id);
+
+    return res
+      .status(200)
+      .json({ success: true, data: product, related: relatedProducts });
+  } catch (error) {
+    console.error("Error getting product:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const ProductOperations = {
   getProducts,
   getProduct,
+  getProductByTitle,
   CreateProduct,
   updateProduct,
   deleteProduct,

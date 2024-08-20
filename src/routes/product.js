@@ -8,6 +8,7 @@ router.get("/product-status", (req, res) => {
 });
 router.get("/all-products", ProductOperations.getProducts);
 router.get("/product/:id", ProductOperations.getProduct);
+router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.post("/product-add", ProductOperations.CreateProduct);
 router.put(
   "/product-update/:id",

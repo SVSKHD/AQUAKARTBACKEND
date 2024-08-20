@@ -16,11 +16,16 @@ cloudinary.config({
 });
 
 // Start server
-generateSwaggerDocs().then(() => {
-  // Start server after Swagger docs are generated
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+generateSwaggerDocs()
+  .then(() => {
+    // Start server after Swagger docs are generated
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error(
+      "Error generating Swagger documentation, server not started:",
+      error,
+    );
   });
-}).catch(error => {
-  console.error("Error generating Swagger documentation, server not started:", error);
-});

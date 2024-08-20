@@ -9,7 +9,10 @@ router.get("/subcategory-status", (req, res) => {
 });
 router.get("/all-subcategories", SubCategoryOperations.getAllSubCategories);
 router.get("/subcategory/:id", SubCategoryOperations.getSubCategory);
-router.get("/subcategory-title/:title", SubCategoryOperations.getSubCategoryByTitle);
+router.get(
+  "/subcategory-title/:title",
+  SubCategoryOperations.getSubCategoryByTitle,
+);
 router.post(
   "/subcategory-add",
   userAuth.isLoggedIn,

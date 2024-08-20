@@ -1,3 +1,4 @@
+import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
 import cloudinary from "cloudinary";
 
@@ -58,10 +59,13 @@ const getSubCategory = async (req, res) => {
   }
 };
 
-const getSubCategoryByTitle = async(req,res)=>{
+const getSubCategoryByTitle = async (req, res) => {
   const { title } = req.params;
   try {
-    const subcategory = await AquaSubCategory.findOne({title}).populate("category");
+    const subcategory = await AquaSubCategory.findOne({ title }).populate(
+      "category",
+    );
+    const products = await AquaProduct.findOne({});
     if (!subcategory) {
       return res
         .status(404)
@@ -72,7 +76,7 @@ const getSubCategoryByTitle = async(req,res)=>{
     console.error("Error getting subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
-}
+};
 
 const updateSubCategory = async (req, res) => {
   const { id } = req.params;
