@@ -205,6 +205,25 @@ const getProducts = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+const getLimitedProducts = async (req, res) => {
+  const { count } = req.params; // Extracting the 'count' parameter from route params
+  const limit = parseInt(count); // Convert the count to a number
+
+  if (isNaN(limit) || limit <= 0) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid product count specified." });
+  }
+
+  try {
+    const products = await AquaProduct.find({}).limit(limit);
+    return res.status(200).json({ status: true, data: products });
+  } catch (error) {
+    console.error("Error getting limited products:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 const getProduct = async (req, res) => {
   const { id } = req.params;
   try {
@@ -255,6 +274,7 @@ const ProductOperations = {
   getProducts,
   getProduct,
   getProductByTitle,
+  getLimitedProducts,
   CreateProduct,
   updateProduct,
   deleteProduct,
