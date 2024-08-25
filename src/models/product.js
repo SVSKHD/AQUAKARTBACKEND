@@ -10,6 +10,12 @@ const AquaProductSchema = new mongoose.Schema({
   ShortName: {
     type: String,
   },
+  slug:{
+    type:String
+  },
+  seoSlug:{
+    type:String
+  },
   code: {
     type: String,
   },
