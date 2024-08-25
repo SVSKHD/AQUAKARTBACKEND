@@ -881,6 +881,37 @@
         }
       }
     },
+    "/v1/product": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "searchField",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "value",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/v1/product-add": {
       "post": {
         "description": "",

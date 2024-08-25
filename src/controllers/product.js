@@ -270,10 +270,52 @@ const getProductByTitle = async (req, res) => {
   }
 };
 
+const getProductByQuery = async (req, res) => {
+  const { searchField, value } = req.query; // Dynamically pass the field and value via query parameters
+
+  if (!searchField || !value) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing search field or value",
+    });
+  }
+
+  try {
+    // Dynamically build the query object
+    const query = {};
+    query[searchField] = value;
+
+    // Search for the product based on the dynamic query
+    const product = await AquaProduct.findOne(query).populate("category");
+
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    // Fetch related products within the same category, excluding the current product
+    let relatedProducts = await AquaProduct.find({
+      category: product.category,
+    });
+
+    relatedProducts = relatedProducts.filter((p) => p.id !== product.id);
+
+    return res
+      .status(200)
+      .json({ success: true, data: product, related: relatedProducts });
+  } catch (error) {
+    console.error("Error getting product:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
 const ProductOperations = {
   getProducts,
   getProduct,
   getProductByTitle,
+  getProductByQuery,
   getLimitedProducts,
   CreateProduct,
   updateProduct,
