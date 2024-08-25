@@ -10,7 +10,7 @@ router.get("/all-products", ProductOperations.getProducts);
 router.get("/product/:id", ProductOperations.getProduct);
 router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.get("/products/:count", ProductOperations.getLimitedProducts);
-router.get("/product", ProductOperations.getProductByQuery)
+router.get("/product", ProductOperations.getProductByQuery);
 router.post("/product-add", ProductOperations.CreateProduct);
 router.put(
   "/product-update/:id",

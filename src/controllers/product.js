@@ -310,7 +310,6 @@ const getProductByQuery = async (req, res) => {
   }
 };
 
-
 const ProductOperations = {
   getProducts,
   getProduct,
