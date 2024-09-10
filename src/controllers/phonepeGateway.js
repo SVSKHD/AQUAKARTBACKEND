@@ -133,7 +133,7 @@ const handlePhoneOrderCheck = async (req, res) => {
           sendWhatsAppMessage(phone, message);
         }
         if (email) {
-          const priceInr = `${formatCurrencyINR(ordercreated.totalAmount)}/-`;
+          const priceInr = `${formatCurrencyINR(updatedOrder.totalAmount)}/-`;
           const deliveryDate = formattedDeliveryDate(
             ordercreated.estimatedDelivery,
           );
