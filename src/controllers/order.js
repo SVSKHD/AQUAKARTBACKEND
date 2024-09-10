@@ -183,13 +183,14 @@ const createCodOrder = async (req, res) => {
 
 const AdminGetOrders = async (req, res) => {
   try {
-    const { id, transactionId, orderId, date } = req.params;
+    const { id, transactionId, orderId, date, user } = req.params;
 
     // Construct the query object
     const query = {};
     if (id) query._id = mongoose.Types.ObjectId(id);
     if (transactionId) query.transactionId = transactionId;
     if (orderId) query.orderId = orderId;
+    if (user) query.user=user
     if (date) {
       const startDate = new Date(date);
       const endDate = new Date(date);

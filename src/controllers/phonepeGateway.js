@@ -5,6 +5,7 @@ import axios from "axios";
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
+import formatCurrencyINR from "../utils/currency.js";
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;

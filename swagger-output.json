@@ -2,12 +2,14 @@
   "swagger": "2.0",
   "info": {
     "version": "1.0.0",
-    "title": "Aquakart Api",
+    "title": "REST API",
     "description": ""
   },
-  "host": "https://api.aquakart.co.in/v1",
+  "host": "localhost:3000",
   "basePath": "/",
-  "schemes": ["https"],
+  "schemes": [
+    "http"
+  ],
   "paths": {
     "/v1": {
       "get": {
