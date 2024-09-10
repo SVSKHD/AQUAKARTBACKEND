@@ -6,6 +6,7 @@ import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import formatCurrencyINR from "../utils/currency.js";
+import formattedDeliveryDate from "../utils/date.js";
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;
@@ -135,7 +136,7 @@ const handlePhoneOrderCheck = async (req, res) => {
         if (email) {
           const priceInr = `${formatCurrencyINR(updatedOrder.totalAmount)}/-`;
           const deliveryDate = formattedDeliveryDate(
-            ordercreated.estimatedDelivery,
+            updatedOrder.estimatedDelivery,
           );
           const content = orderEmail(
             updatedOrder,
