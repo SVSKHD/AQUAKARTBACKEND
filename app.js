@@ -6,7 +6,7 @@ import fileUpload from "express-fileupload";
 import swaggerUi from "swagger-ui-express";
 import { promises as fs } from "fs"; // Importing fs promises API to read files asynchronously
 import path from "path"; // For resolving file paths
-
+import axios from "axios"
 // routes
 import userRoutes from "./src/routes/user.js";
 import categoryRoutes from "./src/routes/category.js";
@@ -24,7 +24,12 @@ import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
 import AdminUserRoutes from "./src/routes/crm/adminUser.js";
 import AdminCategoryRoutes from "./src/routes/crm/category.js";
 
+//methods
+import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
+
 const app = express();
+const BASE = process.env.WHATSAPPAPI;
+const KEY = process.env.WHATSAPPAPIKEY;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -76,6 +81,9 @@ app.use("/v1/subscription", Subscritions);
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
 app.use("/v1/crm/user", AdminUserRoutes);
+
+
+app.post("/v1/notify/send-whatsappp",WhatsappOperations.sendWhatsAppPostMethod)
 
 // Load the Swagger JSON dynamically using fs and path
 const swaggerSetup = async () => {
