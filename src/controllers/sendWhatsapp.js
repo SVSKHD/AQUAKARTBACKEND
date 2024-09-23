@@ -21,16 +21,16 @@ const sendMessage = async (req, res) => {
     } else {
       res
         .status(400)
-        .json({ message: response.data.error || "Failed to send message" });
+        .json({ message: response.data || "Failed to send message" });
     }
   } catch (error) {
     console.error(
       "Error:",
-      error.response ? error.response.data : error.message,
+      error.response ? error.response : error.message,
     );
     res
       .status(400)
-      .json({ message: error.response ? error.response.data : error.message });
+      .json({ message: error.response ? error.response : error.message });
   }
 };
 
