@@ -127,7 +127,7 @@ const getInvoicesByDate = async (req, res) => {
       };
     } else if (startDate && endDate) {
       // If both startDate and endDate are provided
-      query.date = {
+      query.createdAt = {
         $gte: new Date(startDate).toISOString(),
         $lte: new Date(endDate).toISOString(),
       };
@@ -136,7 +136,7 @@ const getInvoicesByDate = async (req, res) => {
       const start = new Date(startDate);
       const end = new Date(startDate);
       end.setHours(23, 59, 59);
-      query.date = {
+      query.createdAt = {
         $gte: start.toISOString(),
         $lte: end.toISOString(),
       };
