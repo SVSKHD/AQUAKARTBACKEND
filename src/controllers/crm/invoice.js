@@ -42,7 +42,7 @@ const deleteInvoice = async (req, res) => {
 const getInvoices = async (req, res) => {
   try {
     const invoices = await AquaInvoice.find({}).sort({ date: -1 });
-    return res.status(200).json({ status: true, data: invoices });
+    return res.status(200).json({ status: true, data: invoices, no:invoices.length });
   } catch (error) {
     return res
       .status(400)
@@ -52,7 +52,7 @@ const getInvoices = async (req, res) => {
 
 const getInvoice = async (req, res) => {
   try {
-    const { id, name, phone, invoiceNo } = req.params; // Change from req.params to req.query to get query parameters
+    const { id, name, phone, invoiceNo, gstNo, date } = req.query; // Change from req.params to req.query to get query parameters
 
     // Construct a dynamic query object
     let query = {};
@@ -60,21 +60,48 @@ const getInvoice = async (req, res) => {
     if (name) query["customerDetails.name"] = new RegExp(name, "i"); // Case-insensitive regex search
     if (phone) query["customerDetails.phone"] = phone;
     if (invoiceNo) query.invoiceNo = invoiceNo;
+    if (gstNo) query["gstDetails.gstNo"] = gstNo
     console.log("invoice", query);
-    // Find the invoices based on the dynamic query
-    const invoices = await AquaInvoice.find(query);
-
-    // Send the found invoices as the response
+    const invoices = await AquaInvoice.findOne(query);
     res.status(200).json(invoices);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
+
+const getInvoiceById = async (req, res) => {
+  try {
+    const { id } = req.params; // Extract the id from the request parameters
+
+    const invoice = await AquaInvoice.findById(id);
+
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    // If the invoice is found, return it
+    res.status(200).json(invoice);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server Error', error });
+  }
+};
+
+
+
 const getMonthDateRange = (monthName, year) => {
   const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
   const startDate = new Date(year, monthIndex, 1);
   const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+  return { startDate, endDate };
+};
+
+const getYearDateRange = (year) => {
+  const startDate = new Date(year, 1, 1);
+  const endDate = new Date(year, 11, 31, 23, 59, 59);
+  console.log(startDate, endDate)
   return { startDate, endDate };
 };
 
@@ -85,27 +112,53 @@ const getInvoicesByDate = async (req, res) => {
     let query = {};
 
     if (month && year) {
-      const { startDate: monthStartDate, endDate: monthEndDate } =
-        getMonthDateRange(month, year);
-      query.date = {
+      // If both month and year are provided, get the range for the entire month
+      const { startDate: monthStartDate, endDate: monthEndDate } = getMonthDateRange(month, year);
+      query.createdAt = {
         $gte: monthStartDate.toISOString(),
         $lte: monthEndDate.toISOString(),
       };
+    } else if (year && !month) {
+      // If only year is provided, get the range for the entire year
+      const { startDate: yearStartDate, endDate: yearEndDate } = getYearDateRange(year);
+      query.createdAt = {
+        $gte: yearStartDate.toISOString(),
+        $lte: yearEndDate.toISOString(),
+      };
     } else if (startDate && endDate) {
+      // If both startDate and endDate are provided
       query.date = {
         $gte: new Date(startDate).toISOString(),
         $lte: new Date(endDate).toISOString(),
       };
+    } else if (startDate && !endDate) {
+      // If only startDate is provided, set the endDate to the end of the day of the startDate
+      const start = new Date(startDate);
+      const end = new Date(startDate);
+      end.setHours(23, 59, 59);
+      query.date = {
+        $gte: start.toISOString(),
+        $lte: end.toISOString(),
+      };
+    } else {
+      // If no date is provided, use the current date for both startDate and endDate
+      const today = new Date();
+      const start = new Date(today.setHours(0, 0, 0, 0)); // Start of the day
+      const end = new Date(today.setHours(23, 59, 59)); // End of the day
+      query.date = {
+        $gte: start.toISOString(),
+        $lte: end.toISOString(),
+      };
     }
-
+    console.log("query", query)
     const invoices = await AquaInvoice.find(query);
-
-    res.status(200).json(invoices);
+    res.status(200).json({success:true, data:invoices, no:invoices.length});
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 
 const InvoiceOperations = {
   createInvoice,
@@ -113,6 +166,7 @@ const InvoiceOperations = {
   getInvoice,
   getInvoices,
   deleteInvoice,
+  getInvoiceById,
   getInvoicesByDate,
 };
 
