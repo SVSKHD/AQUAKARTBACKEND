@@ -42,7 +42,7 @@ app.use(
 
 // CORS configuration
 const corsOptions = {
-  origin: ["http://localhost:3000", "https://aquakart.co.in","http://localhost:4000"],
+  origin: ["http://localhost:3000", "https://aquakart.co.in","http://localhost:4000/admin/crm"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
