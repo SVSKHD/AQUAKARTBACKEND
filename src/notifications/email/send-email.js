@@ -1,21 +1,24 @@
 import nodemailer from "nodemailer";
 
 async function sendEmail({ email, subject, message, content }) {
+  // Configure the transporter with Hostinger SMTP settings
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.hostinger.com", // SMTP host for Hostinger
+    port: 465, // SMTP port for SSL
+    secure: true, // Use SSL
     auth: {
-      user: "aquakart8@gmail.com",
-      pass: "vpyzejrvgbhkjdbe",
+      user: process.env.SMTPEMAIL, // Your email address
+      pass: process.env.SMTPEMIALPASSWORD, // Your email password
     },
   });
 
   try {
     const info = await transporter.sendMail({
-      from: `"AquaKart" aquakart8@gmail.com`,
-      to: email,
-      subject: subject,
-      text: message,
-      html: content,
+      from: `"AquaKart Support" <customercare@aquakart.co.in>`, // Sender details
+      to: email, // Recipient email
+      subject: subject, // Email subject
+      text: message, // Plain text version of the message
+      html: content, // HTML version of the message
     });
     return {
       success: true,
