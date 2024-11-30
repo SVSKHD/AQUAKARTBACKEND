@@ -7,8 +7,8 @@ async function sendEmail({ email, subject, message, content }) {
     port: 465, // SMTP port for SSL
     secure: true, // Use SSL
     auth: {
-      user: "customercare@aquakart.co.in", // Your email address
-      pass: "Hithesh.svsk123", // Your email password
+      user: process.env.SMTPEMAIL, // Your email address
+      pass: process.env.SMTPEMIALPASSWORD, // Your email password
     },
   });
 
