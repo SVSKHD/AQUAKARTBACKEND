@@ -8,7 +8,7 @@ async function sendEmail({ email, subject, message, content }) {
     secure: true, // Use SSL
     auth: {
       user: process.env.SMTPEMAIL, // Your email address
-      pass: process.env.SMTPEMIALPASSWORD, // Your email password
+      pass: process.env.SMTPEMAILPASSWORD, // Your email password
     },
   });
 
