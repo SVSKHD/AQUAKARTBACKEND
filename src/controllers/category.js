@@ -106,36 +106,50 @@ const getCategoryByTitle = async (req, res) => {
 
 const updateCategory = async (req, res) => {
   const { id } = req.params;
-  const { title, description, photos, keywords } = req.body;
+  console.log(req?.files);
+  const { title, description, keywords } = req.body; // Extract text fields
+  let photos = req.files?.photos; // Handle file uploads from req.files
+  const uploadedPhotos = [];
   try {
     const updatedData = { title, description, keywords };
-    if (photos && photos.length > 0) {
-      const uploadedPhotos = [];
-      for (const photo of photos) {
-        const result = await cloudinary.v2.uploader.upload(photo, {
-          folder: "categories",
-        });
+
+    // Check if photos are provided
+    if (photos) {
+      
+
+      // Handle single photo or multiple photos
+      const photoArray = Array.isArray(photos) ? photos : [photos];
+
+      for (const photo of photoArray) {
+        const result = await streamUpload(photo.buffer);
         uploadedPhotos.push({
           id: result.public_id,
           secure_url: result.secure_url,
         });
       }
+
       updatedData.photos = uploadedPhotos;
+       // Update photos in the database
     }
+console.log("uploaded", updatedData, uploadedPhotos);
+    // Update category in the database
     const category = await AquaCategory.findByIdAndUpdate(id, updatedData, {
       new: true,
     });
+
     if (!category) {
       return res
         .status(404)
         .json({ success: false, message: "Category not found" });
     }
+
     return res.status(200).json({ success: true, data: category });
   } catch (error) {
     console.error("Error updating category:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 const deleteCategory = async (req, res) => {
   const { id } = req.params;
@@ -153,6 +167,14 @@ const deleteCategory = async (req, res) => {
   }
 };
 
+
+const updateTest = (req,res, next)=>{
+  
+  console.log("Update Test,", req.body)
+  const {title, description, keywords} = req.body;
+  console.log(title, req?.files)
+}
+
 const CategoryOperations = {
   addCategory,
   getAllCategories,
@@ -160,5 +182,6 @@ const CategoryOperations = {
   getCategoryByTitle,
   updateCategory,
   deleteCategory,
+  updateTest
 };
 export default CategoryOperations;

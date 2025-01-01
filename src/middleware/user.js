@@ -36,15 +36,15 @@ const isLoggedIn = async (req, res, next) => {
 };
 
 const checkAdmin = async (req, res, next) => {
-  const token = req.header("Authorization")?.replace("Bearer ", "");
-
-  if (!token) {
-    return res
-      .status(401)
-      .json({ message: "No token provided, authorization denied" });
-  }
-
   try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token) {
+      return res
+        .status(401)
+        .json({ message: "No token provided, authorization denied" });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     if (!decoded._id) {
@@ -61,10 +61,10 @@ const checkAdmin = async (req, res, next) => {
       return res.status(403).json({ message: "Admin access required" });
     }
 
-    req.user = user;
+    req.user = user; // Attach user to request
     next();
   } catch (err) {
-    console.error("Token verification error:", err); // Debug log
+    console.error("Token verification error:", err);
     res.status(401).json({ message: "Token is not valid" });
   }
 };

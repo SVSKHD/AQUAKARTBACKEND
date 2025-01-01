@@ -6,7 +6,11 @@ import multer from "multer";
 const router = express.Router();
 
 const storage = multer.memoryStorage(); // Use memory storage or disk storage based on your requirement
-const upload = multer({ storage });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+});
+
 
 router.get("/category-status", (req, res) => {
   res.json({ message: "Category Status v1 active" });
@@ -25,10 +29,15 @@ router.post(
 );
 
 router.put(
-  "/category-update",
-  userAuth.checkAdmin,
+  "/category-update/:id",
   upload.array("photos"),
-  CategoryOperations.updateCategory,
+  (req, res, next) => {
+    console.log("Middleware Check - req.files:", req.files);
+    console.log("Middleware Check - req.body:", req.body);
+    next();
+  },
+  // userAuth.checkAdmin,
+  CategoryOperations.updateTest
 );
 
 router.get(

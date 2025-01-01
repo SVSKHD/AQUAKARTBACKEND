@@ -29,17 +29,19 @@ import AdminCategoryRoutes from "./src/routes/crm/category.js";
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 
 const app = express();
+// app.use(
+//   fileUpload({
+//     useTempFiles: true, // Use temp files for larger file uploads
+//     tempFileDir: "/tmp/", // Temp directory for file uploads
+//     limits: { fileSize: 2 * 1024 * 1024 }, // 2MB file size limit
+//   })
+// );
 const BASE = process.env.WHATSAPPAPI;
 const KEY = process.env.WHATSAPPAPIKEY;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  fileUpload({
-    useTempFiles: true,
-    tempFileDir: "/tmp/",
-  }),
-);
+
 
 // CORS configuration
 const corsOptions = {
