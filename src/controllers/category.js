@@ -18,6 +18,18 @@ const streamUpload = (buffer) => {
   });
 };
 
+const deletePhoto = async (publicId) => {
+  try {
+    const result = await cloudinary.v2.uploader.destroy(publicId);
+    console.log("Deleted photo:", result);
+    return result;
+  } catch (error) {
+    console.error("Error deleting photo:", error);
+    throw error;
+  }
+};
+
+
 const addCategory = async (req, res) => {
   try {
     const { title, description, keywords } = req.body;
@@ -106,50 +118,79 @@ const getCategoryByTitle = async (req, res) => {
 
 const updateCategory = async (req, res) => {
   const { id } = req.params;
-  console.log(req?.files);
   const { title, description, keywords } = req.body; // Extract text fields
-  let photos = req.files?.photos; // Handle file uploads from req.files
-  const uploadedPhotos = [];
+  const photos = req?.files; // Handle new file uploads
+
+
   try {
-    const updatedData = { title, description, keywords };
-
-    // Check if photos are provided
-    if (photos) {
-      
-
-      // Handle single photo or multiple photos
-      const photoArray = Array.isArray(photos) ? photos : [photos];
-
-      for (const photo of photoArray) {
-        const result = await streamUpload(photo.buffer);
-        uploadedPhotos.push({
-          id: result.public_id,
-          secure_url: result.secure_url,
-        });
-      }
-
-      updatedData.photos = uploadedPhotos;
-       // Update photos in the database
-    }
-console.log("uploaded", updatedData, uploadedPhotos);
-    // Update category in the database
-    const category = await AquaCategory.findByIdAndUpdate(id, updatedData, {
-      new: true,
-    });
-
+    // Step 1: Find the existing category
+    const category = await AquaCategory.findById(id);
     if (!category) {
       return res
         .status(404)
         .json({ success: false, message: "Category not found" });
     }
 
-    return res.status(200).json({ success: true, data: category });
+    // Initialize updated data with existing or provided text fields
+    const updatedData = {
+      title: title || category.title,
+      description: description || category.description,
+      keywords: keywords || category.keywords,
+      photos: [...category.photos], // Start with existing photos
+    };
+
+    // Step 2: Handle new photos if provided
+    if (photos && photos.length > 0) {
+      try {
+        // Delete existing photos from Cloudinary
+        if (category.photos && category.photos.length > 0) {
+          for (const existingPhoto of category.photos) {
+            try {
+              await deletePhoto(existingPhoto.id);
+            } catch (deleteError) {
+              console.error("Error deleting photo from Cloudinary:", deleteError);
+            }
+          }
+        }
+
+        // Upload new photos
+        const uploadedPhotos = [];
+        for (const photo of photos) {
+          try {
+            const result = await streamUpload(photo.buffer);
+            uploadedPhotos.push({
+              id: result.public_id,
+              secure_url: result.secure_url,
+            });
+          } catch (uploadError) {
+            console.error("Error uploading photo to Cloudinary:", uploadError);
+          }
+        }
+
+        // Replace photos in updated data if any uploads succeeded
+        if (uploadedPhotos.length > 0) {
+          updatedData.photos = uploadedPhotos;
+        }
+      } catch (photoHandlingError) {
+        console.error("Error handling photos:", photoHandlingError);
+      }
+    }
+
+    // Step 3: Update the category in the database
+    const updatedCategory = await AquaCategory.findByIdAndUpdate(id, updatedData, {
+      new: true, // Ensure the updated document is returned
+    });
+
+    // Respond with the updated category
+    return res.status(200).json({ success: true, data: updatedCategory });
   } catch (error) {
-    console.error("Error updating category:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    console.error("Unexpected error updating category:", error);
+    return res.status(200).json({
+      success: false,
+      message: "An issue occurred during the update. Please check logs.",
+    });
   }
 };
-
 
 const deleteCategory = async (req, res) => {
   const { id } = req.params;
@@ -168,20 +209,12 @@ const deleteCategory = async (req, res) => {
 };
 
 
-const updateTest = (req,res, next)=>{
-  
-  console.log("Update Test,", req.body)
-  const {title, description, keywords} = req.body;
-  console.log(title, req?.files)
-}
-
 const CategoryOperations = {
   addCategory,
   getAllCategories,
   getCategory,
   getCategoryByTitle,
   updateCategory,
-  deleteCategory,
-  updateTest
+  deleteCategory
 };
 export default CategoryOperations;

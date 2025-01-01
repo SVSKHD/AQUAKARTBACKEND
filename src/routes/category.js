@@ -30,16 +30,10 @@ router.post(
 
 router.put(
   "/category-update/:id",
-  upload.array("photos"),
-  (req, res, next) => {
-    console.log("Middleware Check - req.files:", req.files);
-    console.log("Middleware Check - req.body:", req.body);
-    next();
-  },
-  // userAuth.checkAdmin,
-  CategoryOperations.updateTest
+  upload.array("photos"), // Multer handles file parsing
+  userAuth.checkAdmin,
+  CategoryOperations.updateCategory
 );
-
 router.get(
   "/category/delete/:id",
   userAuth.checkAdmin,

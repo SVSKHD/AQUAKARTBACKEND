@@ -2,7 +2,7 @@ import "./config.js";
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import fileUpload from "express-fileupload";
+import multer from "multer";
 import swaggerUi from "swagger-ui-express";
 import { promises as fs } from "fs"; // Importing fs promises API to read files asynchronously
 import path from "path"; // For resolving file paths
@@ -36,6 +36,14 @@ const app = express();
 //     limits: { fileSize: 2 * 1024 * 1024 }, // 2MB file size limit
 //   })
 // );
+
+// Multer Configuration
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
+});
+
 const BASE = process.env.WHATSAPPAPI;
 const KEY = process.env.WHATSAPPAPIKEY;
 
