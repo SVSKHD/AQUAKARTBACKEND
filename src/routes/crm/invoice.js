@@ -8,7 +8,7 @@ router.get("invoice-status", async (req, res) => {
   res.json({ message: "Invoice Status v1 active" });
 });
 
-router.get("/admin/all-invoices", userAuth.checkAdmin, InvoiceOperations.getInvoices);
+router.get("/admin/all-invoices", InvoiceOperations.getInvoices);
 router.get("/admin/invoice",userAuth.checkAdmin, InvoiceOperations.getInvoice)
 router.get("/admin/invoice/dates", userAuth.checkAdmin, InvoiceOperations.getInvoicesByDate)
 router.get("/invoice/:id", InvoiceOperations.getInvoiceById);

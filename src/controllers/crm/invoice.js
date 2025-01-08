@@ -39,16 +39,55 @@ const deleteInvoice = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 const getInvoices = async (req, res) => {
   try {
-    const invoices = await AquaInvoice.find({}).sort({ date: -1 });
-    return res.status(200).json({ status: true, data: invoices, no:invoices.length });
+    // Extract query parameters
+    const { gst, po, search, user } = req.query;
+
+    // Build the filter object dynamically
+    let filter = {};
+
+    if (gst === "true") {
+      filter.gst = true;
+    }
+
+    if (po === "true") {
+      filter.po = true;
+    }
+
+    // ✅ If `user=true`, only return invoices where `gst: false`
+    if (user === "true") {
+      filter.gst = false;
+    }
+
+    // If search is provided, filter by relevant fields (assuming invoiceNumber or clientName)
+    if (search) {
+      filter.$or = [
+        { invoiceNumber: { $regex: search, $options: "i" } }, // Case-insensitive search for invoice number
+        { clientName: { $regex: search, $options: "i" } }, // Case-insensitive search for client name
+      ];
+    }
+
+    // Fetch invoices from the database with filters applied
+    const invoices = await AquaInvoice.find(filter)
+      .sort({ createdAt: -1 }) // Ensure sorting
+      .lean(); // Converts Mongoose documents to plain objects
+
+    return res.status(200).json({
+      status: true,
+      data: invoices,
+      no: invoices.length,
+    });
   } catch (error) {
-    return res
-      .status(400)
-      .json({ status: false, message: "Sorry please try again" });
+    console.error("Error fetching invoices:", error);
+    return res.status(400).json({
+      status: false,
+      message: "Sorry, please try again",
+    });
   }
 };
+
 
 const getInvoice = async (req, res) => {
   try {

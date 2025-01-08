@@ -1789,8 +1789,23 @@
         "description": "",
         "parameters": [
           {
-            "name": "Authorization",
-            "in": "header",
+            "name": "gst",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "po",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "user",
+            "in": "query",
             "type": "string"
           }
         ],
@@ -1800,12 +1815,6 @@
           },
           "400": {
             "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         }
       }
