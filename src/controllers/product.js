@@ -34,8 +34,18 @@ const deleteMedia = async (mediaArray) => {
 const CreateProduct = async (req, res, next) => {
   try {
     const photos = req.files?.photos;
+    const arPhotos = req.files?.ar;
     if (!photos || photos.length === 0) {
       return next(new Error("Images are required", 401));
+    }
+    if (photos.length > 10) {
+      return next(new Error("Maximum of 10 images allowed", 400));
+    }
+    if (!arPhotos || arPhotos.length === 0) {
+      return next(new Error("AR files are required", 401));
+    }
+    if (arPhotos && arPhotos.length > 5) {
+      return next(new Error("Maximum of 5 AR files allowed)", 400));
     }
     let imageArray = [];
 
