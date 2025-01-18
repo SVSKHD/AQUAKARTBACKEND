@@ -33,7 +33,7 @@ const deleteMedia = async (mediaArray) => {
 
 const CreateProduct = async (req, res, next) => {
   try {
-    const photos = req.files;
+    const photos = req.files?.photos;
     if (!photos || photos.length === 0) {
       return next(new Error("Images are required", 401));
     }
