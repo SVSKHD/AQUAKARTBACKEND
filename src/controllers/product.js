@@ -2,31 +2,53 @@ import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
 import mongoose from "mongoose";
 
+
+const streamUpload = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.v2.uploader.upload_stream(
+      { folder: "products" },
+      (error, result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(error);
+        }
+      },
+    );
+    stream.end(buffer);
+  });
+};
+
+const deleteMedia = async (mediaArray) => {
+  try {
+    for (const media of mediaArray) {
+      await cloudinary.v2.uploader.destroy(media.id);
+    }
+  } catch (error) {
+    console.error("Error deleting media:", error);
+    throw new Error("Failed to delete old media");
+  }
+};
+
+
 const CreateProduct = async (req, res, next) => {
   try {
-    // Ensure files are uploaded
-    if (!req.files || !req.files.photos) {
-      return next(new CustomError("Images are required", 401));
+    const photos = req.files;
+    if (!photos || photos.length === 0) {
+      return next(new Error("Images are required", 401));
     }
-
-    // Initialize the image array
     let imageArray = [];
 
-    // Upload photos to Cloudinary
-    for (let index = 0; index < req.files.photos.length; index++) {
-      let result = await cloudinary.v2.uploader.upload(
-        req.files.photos[index].tempFilePath,
-        {
-          folder: "products",
-        },
-      );
-
+    for (const photo of photos) {
+      if (!photo.buffer) {
+        return next(new Error("File buffer is missing", 400));
+      }
+      const result = await streamUpload(photo.buffer);
       imageArray.push({
         id: result.public_id,
         secure_url: result.secure_url,
       });
     }
-
     // Add the uploaded images to the request body
     req.body.photos = imageArray;
 
@@ -40,21 +62,20 @@ const CreateProduct = async (req, res, next) => {
       : null;
     const blog = req.body.blog ? req.body.blog.trim() : null;
 
-    if (category && !mongoose.Types.ObjectId.isValid(category)) {
-      return next(new CustomError("Invalid category ID format", 400));
-    }
+    // if (category && !mongoose.Types.ObjectId.isValid(category)) {
+    //   return next(new Error("Invalid category ID format", 400));
+    // }
 
-    if (subCategory && !mongoose.Types.ObjectId.isValid(subCategory)) {
-      return next(new CustomError("Invalid subCategory ID format", 400));
-    }
+    // if (subCategory && !mongoose.Types.ObjectId.isValid(subCategory)) {
+    //   return next(new Error("Invalid subCategory ID format", 400));
+    // }
 
-    if (blog && !mongoose.Types.ObjectId.isValid(blog)) {
-      return next(new CustomError("Invalid blog ID format", 400));
-    }
+    // if (blog && !mongoose.Types.ObjectId.isValid(blog)) {
+    //   return next(new Error("Invalid blog ID format", 400));
+    // }
 
-    req.body.category = category;
-    req.body.subCategory = subCategory;
-    req.body.blog = blog;
+    // req.body.category = category;
+    // req.body.subCategory = subCategory; // req.body.blog = blog;
 
     // Create the product in the database
     const product = await AquaProduct.create(req.body);
@@ -74,31 +95,111 @@ const CreateProduct = async (req, res, next) => {
   }
 };
 
+// const updateProduct = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const {
+//       title,
+//       ShortName,
+//       code,
+//       discountPriceStatus,
+//       discountPrice,
+//       keywords,
+//       price,
+//       description,
+//       notes,
+//       category,
+//       subCategory,
+//       blog,
+//       stock,
+//       brand,
+//       ratings,
+//       numberOfReviews,
+//       reviews,
+//       user,
+//     } = req.body;
+
+//     const product = await AquaProduct.findById(id);
+//     if (!product) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Product not found",
+//       });
+//     }
+
+//     const photos = [];
+//     const arPhotos = [];
+
+//     // Update photos if provided
+//     if (req.files.photos) {
+//       for (const file of req.files.photos) {
+//         const result = await cloudinary.v2.uploader.upload(file.path, {
+//           folder: "products",
+//         });
+//         photos.push({ id: result.public_id, secure_url: result.secure_url });
+//       }
+//     } else {
+//       photos.push(...product.photos);
+//     }
+
+//     // Update AR photos if provided
+//     if (req.files.arPhotos) {
+//       for (const file of req.files.arPhotos) {
+//         const result = await cloudinary.v2.uploader.upload(file.path, {
+//           folder: "arProducts",
+//         });
+//         arPhotos.push({ id: result.public_id, secure_url: result.secure_url });
+//       }
+//     } else {
+//       arPhotos.push(...product.arPhotos);
+//     }
+
+//     const updatedProduct = await AquaProduct.findByIdAndUpdate(
+//       id,
+//       {
+//         title,
+//         ShortName,
+//         code,
+//         discountPriceStatus,
+//         discountPrice,
+//         keywords,
+//         price,
+//         description,
+//         notes,
+//         photos,
+//         arPhotos,
+//         category,
+//         subCategory,
+//         blog,
+//         stock,
+//         brand,
+//         ratings,
+//         numberOfReviews,
+//         reviews,
+//         user,
+//       },
+//       { new: true, runValidators: true },
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       product: updatedProduct,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      title,
-      ShortName,
-      code,
-      discountPriceStatus,
-      discountPrice,
-      keywords,
-      price,
-      description,
-      notes,
-      category,
-      subCategory,
-      blog,
-      stock,
-      brand,
-      ratings,
-      numberOfReviews,
-      reviews,
-      user,
-    } = req.body;
-
+    const files = req.files;
     const product = await AquaProduct.findById(id);
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -106,58 +207,48 @@ const updateProduct = async (req, res) => {
       });
     }
 
-    const photos = [];
-    const arPhotos = [];
+    let newImageArray = [];
+    let newArImageArray = [];
+    let oldPhotos = product.photos;
+    let oldArPhotos = product.arPhotos;
 
-    // Update photos if provided
-    if (req.files.photos) {
-      for (const file of req.files.photos) {
-        const result = await cloudinary.v2.uploader.upload(file.path, {
-          folder: "products",
-        });
-        photos.push({ id: result.public_id, secure_url: result.secure_url });
+    // Upload new photos to Cloudinary
+    if (files && files.photos && files.photos.length > 0) {
+      for (const file of files.photos) {
+        const result = await streamUpload(file.buffer, "products");
+        newImageArray.push({ id: result.public_id, secure_url: result.secure_url });
       }
     } else {
-      photos.push(...product.photos);
+      newImageArray = oldPhotos; // Retain existing photos if no new photos are uploaded
     }
 
-    // Update AR photos if provided
-    if (req.files.arPhotos) {
-      for (const file of req.files.arPhotos) {
-        const result = await cloudinary.v2.uploader.upload(file.path, {
-          folder: "arProducts",
-        });
-        arPhotos.push({ id: result.public_id, secure_url: result.secure_url });
+    // Upload new AR photos to Cloudinary
+    if (files && files.ar && files.ar.length > 0) {
+      for (const file of files.ar) {
+        const result = await streamUpload(file.buffer, "ar_products");
+        newArImageArray.push({ id: result.public_id, secure_url: result.secure_url });
       }
     } else {
-      arPhotos.push(...product.arPhotos);
+      newArImageArray = oldArPhotos; // Retain existing AR photos if no new AR files are uploaded
     }
+
+    // Delete old photos only after successful uploads
+    if (newImageArray.length > 0 && oldPhotos.length > 0) {
+      await deleteMedia(oldPhotos);
+    }
+
+    if (newArImageArray.length > 0 && oldArPhotos.length > 0) {
+      await deleteMedia(oldArPhotos);
+    }
+
+    // Update product with new or retained media
+    req.body.photos = newImageArray;
+    req.body.arPhotos = newArImageArray;
 
     const updatedProduct = await AquaProduct.findByIdAndUpdate(
       id,
-      {
-        title,
-        ShortName,
-        code,
-        discountPriceStatus,
-        discountPrice,
-        keywords,
-        price,
-        description,
-        notes,
-        photos,
-        arPhotos,
-        category,
-        subCategory,
-        blog,
-        stock,
-        brand,
-        ratings,
-        numberOfReviews,
-        reviews,
-        user,
-      },
-      { new: true, runValidators: true },
+      { $set: req.body },
+      { new: true }
     );
 
     res.status(200).json({
@@ -165,15 +256,14 @@ const updateProduct = async (req, res) => {
       product: updatedProduct,
     });
   } catch (error) {
+    console.error("Error updating product:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update product",
+      error: error.message,
     });
   }
 };
-
-
-
 
 const deleteProduct = async (req, res) => {
   try {
