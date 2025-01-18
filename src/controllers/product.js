@@ -98,6 +98,14 @@ const updateProduct = async (req, res) => {
       user,
     } = req.body;
 
+    const product = await AquaProduct.findById(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
     const photos = [];
     const arPhotos = [];
 
@@ -109,6 +117,8 @@ const updateProduct = async (req, res) => {
         });
         photos.push({ id: result.public_id, secure_url: result.secure_url });
       }
+    } else {
+      photos.push(...product.photos);
     }
 
     // Update AR photos if provided
@@ -119,6 +129,8 @@ const updateProduct = async (req, res) => {
         });
         arPhotos.push({ id: result.public_id, secure_url: result.secure_url });
       }
+    } else {
+      arPhotos.push(...product.arPhotos);
     }
 
     const updatedProduct = await AquaProduct.findByIdAndUpdate(
@@ -133,8 +145,8 @@ const updateProduct = async (req, res) => {
         price,
         description,
         notes,
-        photos: photos.length ? photos : undefined,
-        arPhotos: arPhotos.length ? arPhotos : undefined,
+        photos,
+        arPhotos,
         category,
         subCategory,
         blog,
@@ -159,6 +171,10 @@ const updateProduct = async (req, res) => {
     });
   }
 };
+
+
+
+
 const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;

@@ -11,7 +11,7 @@ router.get("/product/:id", ProductOperations.getProduct);
 router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.get("/products/:count", ProductOperations.getLimitedProducts);
 router.get("/product", ProductOperations.getProductByQuery);
-router.post("/product-add", ProductOperations.CreateProduct);
+router.post("/product-add",userAuth.checkAdmin, ProductOperations.CreateProduct);
 router.put(
   "/product-update/:id",
   userAuth.checkAdmin,

@@ -23,6 +23,9 @@ const AquaProductSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  discountPricePercentage: {
+   type: Number,
+  },
   discountPrice: {
     type: Number,
   },
