@@ -53,7 +53,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // CORS configuration
 const corsOptions = {
-  origin: ["http://localhost:3000", "https://aquakart.co.in","http://localhost:4000"],
+  origin: ["http://localhost:3000", "https://admin.aquakart.co.in", "https://aquakart.co.in","http://localhost:4000"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
