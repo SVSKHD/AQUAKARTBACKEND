@@ -1,14 +1,14 @@
 import AquaCoupon from "../models/coupon.js";
 
-
-const AquaCouponTest = (req,res)=>{
-    res.send("Coupon Route Working");
-}
+const AquaCouponTest = (req, res) => {
+  res.send("Coupon Route Working");
+};
 
 // CREATE: Add a new coupon
 export const createCoupon = async (req, res) => {
   try {
-    const { code, description, discountPercentage, validity, conditions } = req.body;
+    const { code, description, discountPercentage, validity, conditions } =
+      req.body;
 
     const newCoupon = new AquaCoupon({
       code,
@@ -131,14 +131,13 @@ export const deleteCoupon = async (req, res) => {
   }
 };
 
-
 const AquaCouponOperations = {
-    AquaCouponTest,
-    createCoupon,
-    getCoupons,
-    getCouponById,
-    updateCoupon,
-    deleteCoupon,   
-}
+  AquaCouponTest,
+  createCoupon,
+  getCoupons,
+  getCouponById,
+  updateCoupon,
+  deleteCoupon,
+};
 
 export default AquaCouponOperations;

@@ -24,51 +24,46 @@ const sendMessage = async (req, res) => {
         .json({ message: response.data || "Failed to send message" });
     }
   } catch (error) {
-    console.error(
-      "Error:",
-      error.response ? error.response : error.message,
-    );
+    console.error("Error:", error.response ? error.response : error.message);
     res
       .status(400)
       .json({ message: error.response ? error.response : error.message });
   }
 };
 
+const sendWhatsAppPostMethod = async (req, res) => {
+  const { no, message } = req.body;
 
-const sendWhatsAppPostMethod = async(req,res)=>{
-    const {no,message} = req.body
-  
-    try {
-      const response = await axios.post(`${BASE}/api/send/text`, {
-        accessToken: KEY,
-        mobile: `91${no}`,
-        text: message || "Aquakart Welcomes you",
-      });
-  
-      console.log("Response:", response.data);
-  
-      if (response.data.success) {
-        res.status(200).json({ message: "Message sent successfully" });
-      } else {
-        res
-          .status(400)
-          .json({ message: response.data.error || "Failed to send message" });
-      }
-    } catch (error) {
-      console.error(
-        "Error:",
-        error.response ? error.response.data : error.message,
-      );
+  try {
+    const response = await axios.post(`${BASE}/api/send/text`, {
+      accessToken: KEY,
+      mobile: `91${no}`,
+      text: message || "Aquakart Welcomes you",
+    });
+
+    console.log("Response:", response.data);
+
+    if (response.data.success) {
+      res.status(200).json({ message: "Message sent successfully" });
+    } else {
       res
         .status(400)
-        .json({ message: error.response ? error.response.data : error.message });
+        .json({ message: response.data.error || "Failed to send message" });
     }
-}
-
+  } catch (error) {
+    console.error(
+      "Error:",
+      error.response ? error.response.data : error.message,
+    );
+    res
+      .status(400)
+      .json({ message: error.response ? error.response.data : error.message });
+  }
+};
 
 const WhatsappOperations = {
   sendMessage,
-  sendWhatsAppPostMethod
+  sendWhatsAppPostMethod,
 };
 
 export default WhatsappOperations;

@@ -9,7 +9,6 @@ const deletePhoto = async (publicId) => {
   }
 };
 
-
 const uploadPhoto = async (filePath, publicId, folder) => {
   try {
     const result = await cloudinary.v2.uploader.upload(filePath, {
@@ -25,9 +24,7 @@ const uploadPhoto = async (filePath, publicId, folder) => {
   }
 };
 
-
-
-
 export const CloudinaryOperations = {
-    deletePhoto, uploadPhoto
-}
+  deletePhoto,
+  uploadPhoto,
+};

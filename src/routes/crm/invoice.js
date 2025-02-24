@@ -9,10 +9,13 @@ router.get("invoice-status", async (req, res) => {
 });
 
 router.get("/admin/all-invoices", InvoiceOperations.getInvoices);
-router.get("/admin/invoice",userAuth.checkAdmin, InvoiceOperations.getInvoice)
-router.get("/admin/invoice/dates", userAuth.checkAdmin, InvoiceOperations.getInvoicesByDate)
+router.get("/admin/invoice", userAuth.checkAdmin, InvoiceOperations.getInvoice);
+router.get(
+  "/admin/invoice/dates",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoicesByDate,
+);
 router.get("/invoice/:id", InvoiceOperations.getInvoiceById);
-
 
 router.get(
   "/invoice/customer/:id",

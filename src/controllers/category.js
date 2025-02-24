@@ -29,7 +29,6 @@ const deletePhoto = async (publicId) => {
   }
 };
 
-
 const addCategory = async (req, res) => {
   try {
     const { title, description, keywords } = req.body;
@@ -121,7 +120,6 @@ const updateCategory = async (req, res) => {
   const { title, description, keywords } = req.body; // Extract text fields
   const photos = req?.files; // Handle new file uploads
 
-
   try {
     // Step 1: Find the existing category
     const category = await AquaCategory.findById(id);
@@ -148,7 +146,10 @@ const updateCategory = async (req, res) => {
             try {
               await deletePhoto(existingPhoto.id);
             } catch (deleteError) {
-              console.error("Error deleting photo from Cloudinary:", deleteError);
+              console.error(
+                "Error deleting photo from Cloudinary:",
+                deleteError,
+              );
             }
           }
         }
@@ -177,9 +178,13 @@ const updateCategory = async (req, res) => {
     }
 
     // Step 3: Update the category in the database
-    const updatedCategory = await AquaCategory.findByIdAndUpdate(id, updatedData, {
-      new: true, // Ensure the updated document is returned
-    });
+    const updatedCategory = await AquaCategory.findByIdAndUpdate(
+      id,
+      updatedData,
+      {
+        new: true, // Ensure the updated document is returned
+      },
+    );
 
     // Respond with the updated category
     return res.status(200).json({ success: true, data: updatedCategory });
@@ -208,13 +213,12 @@ const deleteCategory = async (req, res) => {
   }
 };
 
-
 const CategoryOperations = {
   addCategory,
   getAllCategories,
   getCategory,
   getCategoryByTitle,
   updateCategory,
-  deleteCategory
+  deleteCategory,
 };
 export default CategoryOperations;

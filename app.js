@@ -6,7 +6,7 @@ import multer from "multer";
 import swaggerUi from "swagger-ui-express";
 import { promises as fs } from "fs"; // Importing fs promises API to read files asynchronously
 import path from "path"; // For resolving file paths
-import axios from "axios"
+import axios from "axios";
 // routes
 import userRoutes from "./src/routes/user.js";
 import categoryRoutes from "./src/routes/category.js";
@@ -50,10 +50,14 @@ const KEY = process.env.WHATSAPPAPIKEY;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
 // CORS configuration
 const corsOptions = {
-  origin: ["http://localhost:3000", "https://admin.aquakart.co.in", "https://aquakart.co.in","http://localhost:4000"],
+  origin: [
+    "http://localhost:3000",
+    "https://admin.aquakart.co.in",
+    "https://aquakart.co.in",
+    "http://localhost:4000",
+  ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
@@ -84,7 +88,7 @@ app.use("/v1", productRoutes);
 app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 app.use("/v1", orderRoutes);
-app.use("/v1", Coupons);  
+app.use("/v1", Coupons);
 app.use("/v1/notify", SendWhatsAppMessage);
 app.use("/v1/email", SendEmail);
 app.use("/v1/subscription", Subscritions);
@@ -94,8 +98,10 @@ app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
 app.use("/v1/crm/user", AdminUserRoutes);
 
-
-app.post("/v1/notify/send-whatsappp",WhatsappOperations.sendWhatsAppPostMethod)
+app.post(
+  "/v1/notify/send-whatsappp",
+  WhatsappOperations.sendWhatsAppPostMethod,
+);
 
 // Load the Swagger JSON dynamically using fs and path
 const swaggerSetup = async () => {

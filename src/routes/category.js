@@ -11,7 +11,6 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-
 router.get("/category-status", (req, res) => {
   res.json({ message: "Category Status v1 active" });
 });
@@ -32,7 +31,7 @@ router.put(
   "/category-update/:id",
   upload.array("photos"), // Multer handles file parsing
   userAuth.checkAdmin,
-  CategoryOperations.updateCategory
+  CategoryOperations.updateCategory,
 );
 router.get(
   "/category/delete/:id",

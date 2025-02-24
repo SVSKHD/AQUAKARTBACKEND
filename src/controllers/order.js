@@ -190,7 +190,7 @@ const AdminGetOrders = async (req, res) => {
     if (id) query._id = mongoose.Types.ObjectId(id);
     if (transactionId) query.transactionId = transactionId;
     if (orderId) query.orderId = orderId;
-    if (user) query.user=user
+    if (user) query.user = user;
     if (date) {
       const startDate = new Date(date);
       const endDate = new Date(date);

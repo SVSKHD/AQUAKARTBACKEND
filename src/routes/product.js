@@ -11,7 +11,6 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-
 router.get("/product-status", (req, res) => {
   res.json({ message: "product status v1 active" });
 });
@@ -21,10 +20,15 @@ router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.get("/products/:count", ProductOperations.getLimitedProducts);
 router.get("/product", ProductOperations.getProductByQuery);
 
-router.post("/product-add",userAuth.checkAdmin,  upload.fields([
-  { name: "photos", maxCount: 10 }, // Accept up to 10 photos
-  { name: "ar", maxCount: 5 }, // Accept up to 5 AR files
-]), ProductOperations.CreateProduct);
+router.post(
+  "/product-add",
+  userAuth.checkAdmin,
+  upload.fields([
+    { name: "photos", maxCount: 10 }, // Accept up to 10 photos
+    { name: "ar", maxCount: 5 }, // Accept up to 5 AR files
+  ]),
+  ProductOperations.CreateProduct,
+);
 router.put(
   "/product-update/:id",
   userAuth.checkAdmin,
