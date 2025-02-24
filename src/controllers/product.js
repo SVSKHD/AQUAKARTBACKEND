@@ -1,6 +1,6 @@
 import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
-import mongoose from "mongoose";
+
 
 const streamUpload = (buffer) => {
   return new Promise((resolve, reject) => {
@@ -103,84 +103,6 @@ const CreateProduct = async (req, res, next) => {
   }
 };
 
-// const updateProduct = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const files = req.files;
-//     const product = await AquaProduct.findById(id);
-
-//     if (!product) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Product not found",
-//       });
-//     }
-
-//     let newImageArray = [];
-//     let newArImageArray = [];
-//     let oldPhotos = product.photos;
-//     let oldArPhotos = product.arPhotos;
-
-//     console.log("files", files);
-
-//     if (files?.photos == undefined || files?.ar == undefined) {
-//         product.photos = oldPhotos;
-//         product.arPhotos = oldArPhotos;
-//     }
-
-//     // Upload new photos to Cloudinary
-//     if (files && files.photos && files.photos.length > 0) {
-//       for (const file of files.photos) {
-//         const result = await streamUpload(file.buffer, "products");
-//         newImageArray.push({ id: result.public_id, secure_url: result.secure_url });
-//       }
-//     } else {
-//       newImageArray = oldPhotos; // Retain existing photos if no new photos are uploaded
-//     }
-
-//     // Upload new AR photos to Cloudinary
-//     if (files && files.ar && files.ar.length > 0) {
-//       for (const file of files.ar) {
-//         const result = await streamUpload(file.buffer, "ar_products");
-//         newArImageArray.push({ id: result.public_id, secure_url: result.secure_url });
-//       }
-//     } else {
-//       newArImageArray = oldArPhotos; // Retain existing AR photos if no new AR files are uploaded
-//     }
-
-//     // Delete old photos only after successful uploads
-//     if (newImageArray.length > 0 && oldPhotos.length > 0) {
-//       await deleteMedia(oldPhotos);
-//     }
-
-//     if (newArImageArray.length > 0 && oldArPhotos.length > 0) {
-//       await deleteMedia(oldArPhotos);
-//     }
-
-//     // Update product with new or retained media
-//     req.body.photos = newImageArray;
-//     req.body.arPhotos = newArImageArray;
-
-//     const updatedProduct = await AquaProduct.findByIdAndUpdate(
-//       id,
-//       { $set: req.body },
-//       { new: true }
-//     );
-
-//     res.status(200).json({
-//       success: true,
-//       product: updatedProduct,
-//     });
-//   } catch (error) {
-//     console.error("Error updating product:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to update product",
-//       error: error.message,
-//     });
-//   }
-// };
-
 const updateProduct = async (req, res) => {
   try {
     const { id } = req?.params;
@@ -260,7 +182,7 @@ const updateProduct = async (req, res) => {
 const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-
+    console.log("Deleting product with ID:", id);
     const product = await AquaProduct.findById(id);
 
     if (!product) {
@@ -271,16 +193,16 @@ const deleteProduct = async (req, res) => {
     }
 
     // Delete photos from Cloudinary
-    for (const photo of product.photos) {
-      await cloudinary.v2.uploader.destroy(photo.id);
+    if (product.photos?.length > 0) {
+     await deleteMedia(product.photos);
     }
 
     // Delete AR photos from Cloudinary
-    for (const arPhoto of product.arPhotos) {
-      await cloudinary.v2.uploader.destroy(arPhoto.id);
+    if (product.arPhotos?.length > 0) {
+      await deleteMedia(product.arPhotos);
     }
 
-    await product.remove();
+    await AquaProduct.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
