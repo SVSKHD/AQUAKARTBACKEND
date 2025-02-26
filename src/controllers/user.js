@@ -6,6 +6,7 @@ import signupEmail from "../notifications/email/signupTemplate.js";
 import signupOtpTemplate from "../notifications/email/signupOtp.js";
 import forgotPassword from "../notifications/email/forgotPassword.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
+import userLoginNotificationTemplateToAdmin from "../notifications/email/adminInfo/NewUserLogin.js";
 
 // User Login
 const userLogin = async (req, res) => {
@@ -201,6 +202,18 @@ const verifyEmailLogin = async (req, res) => {
     const userDetails = await AquaEcomUser.findById(user._id).select(
       "-password",
     );
+
+    if (userDetails){
+      const date = new Date();
+      const adminEmail = process.env.SMTPEMAIL ;
+      const adminMessage = userLoginNotificationTemplateToAdmin(userDetails.email, userDetails.firstName, date);
+      const adminEmailResult = await sendEmail({
+        email: adminEmail,
+        subject: "New User Login Alert",
+        message: "A new user has logged into AquaKart",
+        content: adminMessage,
+      });
+    }
 
     // Send the response
     res.status(200).json({ success: true, token, user: userDetails });
