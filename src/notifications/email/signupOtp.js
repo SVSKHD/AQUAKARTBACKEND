@@ -74,7 +74,7 @@ const signupOtpTemplate = (email, username, otp) => {
                               <a href="https://www.instagram.com/aquakart.co.in/">
                                 <img src="https://static-00.iconduck.com/assets.00/instagram-icon-2048x2048-uc6feurl.png" width="30" height="30" alt="Instagram"/>
                               </a>
-                              <a href="https://www.x.com/aquakart">
+                              <a href="https://www.x.com/aquakart8">
                                 <img src="https://img.freepik.com/free-vector/twitter-new-2023-x-logo-white-background-vector_1017-45422.jpg?size=338&ext=jpg" width="30" height="30" alt="Twitter"/>
                               </a>
                             </div>
