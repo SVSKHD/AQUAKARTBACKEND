@@ -50,10 +50,6 @@ const BlogSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     ref: "AquaSubCategory",
   },
-  product: {
-    type: mongoose.Schema.ObjectId,
-    ref: "AquaProduct",
-  },
   brand: {
     type: String,
     required: [true, "please add a brand for clothing"],

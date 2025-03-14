@@ -6,8 +6,6 @@ import multer from "multer";
 import swaggerUi from "swagger-ui-express";
 import { promises as fs } from "fs"; // Importing fs promises API to read files asynchronously
 import path from "path"; // For resolving file paths
-import axios from "axios";
-// routes
 import userRoutes from "./src/routes/user.js";
 import categoryRoutes from "./src/routes/category.js";
 import subCategoryRoutes from "./src/routes/sub-category.js";
