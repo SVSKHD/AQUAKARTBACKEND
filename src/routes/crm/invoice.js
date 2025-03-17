@@ -32,5 +32,6 @@ router.put(
   userAuth.checkAdmin,
   InvoiceOperations.updateInvoice,
 );
+router.delete("/delete/invoice/:id", userAuth.checkAdmin, InvoiceOperations.deleteInvoice);
 
 export default router;

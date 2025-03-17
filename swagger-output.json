@@ -1982,7 +1982,7 @@
             "schema": {
               "type": "object",
               "properties": {
-                "invoiceNumber": {
+                "invoiceNo": {
                   "example": "any"
                 },
                 "createdAt": {
@@ -2019,6 +2019,65 @@
     },
     "/v1/crm/update/invoice/{id}": {
       "put": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "invoiceNo": {
+                  "example": "any"
+                },
+                "createdAt": {
+                  "example": "any"
+                },
+                "updatedAt": {
+                  "example": "any"
+                },
+                "date": {
+                  "example": "any"
+                },
+                "transport": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/v1/crm/delete/invoice/{id}": {
+      "delete": {
         "description": "",
         "parameters": [
           {

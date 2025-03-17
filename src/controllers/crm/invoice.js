@@ -6,15 +6,14 @@ const createInvoice = async (req, res) => {
     const uniqueId = nanoid(4);
     const date = new Date().getDate()
     const year = new Date().getFullYear()
-    const month  = new Date().getMonth()
+    const month  = new Date().getMonth() + 1
     const formattedDate = new Date().toISOString().split("T")[0];
     const concateId = `AQB${uniqueId}|${date}${month}${year}`;
-    req.body.invoiceNumber = concateId;
+    req.body.invoiceNo = concateId;
     req.body.createdAt = formattedDate
     req.body.updatedAt = formattedDate
     req.body.date = formattedDate
     req.body.transport.deliveryDate = formattedDate
-    console.log("req", req.body);
     const newInvoice = new AquaInvoice(req.body);
     const savedInvoice = await newInvoice.save();
     res.status(201).json(savedInvoice);
@@ -27,12 +26,22 @@ const createInvoice = async (req, res) => {
 const updateInvoice = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log("id", id);
+    const invoice = await AquaInvoice.findById(id);
+    req.body.invoiceNo = invoice.invoiceNo;
+    req.body.createdAt = invoice.createdAt;
+    req.body.updatedAt = new Date().toISOString().split("T")[0];
+    req.body.date = invoice.date;
+    req.body.transport.deliveryDate = invoice.transport.deliveryDate;
+
     const updatedInvoice = await AquaInvoice.findByIdAndUpdate(id, req.body, {
       new: true,
     });
+ 
     if (!updatedInvoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
+
     res.status(200).json(updatedInvoice);
   } catch (error) {
     console.error(error);
