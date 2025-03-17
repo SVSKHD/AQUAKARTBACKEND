@@ -17,11 +17,6 @@ router.get(
 );
 router.get("/invoice/:id", InvoiceOperations.getInvoiceById);
 
-router.get(
-  "/invoice/customer/:id",
-  userAuth.checkAdmin,
-  InvoiceOperations.deleteInvoice,
-);
 router.post(
   "/create/invoice",
   userAuth.checkAdmin,
@@ -32,6 +27,12 @@ router.put(
   userAuth.checkAdmin,
   InvoiceOperations.updateInvoice,
 );
-router.delete("/delete/invoice/:id", userAuth.checkAdmin, InvoiceOperations.deleteInvoice);
+router.delete(
+  "/delete/invoice/:id",
+  userAuth.checkAdmin,
+  InvoiceOperations.deleteInvoice,
+);
+
+router.post("/notify/invoice-members", InvoiceOperations.NotifyInvoiceMembers);
 
 export default router;

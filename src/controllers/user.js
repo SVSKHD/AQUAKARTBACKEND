@@ -203,10 +203,14 @@ const verifyEmailLogin = async (req, res) => {
       "-password",
     );
 
-    if (userDetails){
+    if (userDetails) {
       const date = new Date();
-      const adminEmail = process.env.SMTPEMAIL ;
-      const adminMessage = userLoginNotificationTemplateToAdmin(userDetails.email, userDetails.firstName, date);
+      const adminEmail = process.env.SMTPEMAIL;
+      const adminMessage = userLoginNotificationTemplateToAdmin(
+        userDetails.email,
+        userDetails.firstName,
+        date,
+      );
       const adminEmailResult = await sendEmail({
         email: adminEmail,
         subject: "New User Login Alert",

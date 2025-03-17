@@ -22,7 +22,7 @@ router.post(
     { name: "photos", maxCount: 10 },
     { name: "titleImages", maxCount: 2 },
   ]),
-  BlogOperations.BlogAdd
+  BlogOperations.BlogAdd,
 );
 router.post("/blog-update/:id", userAuth.checkAdmin);
 router.get("/delete/blog/:id", userAuth.checkAdmin);

@@ -1,19 +1,20 @@
 import AquaInvoice from "../../models/crm/invoice.js";
 import { nanoid } from "nanoid";
+import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
 const createInvoice = async (req, res) => {
   try {
     const uniqueId = nanoid(4);
-    const date = new Date().getDate()
-    const year = new Date().getFullYear()
-    const month  = new Date().getMonth() + 1
+    const date = new Date().getDate();
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
     const formattedDate = new Date().toISOString().split("T")[0];
     const concateId = `AQB${uniqueId}|${date}${month}${year}`;
     req.body.invoiceNo = concateId;
-    req.body.createdAt = formattedDate
-    req.body.updatedAt = formattedDate
-    req.body.date = formattedDate
-    req.body.transport.deliveryDate = formattedDate
+    req.body.createdAt = formattedDate;
+    req.body.updatedAt = formattedDate;
+    req.body.date = formattedDate;
+    req.body.transport.deliveryDate = formattedDate;
     const newInvoice = new AquaInvoice(req.body);
     const savedInvoice = await newInvoice.save();
     res.status(201).json(savedInvoice);
@@ -37,7 +38,7 @@ const updateInvoice = async (req, res) => {
     const updatedInvoice = await AquaInvoice.findByIdAndUpdate(id, req.body, {
       new: true,
     });
- 
+
     if (!updatedInvoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
@@ -55,7 +56,9 @@ const deleteInvoice = async (req, res) => {
     if (!deletedInvoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
-    res.status(200).json({ message: "Invoice deleted successfully" });
+    res
+      .status(200)
+      .json({ status: true, message: "Invoice deleted successfully" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error", error });
@@ -219,6 +222,46 @@ const getInvoicesByDate = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+const NotifyInvoiceMembers = async (req, res) => {
+  try {
+    const invoices = await AquaInvoice.find({}).lean();
+    let success = false;
+    const data = req.body;
+    const year = new Date().getFullYear();
+
+    if (data.send === "all") {
+      if (!data.festival) {
+        return res.status(400).json({ error: "Festival name is required." });
+      }
+
+      invoices.forEach((invoice) => {
+        const { name: customerName, phone } = invoice.customerDetails;
+        const { invoiceNo, date, totalAmount: amount, _id: id } = invoice;
+
+        const message = `Dear ${customerName}, we wish you a very happy ${data.festival} ${year}! 🎉 Your invoice ${invoiceNo} dated ${date} for Rs.${amount} is available at https://admin.aquakart.co.in/invoice/${id}.  
+
+✨ **Exclusive Festival Offer:** Get special discounts on your next purchase!  
+
+For more products, browse **_aquakart.co.in_** 🛒`;
+
+        
+        success = true;
+      });
+      const message = "hello"
+      await sendWhatsAppMessage("9553419654", message);
+
+      return res.json({
+        success,
+        message: "Notifications sent successfully with offers.",
+      });
+    }
+
+    res.status(400).json({ error: "Invalid request parameters." });
+  } catch (error) {
+    console.error("Error notifying invoice members:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
 
 const InvoiceOperations = {
   createInvoice,
@@ -228,6 +271,7 @@ const InvoiceOperations = {
   deleteInvoice,
   getInvoiceById,
   getInvoicesByDate,
+  NotifyInvoiceMembers,
 };
 
 export default InvoiceOperations;

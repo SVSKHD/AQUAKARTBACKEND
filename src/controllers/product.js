@@ -1,7 +1,6 @@
 import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
 
-
 const streamUpload = (buffer) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
@@ -147,12 +146,20 @@ const updateProduct = async (req, res) => {
     }
 
     // Delete old photos if new ones are uploaded
-    if (newImageArray.length > 0 && product.photos?.length > 0 && files?.photos?.length > 0) {
+    if (
+      newImageArray.length > 0 &&
+      product.photos?.length > 0 &&
+      files?.photos?.length > 0
+    ) {
       console.log("Deleting old photos:", product.photos);
       await deleteMedia(product.photos);
     }
 
-    if (newArImageArray.length > 0 && product.arPhotos?.length > 0 && files?.ar?.length > 0) {
+    if (
+      newArImageArray.length > 0 &&
+      product.arPhotos?.length > 0 &&
+      files?.ar?.length > 0
+    ) {
       console.log("Deleting old AR photos:", product.arPhotos);
       await deleteMedia(product.arPhotos);
     }
@@ -165,7 +172,9 @@ const updateProduct = async (req, res) => {
     console.log("Updated AR photos:", req.body.arPhotos);
 
     // Proceed with updating the product in the database
-    const updatedProduct = await AquaProduct.findByIdAndUpdate(id, req.body, { new: true });
+    const updatedProduct = await AquaProduct.findByIdAndUpdate(id, req.body, {
+      new: true,
+    });
 
     res.status(200).json({
       success: true,
@@ -177,7 +186,6 @@ const updateProduct = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
 
 const deleteProduct = async (req, res) => {
   try {
@@ -194,7 +202,7 @@ const deleteProduct = async (req, res) => {
 
     // Delete photos from Cloudinary
     if (product.photos?.length > 0) {
-     await deleteMedia(product.photos);
+      await deleteMedia(product.photos);
     }
 
     // Delete AR photos from Cloudinary

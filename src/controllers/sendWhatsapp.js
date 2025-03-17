@@ -44,7 +44,7 @@ const sendWhatsAppPostMethod = async (req, res) => {
     console.log("Response:", response.data);
 
     if (response.data.success) {
-      res.status(200).json({ message: "Message sent successfully" });
+      res.status(200).json({ status:true , message: "Message sent successfully" });
     } else {
       res
         .status(400)

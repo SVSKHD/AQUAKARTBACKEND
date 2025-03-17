@@ -12,7 +12,7 @@ const streamUpload = (buffer) => {
         } else {
           reject(error);
         }
-      }
+      },
     );
     stream.end(buffer);
   });
@@ -43,7 +43,7 @@ const BlogAdd = async (req, res, next) => {
 
   console.log("photos", photos, titleImages);
 
-   if (photos.length>0) {
+  if (photos.length > 0) {
     for (const photo of photos) {
       if (!photo.buffer) {
         return next(new Error("File buffer is missing", 400));
@@ -56,18 +56,18 @@ const BlogAdd = async (req, res, next) => {
     }
   }
 
-  if (titleImages.length>0) {
-      for (const photo of titleImages) {
-        if (!photo.buffer) {
-          return next(new Error("File buffer is missing", 400));
-        }
-        const result = await streamUpload(photo.buffer);
-        titleImageArray.push({
-          id: result.public_id,
-          secure_url: result.secure_url,
-        });
+  if (titleImages.length > 0) {
+    for (const photo of titleImages) {
+      if (!photo.buffer) {
+        return next(new Error("File buffer is missing", 400));
       }
+      const result = await streamUpload(photo.buffer);
+      titleImageArray.push({
+        id: result.public_id,
+        secure_url: result.secure_url,
+      });
     }
+  }
 
   req.body.photos = imageArray;
   req.body.titleImages = titleImageArray;
