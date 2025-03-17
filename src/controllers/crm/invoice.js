@@ -1,7 +1,20 @@
 import AquaInvoice from "../../models/crm/invoice.js";
+import { nanoid } from "nanoid";
 
 const createInvoice = async (req, res) => {
   try {
+    const uniqueId = nanoid(4);
+    const date = new Date().getDate()
+    const year = new Date().getFullYear()
+    const month  = new Date().getMonth()
+    const formattedDate = new Date().toISOString().split("T")[0];
+    const concateId = `AQB${uniqueId}|${date}${month}${year}`;
+    req.body.invoiceNumber = concateId;
+    req.body.createdAt = formattedDate
+    req.body.updatedAt = formattedDate
+    req.body.date = formattedDate
+    req.body.transport.deliveryDate = formattedDate
+    console.log("req", req.body);
     const newInvoice = new AquaInvoice(req.body);
     const savedInvoice = await newInvoice.save();
     res.status(201).json(savedInvoice);
