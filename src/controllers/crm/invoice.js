@@ -171,48 +171,53 @@ const getInvoicesByDate = async (req, res) => {
 
     let query = {};
 
-    if (month && year) {
-      // If both month and year are provided, get the range for the entire month
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      const [day, month, year] = dateStr.split("-").map(Number);
+      const fullYear = year < 100 ? 2000 + year : year;
+      return new Date(fullYear, month - 1, day);
+    };
+
+    const parsedStartDate = parseDate(startDate);
+    const parsedEndDate = parseDate(endDate);
+
+    if (month) {
+      const resolvedYear = year || new Date().getFullYear();
       const { startDate: monthStartDate, endDate: monthEndDate } =
-        getMonthDateRange(month, year);
+        getMonthDateRange(month, resolvedYear);
       query.createdAt = {
         $gte: monthStartDate.toISOString(),
         $lte: monthEndDate.toISOString(),
       };
     } else if (year && !month) {
-      // If only year is provided, get the range for the entire year
       const { startDate: yearStartDate, endDate: yearEndDate } =
         getYearDateRange(year);
       query.createdAt = {
         $gte: yearStartDate.toISOString(),
         $lte: yearEndDate.toISOString(),
       };
-    } else if (startDate && endDate) {
-      // If both startDate and endDate are provided
-      query.createdAt = {
-        $gte: new Date(startDate).toISOString(),
-        $lte: new Date(endDate).toISOString(),
-      };
-    } else if (startDate && !endDate) {
-      // If only startDate is provided, set the endDate to the end of the day of the startDate
-      const start = new Date(startDate);
-      const end = new Date(startDate);
-      end.setHours(23, 59, 59);
+    } else if (parsedStartDate && !parsedEndDate) {
+      const start = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth(), 1);
+      const end = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth() + 1, 0, 23, 59, 59);
       query.createdAt = {
         $gte: start.toISOString(),
         $lte: end.toISOString(),
+      };
+    } else if (parsedStartDate && parsedEndDate) {
+      query.createdAt = {
+        $gte: parsedStartDate.toISOString(),
+        $lte: new Date(parsedEndDate.setHours(23, 59, 59)).toISOString(),
       };
     } else {
       // If no date is provided, use the current date for both startDate and endDate
       const today = new Date();
       const start = new Date(today.setHours(0, 0, 0, 0)); // Start of the day
       const end = new Date(today.setHours(23, 59, 59)); // End of the day
-      query.date = {
+      query.createdAt = {
         $gte: start.toISOString(),
         $lte: end.toISOString(),
       };
     }
-    console.log("query", query);
     const invoices = await AquaInvoice.find(query);
     res
       .status(200)
