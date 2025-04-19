@@ -24,10 +24,10 @@ const BlogAdd = async (req, res, next) => {
   const titleImages = req?.files?.titleImages;
   let imageArray = [];
   let titleImageArray = [];
-  if (!photos || !titleImages) {
+  if (!titleImages) {
     return res.status(400).json({ message: "Please upload images" });
   }
-  if (photos.length > 10) {
+  if (photos?.length > 10) {
     return res.status(400).json({ message: "Maximum of 10 images allowed" });
   }
   if (titleImages.length > 1) {
@@ -43,7 +43,7 @@ const BlogAdd = async (req, res, next) => {
 
   console.log("photos", photos, titleImages);
 
-  if (photos.length > 0) {
+  if (photos?.length > 0) {
     for (const photo of photos) {
       if (!photo.buffer) {
         return next(new Error("File buffer is missing", 400));
