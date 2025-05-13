@@ -62,7 +62,7 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
-app.use(cors(corsOptions));
+// app.use(cors(corsOptions));
 app.use(morgan("tiny"));
 
 // Routes
