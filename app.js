@@ -24,7 +24,6 @@ import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
 import AdminUserRoutes from "./src/routes/crm/adminUser.js";
 import AdminCategoryRoutes from "./src/routes/crm/category.js";
 
-
 //methods
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 
@@ -89,7 +88,7 @@ app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 app.use("/v1", orderRoutes);
 app.use("/v1", Coupons);
-app.use("/v1",SoftenerHydRoutes)
+app.use("/v1", SoftenerHydRoutes);
 app.use("/v1/notify", SendWhatsAppMessage);
 app.use("/v1/email", SendEmail);
 app.use("/v1/subscription", Subscritions);

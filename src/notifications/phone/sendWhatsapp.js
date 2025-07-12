@@ -21,7 +21,7 @@ const sendWhatsAppMessage = async (no, message) => {
   } catch (error) {
     console.error(
       "Error:",
-      error.response ? error.response.data : error.message
+      error.response ? error.response.data : error.message,
     );
     throw {
       status: false,

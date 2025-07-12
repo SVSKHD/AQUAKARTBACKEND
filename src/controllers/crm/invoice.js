@@ -197,8 +197,19 @@ const getInvoicesByDate = async (req, res) => {
         $lte: yearEndDate.toISOString(),
       };
     } else if (parsedStartDate && !parsedEndDate) {
-      const start = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth(), 1);
-      const end = new Date(parsedStartDate.getFullYear(), parsedStartDate.getMonth() + 1, 0, 23, 59, 59);
+      const start = new Date(
+        parsedStartDate.getFullYear(),
+        parsedStartDate.getMonth(),
+        1,
+      );
+      const end = new Date(
+        parsedStartDate.getFullYear(),
+        parsedStartDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
       query.createdAt = {
         $gte: start.toISOString(),
         $lte: end.toISOString(),
@@ -249,10 +260,9 @@ const NotifyInvoiceMembers = async (req, res) => {
 
 For more products, browse **_aquakart.co.in_** 🛒`;
 
-        
         success = true;
       });
-      const message = "hello"
+      const message = "hello";
       await sendWhatsAppMessage("9553419654", message);
 
       return res.json({
