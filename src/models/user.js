@@ -37,9 +37,7 @@ const UserSchema = new mongoose.Schema(
     // login creds info
     email: {
       type: String,
-      unique: true,
       trim: true,
-      index: true,
       lowercase: true,
     },
     firstName: {
@@ -135,6 +133,14 @@ const UserSchema = new mongoose.Schema(
     addresses: [addressSchema],
   },
   { timestamps: true },
+);
+
+UserSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { email: { $exists: true, $ne: null } },
+  },
 );
 
 // Pre-save hook to hash password

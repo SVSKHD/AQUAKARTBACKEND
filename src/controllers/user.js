@@ -104,42 +104,94 @@ const userPhoneLogin = async (req, res) => {
     return randomNumber;
   }
 
-  try {
-    const sixDigitNumber = generateRandomSixDigitNumber();
-    let userExist = "";
-    // Check if the user already exists
-    let user = await AquaEcomUser.findOne({ phone });
+  const sanitizedPhone = String(phone ?? "").replace(/\D/g, "");
 
-    let message;
-    if (user) {
-      userExist = true;
-      user.mobileOtp = sixDigitNumber;
-      message = `Welcome back to Aquakart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
-    } else {
-      userExist = false;
-      user = new AquaEcomUser({ phone, mobileOtp: sixDigitNumber });
-      message = `Welcome to Aquakart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+  if (!sanitizedPhone) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Phone number is required" });
+  }
+
+  const numericPhone = Number(sanitizedPhone);
+
+  if (!Number.isFinite(numericPhone)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Phone number is invalid" });
+  }
+
+  const sixDigitNumber = generateRandomSixDigitNumber();
+
+  let otpResponseMessage = null;
+
+  try {
+    // Check if the user already exists
+    let user = await AquaEcomUser.findOne({ phone: numericPhone });
+    const userExist = Boolean(user);
+
+    if (!user) {
+      user = new AquaEcomUser({ phone: numericPhone });
     }
 
-    // Send the OTP message
-    const otpData = await sendWhatsAppMessage(phone, message);
+    user.mobileOtp = sixDigitNumber;
 
-    if (otpData.success) {
-      // Save the user with the OTP
-      await user.save();
-      res.status(200).json({
-        success: true,
-        otpMessage: otpData.message,
-        userExist: userExist,
-      });
-    } else {
-      res.status(400).json({
+    const message = userExist
+      ? `Welcome back to Aquakart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`
+      : `Welcome to Aquakart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
+
+    // Send the OTP message
+    const otpData = await sendWhatsAppMessage(sanitizedPhone, message);
+
+    if (!otpData.success) {
+      return res.status(400).json({
         success: false,
         message: "Failed to send OTP",
         otpMessage: otpData.message,
       });
     }
+
+    otpResponseMessage = otpData.message;
+
+    // Save the user with the OTP
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      otpMessage: otpData.message,
+      userExist,
+    });
   } catch (error) {
+    if (
+      error?.code === 11000 &&
+      (error?.keyPattern?.email || error?.keyValue?.email === null)
+    ) {
+      try {
+        const existingUser = await AquaEcomUser.findOneAndUpdate(
+          { phone: numericPhone },
+          { mobileOtp: sixDigitNumber },
+          { new: true },
+        );
+
+        if (existingUser) {
+          return res.status(200).json({
+            success: true,
+            otpMessage: otpResponseMessage ?? "OTP sent successfully",
+            userExist: true,
+          });
+        }
+      } catch (updateError) {
+        return res.status(500).json({
+          success: false,
+          message: updateError.message,
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        message:
+          "Account already exists. Please use login to receive a new OTP.",
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
