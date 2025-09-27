@@ -99,61 +99,51 @@ const userEmailOtpLogin = async (req, res) => {
 const userPhoneLogin = async (req, res) => {
   const { phone } = req.body;
 
-  function generateRandomSixDigitNumber() {
-    const randomNumber = Math.floor(100000 + Math.random() * 900000);
-    return randomNumber;
-  }
+  const generateOtp = () => Math.floor(100000 + Math.random() * 900000);
 
+  // sanitize and keep as string
   const sanitizedPhone = String(phone ?? "").replace(/\D/g, "");
-
   if (!sanitizedPhone) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Phone number is required" });
+    return res.status(400).json({ success: false, message: "Phone number is required" });
   }
 
-  const numericPhone = Number(sanitizedPhone);
+  // optional: prepend country code if your WA provider expects it
+  const whatsappPhone = sanitizedPhone.startsWith("91")
+    ? `+${sanitizedPhone}`
+    : `+91${sanitizedPhone}`; // adjust to your rules/provider
 
-  if (!Number.isFinite(numericPhone)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Phone number is invalid" });
-  }
-
-  const sixDigitNumber = generateRandomSixDigitNumber();
-
-  let otpResponseMessage = null;
+  const otp = generateOtp();
 
   try {
-    // Check if the user already exists
-    let user = await AquaEcomUser.findOne({ phone: numericPhone });
-    const userExist = Boolean(user);
+    // Send OTP first (so we don't persist if provider fails)
+    const messageNew = `Welcome to Aquakart! Your Signup OTP is: ${otp}. Enjoy your shopping experience with us!`;
+    const messageExisting = `Welcome back to Aquakart! Your Login OTP is: ${otp}. Enjoy your shopping experience with us!`;
 
-    if (!user) {
-      user = new AquaEcomUser({ phone: numericPhone });
-    }
+    // Check existence
+    const existing = await AquaEcomUser.findOne({ phone: sanitizedPhone }).lean();
+    const userExist = Boolean(existing);
 
-    user.mobileOtp = sixDigitNumber;
-
-    const message = userExist
-      ? `Welcome back to Aquakart! Your Login OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`
-      : `Welcome to Aquakart! Your Signup OTP is: ${sixDigitNumber}. Enjoy your shopping experience with us!`;
-
-    // Send the OTP message
-    const otpData = await sendWhatsAppMessage(sanitizedPhone, message);
-
-    if (!otpData.success) {
+    const otpData = await sendWhatsAppMessage(whatsappPhone, userExist ? messageExisting : messageNew);
+    if (!otpData?.success) {
       return res.status(400).json({
         success: false,
         message: "Failed to send OTP",
-        otpMessage: otpData.message,
+        otpMessage: otpData?.message || "Provider error",
       });
     }
 
-    otpResponseMessage = otpData.message;
+    // Atomic upsert: set mobileOtp always; set email only on insert
+    // Use a stable placeholder email (NOT dependent on OTP)
+    const placeholderEmail = `${sanitizedPhone}@aquakart.co.in`;
 
-    // Save the user with the OTP
-    await user.save();
+    await AquaEcomUser.findOneAndUpdate(
+      { phone: sanitizedPhone },
+      {
+        $set: { mobileOtp: otp },
+        $setOnInsert: { phone: sanitizedPhone, email: placeholderEmail },
+      },
+      { new: true, upsert: true }
+    );
 
     return res.status(200).json({
       success: true,
@@ -161,38 +151,21 @@ const userPhoneLogin = async (req, res) => {
       userExist,
     });
   } catch (error) {
-    if (
-      error?.code === 11000 &&
-      (error?.keyPattern?.email || error?.keyValue?.email === null)
-    ) {
+    // Handle dup-key in case of legacy data/index quirks
+    if (error?.code === 11000) {
+      // Fallback: just update OTP and don't touch email
       try {
-        const existingUser = await AquaEcomUser.findOneAndUpdate(
-          { phone: numericPhone },
-          { mobileOtp: sixDigitNumber },
-          { new: true },
-        );
-
-        if (existingUser) {
-          return res.status(200).json({
-            success: true,
-            otpMessage: otpResponseMessage ?? "OTP sent successfully",
-            userExist: true,
-          });
-        }
-      } catch (updateError) {
-        return res.status(500).json({
-          success: false,
-          message: updateError.message,
+        await AquaEcomUser.updateOne({ phone: sanitizedPhone }, { $set: { mobileOtp: otp } });
+        return res.status(200).json({
+          success: true,
+          otpMessage: "OTP sent successfully",
+          userExist: true,
         });
+      } catch (updateError) {
+        return res.status(500).json({ success: false, message: updateError.message });
       }
-
-      return res.status(409).json({
-        success: false,
-        message:
-          "Account already exists. Please use login to receive a new OTP.",
-      });
     }
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

@@ -35,11 +35,17 @@ const UserSchema = new mongoose.Schema(
     // user signedup date
     userSignedupDate: { type: Date, default: Date.now },
     // login creds info
-    email: {
-      type: String,
-      trim: true,
-      lowercase: true,
-    },
+   email: {
+  type: String,
+  trim: true,
+  lowercase: true,
+  set: (value) => {
+    if (typeof value !== "string") return undefined; // drop null/undefined
+    const cleaned = value.trim();
+    return cleaned.length ? cleaned : undefined;     // drop empty strings
+  },
+},
+
     firstName: {
       type: String,
       trim: true,
