@@ -18,7 +18,7 @@ router.get(
   userAuth.isLoggedIn,
   OrderOperations.getOrderByTransactionId,
 );
-router.put("/order/user/:id", userAuth.isLoggedIn, OrderOperations.updateOrder);
+router.put("/order/user/:id", OrderOperations.updateOrder);
 //admin routes
 router.get(
   "/admin/orders",
