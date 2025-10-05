@@ -88,6 +88,7 @@ const payPhonepe = async (req, res) => {
 const handlePhoneOrderCheck = async (req, res) => {
   const { id } = req.params;
   const transactionId = id;
+  const callbackPayload = req.body ?? {};
   const merchantId = process.env.PHONEPE_MERCHANTID;
 
   console.log(id);
@@ -127,8 +128,13 @@ const handlePhoneOrderCheck = async (req, res) => {
 
       const orderData = {
         paymentStatus,
-        paymentInstrument: gatewayData?.paymentInstrument,
-        paymentGatewayDetails: response.data,
+        paymentInstrument:
+          gatewayData?.paymentInstrument ||
+          callbackPayload?.data?.paymentInstrument,
+        paymentGatewayDetails: {
+          statusResponse: response.data,
+          callbackPayload,
+        },
         orderType: "Payment Method(Phone Pe Gateway)",
       };
 
@@ -144,42 +150,75 @@ const handlePhoneOrderCheck = async (req, res) => {
           .json({ success: false, message: "Order not found" });
       }
 
-      const user = await AquaEcomUser.findById(updatedOrder.user);
-      if (user) {
-        const phone = user.phone;
-        const email = user.email;
-        if (phone) {
-          const message = `Welcome to Aquakart Family, We have successfully received the order "${updatedOrder.orderId}"`;
-          sendWhatsAppMessage(phone, message);
-        }
-        if (email) {
-          const priceInr = `${formatCurrencyINR(updatedOrder.totalAmount)}/-`;
-          const deliveryDate = formattedDeliveryDate(
-            updatedOrder.estimatedDelivery,
-          );
-          const content = orderEmail(
-            updatedOrder,
-            email,
-            priceInr,
-            deliveryDate,
-          );
-          const emailResult = await sendEmail({
-            email: user.email,
-            subject: "Cash on Delivery Order Confirmation",
-            message: "Cash on Delivery Order Confirmation - Hello Aquakart",
-            content: content,
-          });
-        }
-      }
-
       const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
 
+      const triggerNotifications = async () => {
+        try {
+          const user = await AquaEcomUser.findById(updatedOrder.user);
+
+          if (!user) {
+            return;
+          }
+
+          const phone = user.phone;
+          const email = user.email;
+
+          if (phone) {
+            try {
+              await sendWhatsAppMessage(
+                phone,
+                `Welcome to Aquakart Family, We have successfully received the order "${updatedOrder.orderId}"`,
+              );
+            } catch (whatsAppError) {
+              console.error(
+                "Failed to send WhatsApp notification",
+                whatsAppError,
+              );
+            }
+          }
+
+          if (email) {
+            const priceInr = `${formatCurrencyINR(updatedOrder.totalAmount)}/-`;
+            const deliveryDate = formattedDeliveryDate(
+              updatedOrder.estimatedDelivery,
+            );
+            const content = orderEmail(
+              updatedOrder,
+              email,
+              priceInr,
+              deliveryDate,
+            );
+
+            try {
+              await sendEmail({
+                email: user.email,
+                subject: "Cash on Delivery Order Confirmation",
+                message: "Cash on Delivery Order Confirmation - Hello Aquakart",
+                content,
+              });
+            } catch (emailError) {
+              console.error("Failed to send email notification", emailError);
+            }
+          }
+        } catch (userFetchError) {
+          console.error(
+            "Failed to fetch user for notifications",
+            userFetchError,
+          );
+        }
+      };
+
+      const payload = { success: true, data: updatedOrder };
+
       if (code === "PAYMENT_SUCCESS") {
-        res.status(200).json({ success: true, data: updatedOrder });
+        res.status(200).json(payload);
+        Promise.resolve().then(() => triggerNotifications());
       } else if (code === "PAYMENT_ERROR") {
-        res.status(200).json({ success: true, data: updatedOrder });
+        res.status(200).json(payload);
+        Promise.resolve().then(() => triggerNotifications());
       } else if (code === "PAYMENT_PENDING") {
-        res.status(200).json({ success: true, data: updatedOrder });
+        res.status(200).json(payload);
+        Promise.resolve().then(() => triggerNotifications());
       } else {
         res
           .status(400)
