@@ -111,12 +111,25 @@ const handlePhoneOrderCheck = async (req, res) => {
     });
 
     if (response.data) {
+      const { code, data: gatewayData } = response.data;
+      let paymentStatus;
+
+      switch (code) {
+        case "PAYMENT_SUCCESS":
+          paymentStatus = "Paid";
+          break;
+        case "PAYMENT_PENDING":
+          paymentStatus = "Pending";
+          break;
+        default:
+          paymentStatus = "Failed";
+      }
+
       const orderData = {
-        paymentStatus:
-          response.data.code === "PAYMENT_SUCCESS" ? "Paid" : "Failed",
-        paymentInstrument: response.data.data.paymentInstrument,
+        paymentStatus,
+        paymentInstrument: gatewayData?.paymentInstrument,
         paymentGatewayDetails: response.data,
-        orderType: "Payment Method(Phone-Pe-Gateway)",
+        orderType: "Payment Method(Phone Pe Gateway)",
       };
 
       const updatedOrder = await AquaOrder.findOneAndUpdate(
@@ -124,6 +137,12 @@ const handlePhoneOrderCheck = async (req, res) => {
         orderData,
         { new: true },
       );
+
+      if (!updatedOrder) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Order not found" });
+      }
 
       const user = await AquaEcomUser.findById(updatedOrder.user);
       if (user) {
@@ -155,11 +174,11 @@ const handlePhoneOrderCheck = async (req, res) => {
 
       const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
 
-      if (response.data.code === "PAYMENT_SUCCESS") {
+      if (code === "PAYMENT_SUCCESS") {
         res.status(200).json({ success: true, data: updatedOrder });
-      } else if (response.data.code === "PAYMENT_ERROR") {
+      } else if (code === "PAYMENT_ERROR") {
         res.status(200).json({ success: true, data: updatedOrder });
-      } else if ((response.data.code = "PAYMENT_PENDING")) {
+      } else if (code === "PAYMENT_PENDING") {
         res.status(200).json({ success: true, data: updatedOrder });
       } else {
         res

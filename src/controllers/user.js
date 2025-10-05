@@ -104,7 +104,9 @@ const userPhoneLogin = async (req, res) => {
   // sanitize and keep as string
   const sanitizedPhone = String(phone ?? "").replace(/\D/g, "");
   if (!sanitizedPhone) {
-    return res.status(400).json({ success: false, message: "Phone number is required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Phone number is required" });
   }
 
   // optional: prepend country code if your WA provider expects it
@@ -120,10 +122,15 @@ const userPhoneLogin = async (req, res) => {
     const messageExisting = `Welcome back to Aquakart! Your Login OTP is: ${otp}. Enjoy your shopping experience with us!`;
 
     // Check existence
-    const existing = await AquaEcomUser.findOne({ phone: sanitizedPhone }).lean();
+    const existing = await AquaEcomUser.findOne({
+      phone: sanitizedPhone,
+    }).lean();
     const userExist = Boolean(existing);
 
-    const otpData = await sendWhatsAppMessage(whatsappPhone, userExist ? messageExisting : messageNew);
+    const otpData = await sendWhatsAppMessage(
+      whatsappPhone,
+      userExist ? messageExisting : messageNew,
+    );
     if (!otpData?.success) {
       return res.status(400).json({
         success: false,
@@ -142,7 +149,7 @@ const userPhoneLogin = async (req, res) => {
         $set: { mobileOtp: otp },
         $setOnInsert: { phone: sanitizedPhone, email: placeholderEmail },
       },
-      { new: true, upsert: true }
+      { new: true, upsert: true },
     );
 
     return res.status(200).json({
@@ -155,14 +162,19 @@ const userPhoneLogin = async (req, res) => {
     if (error?.code === 11000) {
       // Fallback: just update OTP and don't touch email
       try {
-        await AquaEcomUser.updateOne({ phone: sanitizedPhone }, { $set: { mobileOtp: otp } });
+        await AquaEcomUser.updateOne(
+          { phone: sanitizedPhone },
+          { $set: { mobileOtp: otp } },
+        );
         return res.status(200).json({
           success: true,
           otpMessage: "OTP sent successfully",
           userExist: true,
         });
       } catch (updateError) {
-        return res.status(500).json({ success: false, message: updateError.message });
+        return res
+          .status(500)
+          .json({ success: false, message: updateError.message });
       }
     }
     return res.status(500).json({ success: false, message: error.message });
