@@ -32,6 +32,7 @@
     "multer": "2.0.2",
     "nanoid": "^5.1.6",
     "nodemailer": "^7.0.6",
+    "pg-sdk-node": "https://phonepe.mycloudrepo.io/public/repositories/phonepe-pg-sdk-node/releases/v2/phonepe-pg-sdk-node.tgz",
     "swagger-autogen": "^2.23.7",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",

@@ -1,12 +1,74 @@
 import AquaOrder from "../models/orders.js";
 import AquaEcomUser from "../models/user.js"; // Ensure you have the correct path
-import crypto from "crypto";
-import axios from "axios";
+import {
+  Env,
+  MetaInfo,
+  StandardCheckoutClient,
+  StandardCheckoutPayRequest,
+} from "pg-sdk-node";
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import formatCurrencyINR from "../utils/currency.js";
 import formattedDeliveryDate from "../utils/date.js";
+
+let phonePeClient;
+
+const resolvePhonePeEnv = (envValue = "SANDBOX") =>
+  envValue.toUpperCase() === "PRODUCTION" ? Env.PRODUCTION : Env.SANDBOX;
+
+const getPhonePeClient = () => {
+  if (phonePeClient) {
+    return phonePeClient;
+  }
+
+  const clientId = process.env.PHONEPE_CLIENT_ID;
+  const clientSecret = process.env.PHONEPE_CLIENT_SECRET;
+  const clientVersionRaw = process.env.PHONEPE_CLIENT_VERSION;
+
+  if (!clientId || !clientSecret || !clientVersionRaw) {
+    throw new Error(
+      "PhonePe configuration missing: PHONEPE_CLIENT_ID/PHONEPE_CLIENT_SECRET/PHONEPE_CLIENT_VERSION",
+    );
+  }
+
+  const clientVersion = Number(clientVersionRaw);
+
+  if (Number.isNaN(clientVersion)) {
+    throw new Error(
+      "PhonePe configuration invalid: PHONEPE_CLIENT_VERSION must be numeric",
+    );
+  }
+
+  const env = resolvePhonePeEnv(process.env.PHONEPE_ENV);
+
+  phonePeClient = StandardCheckoutClient.getInstance(
+    clientId,
+    clientSecret,
+    clientVersion,
+    env,
+  );
+
+  return phonePeClient;
+};
+
+const mapPhonePeStateToPaymentStatus = (state) => {
+  const normalizedState = (state || "").toUpperCase();
+
+  switch (normalizedState) {
+    case "COMPLETED":
+    case "SUCCESS":
+      return "Paid";
+    case "PENDING":
+    case "INITIATED":
+      return "Pending";
+    case "PROCESSING":
+      return "Processing";
+    default:
+      return "Failed";
+  }
+};
+
 
 const payPhonepe = async (req, res) => {
   const passedPayload = req.body;
@@ -36,45 +98,41 @@ const payPhonepe = async (req, res) => {
     });
     await order.save(); // Save the order with proper await
 
+    const client = getPhonePeClient();
+
     const merchantTransactionId = passedPayload.transactionId;
-    const data = {
-      merchantId: process.env.PHONEPE_MERCHANTID,
-      merchantTransactionId,
-      merchantUserId: passedPayload.user,
-      name: getUserById.name || createUserName(getUserById.email),
-      amount: passedPayload.totalAmount * 100,
-      redirectUrl: `https://aquakart.co.in/order/${merchantTransactionId}`,
-      redirectMode: "REDIRECT",
-      callbackUrl: `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`,
-      mobileNumber: passedPayload.number,
-      paymentInstrument: {
-        type: "PAY_PAGE",
-      },
-    };
-    const payload = JSON.stringify(data);
-    const payloadMain = Buffer.from(payload).toString("base64");
-    const keyIndex = 1;
-    const string = payloadMain + "/pg/v1/pay" + process.env.PHONEPE_KEY;
-    const sha256 = crypto.createHash("sha256").update(string).digest("hex");
-    const checksum = sha256 + "###" + keyIndex;
+    const redirectUrl = `https://aquakart.co.in/order/${merchantTransactionId}`;
+    const callbackUrl = `https://api.aquakart.co.in/v1/phonepe-verify/${merchantTransactionId}`;
 
-    const prod_URL = "https://api.phonepe.com/apis/hermes/pg/v1/pay";
-    const options = {
-      method: "POST",
-      url: prod_URL,
-      headers: {
-        accept: "application/json",
-        "Content-Type": "application/json",
-        "X-VERIFY": checksum,
-      },
-      data: {
-        request: payloadMain,
-      },
-    };
+    const metaInfoValues = [
+      passedPayload.user ? String(passedPayload.user) : undefined,
+      passedPayload.number ? String(passedPayload.number) : undefined,
+      getUserById.email || undefined,
+      callbackUrl,
+      process.env.PHONEPE_MERCHANTID,
+    ];
 
-    const response = await axios.request(options);
+    const hasMetaInfo = metaInfoValues.some((value) => value !== undefined);
+    const metaInfo = hasMetaInfo
+      ? new MetaInfo(...metaInfoValues)
+      : undefined;
+
+    const payRequestBuilder = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(merchantTransactionId)
+      .amount(passedPayload.totalAmount * 100)
+      .redirectUrl(redirectUrl)
+      .message(`Aquakart order ${merchantTransactionId}`);
+
+    if (metaInfo) {
+      payRequestBuilder.metaInfo(metaInfo);
+    }
+
+    const payResponse = await client.pay(payRequestBuilder.build());
+
     return res.json({
-      url: response.data.data.instrumentResponse.redirectInfo.url,
+      url: payResponse.redirectUrl,
+      orderId: payResponse.orderId,
+      state: payResponse.state,
     });
   } catch (error) {
     console.error(error);
@@ -89,50 +147,38 @@ const handlePhoneOrderCheck = async (req, res) => {
   const { id } = req.params;
   const transactionId = id;
   const callbackPayload = req.body ?? {};
-  const merchantId = process.env.PHONEPE_MERCHANTID;
 
-  console.log(id);
-  const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
-  const checksum =
-    crypto
-      .createHash("sha256")
-      .update(
-        `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
-      )
-      .digest("hex") + "###1";
+  let client;
 
   try {
-    const response = await axios.get(url, {
-      headers: {
-        "Content-Type": "application/json",
-        "X-VERIFY": checksum,
-        "X-MERCHANT-ID": merchantId,
-        accept: "application/json",
-      },
+    client = getPhonePeClient();
+  } catch (configError) {
+    console.error(configError);
+    return res.status(500).json({
+      success: false,
+      message: configError.message,
     });
+  }
 
-    if (response.data) {
-      const { code, data: gatewayData } = response.data;
-      let paymentStatus;
+  try {
+    const statusResponse = await client.getOrderStatus(transactionId, true);
 
-      switch (code) {
-        case "PAYMENT_SUCCESS":
-          paymentStatus = "Paid";
-          break;
-        case "PAYMENT_PENDING":
-          paymentStatus = "Pending";
-          break;
-        default:
-          paymentStatus = "Failed";
-      }
+    if (statusResponse) {
+      const statusData = JSON.parse(JSON.stringify(statusResponse));
+      const paymentDetails = Array.isArray(statusData.paymentDetails)
+        ? statusData.paymentDetails
+        : [];
+      const latestPaymentDetail = paymentDetails[0];
+      const paymentState =
+        latestPaymentDetail?.state || statusData.state || "UNKNOWN";
 
       const orderData = {
-        paymentStatus,
+        paymentStatus: mapPhonePeStateToPaymentStatus(paymentState),
         paymentInstrument:
-          gatewayData?.paymentInstrument ||
+          latestPaymentDetail?.instrument ||
           callbackPayload?.data?.paymentInstrument,
         paymentGatewayDetails: {
-          statusResponse: response.data,
+          statusResponse: statusData,
           callbackPayload,
         },
         orderType: "Payment Method(Phone Pe Gateway)",
@@ -149,8 +195,6 @@ const handlePhoneOrderCheck = async (req, res) => {
           .status(404)
           .json({ success: false, message: "Order not found" });
       }
-
-      const redirectUrl = `https://aquakart.co.in/order/${transactionId}`;
 
       const triggerNotifications = async () => {
         try {
@@ -208,17 +252,32 @@ const handlePhoneOrderCheck = async (req, res) => {
         }
       };
 
-      const payload = { success: true, data: updatedOrder };
+      const payload = {
+        success: true,
+        data: updatedOrder,
+        gatewayState: paymentState,
+      };
 
-      if (code === "PAYMENT_SUCCESS") {
+      const normalizedState = paymentState.toUpperCase();
+      const knownStates = new Set([
+        "COMPLETED",
+        "SUCCESS",
+        "FAILED",
+        "PENDING",
+        "PROCESSING",
+        "INITIATED",
+      ]);
+
+      if (knownStates.has(normalizedState)) {
         res.status(200).json(payload);
-        Promise.resolve().then(() => triggerNotifications());
-      } else if (code === "PAYMENT_ERROR") {
-        res.status(200).json(payload);
-        Promise.resolve().then(() => triggerNotifications());
-      } else if (code === "PAYMENT_PENDING") {
-        res.status(200).json(payload);
-        Promise.resolve().then(() => triggerNotifications());
+        Promise.resolve()
+          .then(() => triggerNotifications())
+          .catch((notificationError) => {
+            console.error(
+              "PhonePe notification dispatch failed",
+              notificationError,
+            );
+          });
       } else {
         res
           .status(400)
