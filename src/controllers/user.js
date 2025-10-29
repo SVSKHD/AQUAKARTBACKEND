@@ -7,6 +7,7 @@ import signupOtpTemplate from "../notifications/email/signupOtp.js";
 import forgotPassword from "../notifications/email/forgotPassword.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import userLoginNotificationTemplateToAdmin from "../notifications/email/adminInfo/NewUserLogin.js";
+import axios from "axios";
 
 // User Login
 const userLogin = async (req, res) => {
@@ -127,10 +128,12 @@ const userPhoneLogin = async (req, res) => {
     }).lean();
     const userExist = Boolean(existing);
 
-    const otpData = await sendWhatsAppMessage(
-      whatsappPhone,
-      userExist ? messageExisting : messageNew,
-    );
+    const otpData = axios.post(`${process.env.WHATSAPPAPI}/api/send/text`, {
+      accessToken: process.env.WHATSAPPAPIKEY,
+      mobile: `91${sanitizedPhone}`,
+      text: userExist ? messageExisting : messageNew,
+    });
+    console.log("otpData", otpData);
     if (!otpData?.success) {
       return res.status(400).json({
         success: false,
@@ -158,9 +161,7 @@ const userPhoneLogin = async (req, res) => {
       userExist,
     });
   } catch (error) {
-    // Handle dup-key in case of legacy data/index quirks
     if (error?.code === 11000) {
-      // Fallback: just update OTP and don't touch email
       try {
         await AquaEcomUser.updateOne(
           { phone: sanitizedPhone },

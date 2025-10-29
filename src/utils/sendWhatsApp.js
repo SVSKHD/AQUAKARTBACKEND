@@ -10,7 +10,7 @@ const sendWhatsAppMessage = async (no, message) => {
       mobile: `91${no}`,
       text: message || "Aquakart Welcomes you",
     });
-    console.log("response", response);
+    console.log("response", response, no, message, BASE);
     if (response.data.success) {
       return { success: true, message: "Message sent successfully" };
     } else {
