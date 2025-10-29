@@ -128,13 +128,13 @@ const userPhoneLogin = async (req, res) => {
     }).lean();
     const userExist = Boolean(existing);
 
-    const otpData = axios.post(`${process.env.WHATSAPPAPI}/api/send/text`, {
+    const otpData =await axios.post(`${process.env.WHATSAPPAPI}/api/send/text`, {
       accessToken: process.env.WHATSAPPAPIKEY,
       mobile: `91${sanitizedPhone}`,
       text: userExist ? messageExisting : messageNew,
     });
-    console.log("otpData", otpData);
-    if (!otpData?.success) {
+   
+    if (!otpData?.data.success) {
       return res.status(400).json({
         success: false,
         message: "Failed to send OTP",
