@@ -128,12 +128,15 @@ const userPhoneLogin = async (req, res) => {
     }).lean();
     const userExist = Boolean(existing);
 
-    const otpData =await axios.post(`${process.env.WHATSAPPAPI}/api/send/text`, {
-      accessToken: process.env.WHATSAPPAPIKEY,
-      mobile: `91${sanitizedPhone}`,
-      text: userExist ? messageExisting : messageNew,
-    });
-   
+    const otpData = await axios.post(
+      `${process.env.WHATSAPPAPI}/api/send/text`,
+      {
+        accessToken: process.env.WHATSAPPAPIKEY,
+        mobile: `91${sanitizedPhone}`,
+        text: userExist ? messageExisting : messageNew,
+      },
+    );
+
     if (!otpData?.data.success) {
       return res.status(400).json({
         success: false,
