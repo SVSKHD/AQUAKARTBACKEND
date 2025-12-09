@@ -4,7 +4,7 @@ import userAuth from "../middleware/user.js";
 import paymentOperations from "../controllers/phonepeGateway.js";
 const router = express.Router();
 
-//cod order
+
 router.post("/order/cod", OrderOperations.createCodOrder);
 router.post("/order/pay", paymentOperations.payPhonepe);
 router.get("/order/:id", OrderOperations.getOrdersById);
@@ -19,6 +19,7 @@ router.get(
   OrderOperations.getOrderByTransactionId,
 );
 router.put("/order/user/:id", OrderOperations.updateOrder);
+
 //admin routes
 router.get(
   "/admin/orders",

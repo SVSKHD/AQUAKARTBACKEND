@@ -29,7 +29,7 @@ router.post(
 
 router.put(
   "/category-update/:id",
-  upload.array("photos"), // Multer handles file parsing
+  upload.array("photos"),
   userAuth.checkAdmin,
   CategoryOperations.updateCategory,
 );
