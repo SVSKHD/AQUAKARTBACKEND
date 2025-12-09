@@ -25,6 +25,16 @@ router.get(
   userAuth.checkAdmin,
   OrderOperations.AdminGetOrders,
 );
+router.put(
+  "/admin/order/:id",
+  userAuth.checkAdmin,
+  OrderOperations.updateOrder,
+)
+router.delete(
+  "/admin/order/:id",
+  userAuth.checkAdmin,
+  OrderOperations.deleteOrderByAdmin
+)
 // update orders
 // delete orders
 
