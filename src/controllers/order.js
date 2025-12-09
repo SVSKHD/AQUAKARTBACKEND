@@ -136,10 +136,13 @@ const createCodOrder = async (req, res) => {
     }
 
     const message = `Welcome to Aquakart Family, We have successfully received the order "${ordercreated.orderId}"`;
-
-    // Send WhatsApp message if user has a phone number
+    const AdminMessage = `New COD Order Received: Order ID "${ordercreated.orderId}" has been placed. Please process it accordingly.`;
+    const AdminPhone = 9014774667;
     if (user.phone) {
       sendWhatsAppMessage(user.phone, message);
+    }
+    if (AdminMessage) {
+      sendWhatsAppMessage(AdminPhone, AdminMessage);
     }
     if (user.email) {
       const priceInr = `${formatCurrencyINR(ordercreated.totalAmount)}/-`;
