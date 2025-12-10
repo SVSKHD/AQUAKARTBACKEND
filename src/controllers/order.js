@@ -251,7 +251,11 @@ const AdminGetOrders = async (req, res) => {
     const orders = await AquaOrder.find(query).populate("user items.productId");
 
     // Send the response
-    res.status(200).json({ orders });
+    res.status(200).json({ 
+      count:orders?.length,
+      success: true,
+      data:orders 
+    });
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({ error: "Internal Server Error" });
