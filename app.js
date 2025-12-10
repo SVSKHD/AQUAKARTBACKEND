@@ -23,7 +23,7 @@ import invoiceRoutes from "./src/routes/crm/invoice.js";
 import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
 import AdminUserRoutes from "./src/routes/crm/adminUser.js";
 import AdminCategoryRoutes from "./src/routes/crm/category.js";
-
+import AquaStock from "./src/models/crm/stock.js";
 //methods
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 
@@ -96,6 +96,7 @@ app.use("/v1/subscription", Subscritions);
 // crm routes
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
+app.use("/v1/crm", AquaStock);
 app.use("/v1/crm/user", AdminUserRoutes);
 
 app.post(
