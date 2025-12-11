@@ -8,7 +8,9 @@ const stockSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-
+    productName:{
+      type: String,
+    },
     quantity: {
       type: Number,
       required: true,
@@ -36,28 +38,6 @@ const stockSchema = new mongoose.Schema(
 );
 
 
-stockSchema.pre("save", function (next) {
-  this.totalValue = this.quantity * this.distributorPrice;
-  this.lastUpdated = Date.now();
-  next();
-});
-
-
-stockSchema.pre("findOneAndUpdate", function (next) {
-  const update = this.getUpdate();
-
-  if (update.quantity || update.distributorPrice) {
-    const qty = update.quantity ?? this._update.$set?.quantity;
-    const price = update.distributorPrice ?? this._update.$set?.distributorPrice;
-
-    if (qty !== undefined && price !== undefined) {
-      update.totalValue = qty * price;
-      update.lastUpdated = Date.now();
-    }
-  }
-
-  next();
-});
 
 const AquaStock = mongoose.model("AquaStock", stockSchema);
 export default AquaStock;
