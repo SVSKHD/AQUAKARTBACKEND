@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import AquaStock from "../../models/crm/stock";
+import AquaStock from "../../models/crm/stock.js";
 
 
 const getAllStock = async (req, res) => {

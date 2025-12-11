@@ -1,6 +1,6 @@
 import express from "express"
-import userAuth from "../../middleware/user";
-import stockOperations from "../../controllers/crm/stock";
+import userAuth from "../../middleware/user.js";
+import stockOperations from "../../controllers/crm/stock.js";
 
 const router = express.Router();
 
