@@ -7,9 +7,11 @@ const stockSchema = new mongoose.Schema(
       ref: "Product",
       required: true,
       index: true,
+      unique: true,
     },
     productName:{
       type: String,
+      unique: true,
     },
     quantity: {
       type: Number,
@@ -17,18 +19,15 @@ const stockSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-
     distributorPrice: {
       type: Number,
       required: true,
       min: 0,
     },
-
     totalValue: {
       type: Number,
       default: 0,
     },
-
     lastUpdated: {
       type: Date,
       default: Date.now,

@@ -15,10 +15,18 @@ const createStock = async (req, res) => {
     try{
       const {productId, quantity, distributorPrice} = req.body;
       const product = await AquaProduct.findById(productId)
-      
-      console.log(req.body, productId, product);
+      const totalValue = quantity * distributorPrice;
+        const newStock = new AquaStock({
+            productId,
+            productName: product ? product.title : "",
+            quantity,
+            distributorPrice,
+            totalValue,
+        });
+        const savedStock = await newStock.save();
+        res.status(201).json({ success: true, data: savedStock });  
     }catch(error){
-
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 }
 
