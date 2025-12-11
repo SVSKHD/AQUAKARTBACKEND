@@ -32,13 +32,15 @@ const createStock = async (req, res) => {
 
 const updateStock = async (req, res) => {
     const { id } = req.params;
+    const {quantity, distributorPrice} = req.body;
     try{
+        req.body.totalValue = quantity * distributorPrice;
         const updatedStock = await AquaStock.findByIdAndUpdate(id, req.body, { new: true });
         if(!updatedStock){
             return res.status(404).json({ success: false, message: "Stock record not found" });
         }
         res.status(200).json({ success: true, data: updatedStock });
-    }catch(error){
+    }catch(error){  
         res.status(500).json({ error: "Internal Server Error" });
     }
 }

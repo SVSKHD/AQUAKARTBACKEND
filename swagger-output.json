@@ -2341,6 +2341,24 @@
             "name": "Authorization",
             "in": "header",
             "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "totalValue": {
+                  "example": "any"
+                },
+                "quantity": {
+                  "example": "any"
+                },
+                "distributorPrice": {
+                  "example": "any"
+                }
+              }
+            }
           }
         ],
         "responses": {
