@@ -173,6 +173,7 @@ const getYearDateRange = (year) => {
 const getInvoiceByPhone = async (req, res) => {
   try {
     const { phone } = req.params;
+    console.log("phone", phone);
     const details = await AquaInvoice.find({ "customerDetails.phone": phone });
     console.log("details", details);
     res.status(200).json(details);

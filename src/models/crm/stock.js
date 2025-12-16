@@ -9,7 +9,7 @@ const stockSchema = new mongoose.Schema(
       index: true,
       unique: true,
     },
-    productName:{
+    productName: {
       type: String,
       unique: true,
     },
@@ -33,10 +33,8 @@ const stockSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
-
-
 
 const AquaStock = mongoose.model("AquaStock", stockSchema);
 export default AquaStock;

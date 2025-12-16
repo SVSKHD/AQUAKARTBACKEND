@@ -4,7 +4,6 @@ import userAuth from "../middleware/user.js";
 import paymentOperations from "../controllers/phonepeGateway.js";
 const router = express.Router();
 
-
 router.post("/order/cod", OrderOperations.createCodOrder);
 router.post("/order/pay", paymentOperations.payPhonepe);
 router.get("/order/:id", OrderOperations.getOrdersById);
@@ -30,12 +29,12 @@ router.put(
   "/admin/order/:id",
   userAuth.checkAdmin,
   OrderOperations.updateOrder,
-)
+);
 router.delete(
   "/admin/order/:id",
   userAuth.checkAdmin,
-  OrderOperations.deleteOrderByAdmin
-)
+  OrderOperations.deleteOrderByAdmin,
+);
 // update orders
 // delete orders
 

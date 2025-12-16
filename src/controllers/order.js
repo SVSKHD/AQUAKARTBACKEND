@@ -157,46 +157,43 @@ const createCodOrder = async (req, res) => {
     const notificationJobs = [];
 
     if (user.phone) {
-      notificationJobs.push(
-        () =>
-          sendWhatsAppMessage(user.phone, message).catch((err) =>
-            console.error("Failed to send WhatsApp to user:", err),
-          ),
+      notificationJobs.push(() =>
+        sendWhatsAppMessage(user.phone, message).catch((err) =>
+          console.error("Failed to send WhatsApp to user:", err),
+        ),
       );
     }
 
     if (ADMIN_PHONE) {
-      notificationJobs.push(
-        () =>
-          sendWhatsAppMessage(ADMIN_PHONE, adminMessage).catch((err) =>
-            console.error("Failed to send WhatsApp to admin:", err),
-          ),
+      notificationJobs.push(() =>
+        sendWhatsAppMessage(ADMIN_PHONE, adminMessage).catch((err) =>
+          console.error("Failed to send WhatsApp to admin:", err),
+        ),
       );
     }
 
     if (user.email) {
-      notificationJobs.push(
-        () =>
-          (async () => {
-            const priceInr = `${formatCurrencyINR(orderCreated.totalAmount)}/-`;
-            const deliveryDate = formattedDeliveryDate(
-              orderCreated.estimatedDelivery,
-            );
-            const content = orderEmail(
-              orderCreated,
-              user.email,
-              priceInr,
-              deliveryDate,
-            );
-            await sendEmail({
-              email: user.email,
-              subject: "Cash on Delivery Order Confirmation",
-              message: "Cash on Delivery Order Confirmation - Hello Aquakart",
-              content: content,
-            });
-          })().catch((err) =>
-            console.error("Failed to send confirmation email:", err),
-          ),
+      notificationJobs.push(() =>
+        (async () => {
+          const priceInr = `${formatCurrencyINR(orderCreated.totalAmount)}/-`;
+          const deliveryDate = formattedDeliveryDate(
+            orderCreated.estimatedDelivery,
+          );
+          const content = orderEmail(
+            orderCreated,
+            user.email,
+            priceInr,
+            deliveryDate,
+          );
+          await sendEmail({
+            email: user.email,
+            subject: "Cash on Delivery Order Confirmation",
+            message: "Cash on Delivery Order Confirmation - Hello Aquakart",
+            content: content,
+          });
+        })().catch((err) =>
+          console.error("Failed to send confirmation email:", err),
+        ),
       );
     }
 
@@ -251,10 +248,10 @@ const AdminGetOrders = async (req, res) => {
     const orders = await AquaOrder.find(query).populate("user items.productId");
 
     // Send the response
-    res.status(200).json({ 
-      count:orders?.length,
+    res.status(200).json({
+      count: orders?.length,
       success: true,
-      data:orders 
+      data: orders,
     });
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -262,32 +259,44 @@ const AdminGetOrders = async (req, res) => {
   }
 };
 
-const updateOrderByAdmin = async (req,res)=>{
-  const {id} = req.params
-  const updateData = req.body
-  try{
-    const updatedOrder = await AquaOrder.findByIdAndUpdate(id,updateData,{new:true})
-    if(!updatedOrder){
-      return res.status(404).json({success:false,message:"Order not found"})
+const updateOrderByAdmin = async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+  try {
+    const updatedOrder = await AquaOrder.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+    if (!updatedOrder) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
-    return res.status(200).json({success:true,data:updatedOrder})
-  }catch(error){
-    return res.status(400).json({success:false,message:"Error updating order"})
+    return res.status(200).json({ success: true, data: updatedOrder });
+  } catch (error) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Error updating order" });
   }
-}
+};
 
-const deleteOrderByAdmin = async (req,res)=>{
-  const {id} = req.params
-  try{
-    const deletedOrder = await AquaOrder.findByIdAndDelete(id)
-    if(!deletedOrder){
-      return res.status(404).json({success:false,message:"Order not found"})
+const deleteOrderByAdmin = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const deletedOrder = await AquaOrder.findByIdAndDelete(id);
+    if (!deletedOrder) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
-    return res.status(200).json({success:true,message:"Order deleted successfully"})
-  }catch(error){
-    return res.status(400).json({success:false,message:"Error deleting order"})
+    return res
+      .status(200)
+      .json({ success: true, message: "Order deleted successfully" });
+  } catch (error) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Error deleting order" });
   }
-}
+};
 
 const OrderOperations = {
   getAllOrders,
@@ -302,7 +311,7 @@ const OrderOperations = {
   //admin routes
   AdminGetOrders,
   updateOrderByAdmin,
-  deleteOrderByAdmin
+  deleteOrderByAdmin,
 };
 
 export default OrderOperations;

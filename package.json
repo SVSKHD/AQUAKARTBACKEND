@@ -9,7 +9,8 @@
     "start": "nodemon index.js",
     "pretty": "npx prettier --write .",
     "update": "npx npm-check-updates -u",
-    "update:packages": "npx npm-check-updates -u && npm install"
+    "update:packages": "npx npm-check-updates -u && npm install",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -46,5 +47,13 @@
     "onlyBuiltDependencies": [
       "bcrypt"
     ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4"
+  },
+  "lint-staged": {
+    "**/*": "prettier --write --ignore-unknown"
   }
 }
