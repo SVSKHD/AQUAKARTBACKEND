@@ -1,4 +1,5 @@
 import AquaInvoice from "../../models/crm/invoice.js";
+import mongoose from "mongoose";
 import { nanoid } from "nanoid";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
@@ -137,6 +138,10 @@ const getInvoiceById = async (req, res) => {
   try {
     const { id } = req.params; // Extract the id from the request parameters
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid invoice id" });
+    }
+
     const invoice = await AquaInvoice.findById(id);
 
     if (!invoice) {
@@ -163,6 +168,18 @@ const getYearDateRange = (year) => {
   const endDate = new Date(year, 11, 31, 23, 59, 59);
   console.log(startDate, endDate);
   return { startDate, endDate };
+};
+
+const getInvoiceByPhone = async (req, res) => {
+  try {
+    const { phone } = req.params;
+    const details = await AquaInvoice.find({ "customerDetails.phone": phone });
+    console.log("details", details);
+    res.status(200).json(details);
+  } catch (error) {
+    console.error("Error fetching invoice by phone:", error);
+    res.status(500).json({ message: "Server Error", error });
+  }
 };
 
 const getInvoicesByDate = async (req, res) => {
@@ -285,6 +302,7 @@ const InvoiceOperations = {
   getInvoices,
   deleteInvoice,
   getInvoiceById,
+  getInvoiceByPhone,
   getInvoicesByDate,
   NotifyInvoiceMembers,
 };
