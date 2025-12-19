@@ -827,6 +827,13 @@
     "/v1/all-products": {
       "get": {
         "description": "",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "type": "string"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"

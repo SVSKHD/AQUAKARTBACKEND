@@ -14,7 +14,7 @@ const upload = multer({
 router.get("/product-status", (req, res) => {
   res.json({ message: "product status v1 active" });
 });
-router.get("/all-products", ProductOperations.getProducts);
+router.get("/all-products", ProductOperations.getAllProducts);
 router.get("/product/:id", ProductOperations.getProduct);
 router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.get("/products/:count", ProductOperations.getLimitedProducts);

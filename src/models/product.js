@@ -98,6 +98,10 @@ const AquaProductSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  dpPrice: {
+    type: Number,
+    default: 0,
+  },
   reviews: [
     {
       user: {

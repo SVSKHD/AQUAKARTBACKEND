@@ -224,12 +224,20 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-const getProducts = async (req, res) => {
+const getAllProducts = async (req, res) => {
   try {
-    const products = await AquaProduct.find({});
+    const { query } = req.query;
+    let products;
+
+    if (query === "ecom") {
+      products = await AquaProduct.find({}).select("-dpPrice");
+    } else {
+      products = await AquaProduct.find({});
+    }
+
     return res.status(200).json({ status: true, data: products });
   } catch (error) {
-    console.error("Error getting subcategories:", error);
+    console.error("Error getting products:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -339,7 +347,7 @@ const getProductByQuery = async (req, res) => {
 };
 
 const ProductOperations = {
-  getProducts,
+  getAllProducts,
   getProduct,
   getProductByTitle,
   getProductByQuery,
