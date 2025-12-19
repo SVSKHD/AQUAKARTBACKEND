@@ -1,1 +1,3 @@
+echo "ran prettier as npx prettier --write."
+echo "formatted go to go aquakart in that way ."
 npx lint-staged
