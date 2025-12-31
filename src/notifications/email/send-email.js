@@ -5,7 +5,7 @@ async function sendEmail({ email, subject, message, content }) {
   const transporter = nodemailer.createTransport({
     host: "smtp.hostinger.com", // SMTP host for Hostinger
     port: 465, // SMTP port for SSL
-    secure: true, // Use SSL
+    secure: false, // Use SSL
     auth: {
       user: process.env.SMTPEMAIL, // Your email address
       pass: process.env.SMTPEMAILPASSWORD, // Your email password
@@ -14,7 +14,7 @@ async function sendEmail({ email, subject, message, content }) {
 
   try {
     const info = await transporter.sendMail({
-      from: `"AquaKart Support" <customercare@aquakart.co.in>`, // Sender details
+      from: `"AquaKart Support" <${process.env.SMTPEMAIL}>`, // Sender details
       to: email, // Recipient email
       subject: subject, // Email subject
       text: message, // Plain text version of the message
