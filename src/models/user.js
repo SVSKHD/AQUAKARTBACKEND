@@ -150,11 +150,14 @@ UserSchema.index(
 );
 
 // Pre-save hook to hash password
-UserSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+UserSchema.pre("save", async function () {
+  // Only hash if password is new or changed
+  if (!this.isModified("password")) return;
+
+  if (!this.password) return; // nothing to hash, skip
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-  next();
 });
 
 // Method to generate JWT token
