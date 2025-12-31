@@ -47,10 +47,8 @@ const userEmailOtpLogin = async (req, res) => {
     const sixDigitNumber = generateRandomSixDigitNumber();
     let userExist = false;
 
-    // Extract the name from the email
     const name = email.split("@")[0];
 
-    // Check if the user already exists
     let user = await AquaEcomUser.findOne({ email });
 
     let subject, message, content;
@@ -68,35 +66,35 @@ const userEmailOtpLogin = async (req, res) => {
       content = signupOtpTemplate(email, name, sixDigitNumber);
     }
 
-    // Send the OTP email
     const emailResult = await sendEmail({
       email: user.email,
-      subject: subject,
-      message: message,
-      content: content,
+      subject,
+      message,
+      content,
     });
 
     if (emailResult.success) {
-      // Save the user with the OTP
       await user.save();
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         emailMessage: emailResult.message,
-        userExist: userExist,
+        userExist,
       });
     } else {
-      res.status(400).json({
+      // 🔥 IMPORTANT: expose the internal error for now
+      return res.status(400).json({
         success: false,
         message: "Failed to send OTP",
         emailMessage: emailResult.message,
+        error: emailResult.error || null,
+        code: emailResult.code || null,
       });
     }
   } catch (error) {
     console.error("Error during email OTP login:", error);
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 const userPhoneLogin = async (req, res) => {
   const { phone } = req.body;
 
