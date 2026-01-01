@@ -1,23 +1,22 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.hostinger.com",
-  port: 587,
-  secure: true,
-  auth: {
-    user: process.env.SMTPEMAIL,
-    pass: process.env.SMTPEMAILPASSWORD,
-  },
-});
-
 async function sendEmail({ email, subject, message, content }) {
-  try {
-    if (!process.env.SMTPEMAIL || !process.env.SMTPEMAILPASSWORD) {
-      throw new Error("SMTP credentials are not configured");
-    }
+  const transporter = nodemailer.createTransport({
+    host: "smtp.hostinger.com",
+    port: 587, // ✅ STARTTLS port
+    secure: false, // ✅ false for 587, Nodemailer will STARTTLS
+    auth: {
+      user: process.env.SMTPEEMAIL,
+      pass: process.env.SMTPEMAILPASSWORD,
+    },
+    requireTLS: true, // force TLS upgrade
+    logger: true, // optional: verbose logs in container
+    debug: true, // optional: verbose logs in container
+  });
 
+  try {
     const info = await transporter.sendMail({
-      from: `"AquaKart Support" <${process.env.SMTPEMAIL}>`,
+      from: `"AquaKart Support" <${process.env.SMTPEEMAIL}>`,
       to: email,
       subject,
       text: message,
@@ -31,17 +30,16 @@ async function sendEmail({ email, subject, message, content }) {
     };
   } catch (error) {
     console.error("Failed to send email:", {
-      message: error.message,
       code: error.code,
+      message: error.message,
       command: error.command,
-      response: error.response,
     });
 
     return {
       success: false,
       message: "Failed to Send Email",
       error: error.message,
-      code: error.code || null,
+      code: error.code,
     };
   }
 }
