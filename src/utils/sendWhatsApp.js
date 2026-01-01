@@ -6,7 +6,7 @@ const KEY = "685e311c3d3aacf917650e6f";
 const sendWhatsAppMessage = async (no, message) => {
   try {
     const response = await axios.post(`${BASE}/api/send/text`, {
-      accessToken: KEY,
+      accessToken: "685e311c3d3aacf917650e6f",
       mobile: `91${no}`,
       text: message || "Aquakart Welcomes you",
     });

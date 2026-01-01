@@ -126,14 +126,11 @@ const userPhoneLogin = async (req, res) => {
     }).lean();
     const userExist = Boolean(existing);
 
-    const otpData = await axios.post(
-      `${process.env.WHATSAPPAPI}/api/send/text`,
-      {
-        accessToken: process.env.WHATSAPPAPIKEY,
-        mobile: `91${sanitizedPhone}`,
-        text: userExist ? messageExisting : messageNew,
-      },
-    );
+    const otpData = await axios.post(`https://app.whatsera.com/api/send/text`, {
+      accessToken: "685e311c3d3aacf917650e6f",
+      mobile: `91${sanitizedPhone}`,
+      text: userExist ? messageExisting : messageNew,
+    });
 
     if (!otpData?.data.success) {
       return res.status(400).json({
