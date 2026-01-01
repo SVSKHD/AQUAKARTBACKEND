@@ -2,8 +2,8 @@ import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.hostinger.com",
-  port: 465,
-  secure: false,
+  port: 587,
+  secure: true,
   auth: {
     user: process.env.SMTPEMAIL,
     pass: process.env.SMTPEMAILPASSWORD,
