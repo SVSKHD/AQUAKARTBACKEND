@@ -6,7 +6,7 @@ async function sendEmail({ email, subject, message, content }) {
     port: 587, // ✅ STARTTLS port
     secure: false, // ✅ false for 587, Nodemailer will STARTTLS
     auth: {
-      user: process.env.SMTPEEMAIL,
+      user: process.env.SMTPEMAIL,
       pass: process.env.SMTPEMAILPASSWORD,
     },
     requireTLS: true, // force TLS upgrade
@@ -16,7 +16,7 @@ async function sendEmail({ email, subject, message, content }) {
 
   try {
     const info = await transporter.sendMail({
-      from: `"AquaKart Support" <${process.env.SMTPEEMAIL}>`,
+      from: `"AquaKart Support" <${process.env.SMTPEMAIL}>`,
       to: email,
       subject,
       text: message,
