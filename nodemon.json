@@ -1,4 +1,5 @@
 {
   "ignore": ["swagger-output.json", "swagger-autogen.js"],
-  "ext": "js,jsx,yaml,json,.env"
+  "ext": "js,jsx,yaml,json,.env",
+  "watch": ["*.*", "5300"]
 }

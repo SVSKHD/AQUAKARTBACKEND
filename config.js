@@ -1,5 +1,7 @@
 // config.js
 import dotenv from "dotenv";
 
-// Load environment variables from .env file
-dotenv.config();
+// Only load .env when NOT using Doppler
+if (!process.env.DOPPLER_PROJECT) {
+  dotenv.config();
+}
