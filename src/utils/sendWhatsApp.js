@@ -1,7 +1,7 @@
 import axios from "axios";
 
-const BASE = process.env.WHATSAPPAPI;
-const KEY = process.env.WHATSAPPAPIKEY;
+const BASE = "https://app.whatsera.com";
+const KEY = "685e311c3d3aacf917650e6f";
 
 const sendWhatsAppMessage = async (no, message) => {
   try {
