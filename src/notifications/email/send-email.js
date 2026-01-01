@@ -3,20 +3,19 @@ import nodemailer from "nodemailer";
 async function sendEmail({ email, subject, message, content }) {
   const transporter = nodemailer.createTransport({
     host: "smtp.hostinger.com",
-    port: 587, // ✅ STARTTLS port
-    secure: false, // ✅ false for 587, Nodemailer will STARTTLS
+    port: 465, // ✅ STARTTLS port
+    secure: true, // ✅ false for 587, Nodemailer will STARTTLS
     auth: {
-      user: process.env.SMTPEMAIL,
-      pass: process.env.SMTPEMAILPASSWORD,
+      user: "customercare@aquakart.co.in",
+      pass: "Hithesh.svsk123",
     },
-    requireTLS: true, // force TLS upgrade
     logger: true, // optional: verbose logs in container
     debug: true, // optional: verbose logs in container
   });
 
   try {
     const info = await transporter.sendMail({
-      from: `"AquaKart Support" <${process.env.SMTPEMAIL}>`,
+      from: `"AquaKart Support" <customercare@aquakart.co.in>`,
       to: email,
       subject,
       text: message,
