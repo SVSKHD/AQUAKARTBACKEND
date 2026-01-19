@@ -224,15 +224,36 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+const cloudinaryDeliveryUrl = (url) => {
+  if (!url) return url;
+
+  // already transformed? don't double insert
+  if (url.includes("/image/upload/f_") || url.includes("/image/upload/q_"))
+    return url;
+
+  return url.replace("/image/upload/", "/image/upload/f_auto,q_auto/");
+};
+
 const getAllProducts = async (req, res) => {
   try {
     const { query } = req.query;
-    let products;
+
+    let products = await AquaProduct.find({}).select(
+      query === "ecom" ? "-dpPrice" : "",
+    );
 
     if (query === "ecom") {
-      products = await AquaProduct.find({}).select("-dpPrice");
-    } else {
-      products = await AquaProduct.find({});
+      products = products.map((product) => ({
+        ...product._doc,
+        photos: (product.photos || []).map((photo) => ({
+          ...photo._doc, // important: keep id, secure_url, _id
+          delivery_url: cloudinaryDeliveryUrl(photo.secure_url),
+        })),
+        arPhotos: (product.arPhotos || []).map((photo) => ({
+          ...photo._doc,
+          delivery_url: cloudinaryDeliveryUrl(photo.secure_url),
+        })),
+      }));
     }
 
     return res.status(200).json({ status: true, data: products });

@@ -20,6 +20,9 @@ router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.get("/products/:count", ProductOperations.getLimitedProducts);
 router.get("/product", ProductOperations.getProductByQuery);
 
+// user opearations
+// router.put("/product/ratings-comments/:id", userAuth.isLoggedIn, ProductOperations.addRatingsComments);
+
 router.post(
   "/product-add",
   userAuth.checkAdmin,

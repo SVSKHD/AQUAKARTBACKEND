@@ -67,6 +67,10 @@ const AquaProductSchema = new mongoose.Schema({
         type: String,
         required: true,
       },
+      delivery_url: {
+        type: String,
+        required: true,
+      },
     },
   ],
   category: {
