@@ -70,9 +70,9 @@ const getAllCategories = async (req, res) => {
     let categories = await AquaCategory.find({});
 
     categories = categories.map((category) => ({
-      ...category._doc, // keep all fields (_id, name, etc.)
+      ...category._doc,
       photos: (category.photos || []).map((photo) => ({
-        ...photo._doc, // keep id, secure_url, _id
+        ...photo._doc,
         delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(photo.secure_url),
       })),
     }));
