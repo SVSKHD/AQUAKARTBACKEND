@@ -1,6 +1,7 @@
 import AquaCategory from "../models/category.js";
 import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
+import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
 const streamUpload = (buffer) => {
   return new Promise((resolve, reject) => {
@@ -66,7 +67,16 @@ const addCategory = async (req, res) => {
 
 const getAllCategories = async (req, res) => {
   try {
-    const categories = await AquaCategory.find({});
+    let categories = await AquaCategory.find({});
+
+    categories = categories.map((category) => ({
+      ...category._doc, // keep all fields (_id, name, etc.)
+      photos: (category.photos || []).map((photo) => ({
+        ...photo._doc, // keep id, secure_url, _id
+        delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(photo.secure_url),
+      })),
+    }));
+
     return res.status(200).json({ success: true, data: categories });
   } catch (error) {
     console.error("Error getting categories:", error);

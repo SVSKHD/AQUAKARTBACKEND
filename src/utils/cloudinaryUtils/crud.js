@@ -24,7 +24,17 @@ const uploadPhoto = async (filePath, publicId, folder) => {
   }
 };
 
-export const CloudinaryOperations = {
+const cloudinaryDeliveryUrl = (url) => {
+  if (!url) return url;
+
+  if (url.includes("/image/upload/f_") || url.includes("/image/upload/q_"))
+    return url;
+
+  return url.replace("/image/upload/", "/image/upload/f_auto,q_auto/");
+};
+
+export const CloudinaryUtils = {
   deletePhoto,
   uploadPhoto,
+  cloudinaryDeliveryUrl,
 };

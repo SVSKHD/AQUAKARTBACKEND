@@ -1,5 +1,6 @@
 import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
+import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
 const streamUpload = (buffer) => {
   return new Promise((resolve, reject) => {
@@ -224,16 +225,6 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-const cloudinaryDeliveryUrl = (url) => {
-  if (!url) return url;
-
-  // already transformed? don't double insert
-  if (url.includes("/image/upload/f_") || url.includes("/image/upload/q_"))
-    return url;
-
-  return url.replace("/image/upload/", "/image/upload/f_auto,q_auto/");
-};
-
 const getAllProducts = async (req, res) => {
   try {
     const { query } = req.query;
@@ -247,11 +238,11 @@ const getAllProducts = async (req, res) => {
         ...product._doc,
         photos: (product.photos || []).map((photo) => ({
           ...photo._doc, // important: keep id, secure_url, _id
-          delivery_url: cloudinaryDeliveryUrl(photo.secure_url),
+          delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(photo.secure_url),
         })),
         arPhotos: (product.arPhotos || []).map((photo) => ({
           ...photo._doc,
-          delivery_url: cloudinaryDeliveryUrl(photo.secure_url),
+          delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(photo.secure_url),
         })),
       }));
     }
