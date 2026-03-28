@@ -5,8 +5,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "prod": "doppler run -- pm2 index.js",
-    "start": "doppler run -- nodemon index.js",
+    "prod": "pm2 index.js",
+    "start": "nodemon index.js",
     "pretty": "npx prettier --write .",
     "update": "npx npm-check-updates -u",
     "update:packages": "npx npm-check-updates -u && npm install",
