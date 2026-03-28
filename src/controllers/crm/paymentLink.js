@@ -1,6 +1,6 @@
 import AquaPayment from "../../models/crm/paymentLink.js";
-import crypto from "crypto";
-import axios from "axios";
+import { StandardCheckoutPayRequest } from "pg-sdk-node";
+import getPhonePeClient from "../../utils/phonepeClient.js";
 
 const createPaymentLink = async (req, res) => {
   const { name, phone, email, amount, invoiceId, referenceId } = req.body;
@@ -14,64 +14,30 @@ const createPaymentLink = async (req, res) => {
       });
     }
 
-    // Create a unique transaction ID
     const merchantTransactionId = `AQTRPAYLINK_${Date.now()}`;
-    const orderId = `AQTR_ODPAYLINK-${Date.now()}`;
 
-    const data = {
-      merchantId: process.env.PHONEPE_MERCHANTID,
-      transactionId: merchantTransactionId,
-      merchantOrderId: merchantTransactionId,
-      amount: amount * 100,
-      mobileNumber: phone,
-      message: "paylink for 1 order",
-      expiresIn: 3600,
-      storeId: "store1",
-      terminalId: "terminal1",
-      shortName: "DemoCustomer",
-      subMerchantId: "DemoMerchant",
-    };
+    const client = getPhonePeClient();
+    const request = StandardCheckoutPayRequest.builder()
+      .merchantOrderId(merchantTransactionId)
+      .amount(amount * 100)
+      .redirectUrl(
+        `https://aquakart.co.in/payment/status/${merchantTransactionId}`,
+      )
+      .build();
 
-    const payload = JSON.stringify(data);
-    const payloadMain = Buffer.from(payload).toString("base64");
-    const keyIndex = 1;
-    const string = payloadMain + "/v3/payLink/init" + process.env.PHONEPE_KEY;
-    const sha256 = crypto.createHash("sha256").update(string).digest("hex");
-    const checksum = sha256 + "###" + keyIndex;
-    console.log("checksub", checksum, payloadMain);
+    const response = await client.pay(request);
+    const payLink = response.redirectUrl;
 
-    const prod_URL =
-      "https://api.phonepe.com/apis/hermes/v3/payLink/init";
-    const options = {
-      method: "POST",
-      url: prod_URL,
-      headers: {
-        accept: "application/json",
-        "Content-Type": "application/json",
-        "X-VERIFY": checksum,
-        "X-MERCHANT-ID": process.env.PHONEPE_MERCHANTID,
-      },
-      data: {
-        request: payloadMain,
-      },
-    };
-
-    const response = await axios.request(options);
-    const responseData = response.data.data;
-
-    // Save the payment link to the database
     const newPayment = new AquaPayment({
-      referenceId: referenceId, // Use the string directly
-      invoiceId: invoiceId, // Use the string directly
-      paymentLink: responseData.payLink,
+      referenceId: referenceId,
+      invoiceId: invoiceId,
+      paymentLink: payLink,
       paymentStatus: false,
       paymentinfo: {
-        transactionId: responseData.transactionId,
-        amount: responseData.amount,
-        merchantId: responseData.merchantId,
-        upiIntent: responseData.upiIntent,
-        payUrl: responseData.payLink,
-        mobileNumber: responseData.mobileNumber,
+        transactionId: merchantTransactionId,
+        amount: amount,
+        merchantId: process.env.PHONEPE_CLIENT_ID,
+        payUrl: payLink,
       },
       userDetails: {
         phone: phone,
@@ -86,12 +52,11 @@ const createPaymentLink = async (req, res) => {
       code: "SUCCESS",
       message: "Your request has been successfully completed.",
       data: {
-        transactionId: responseData.transactionId,
-        amount: responseData.amount / 100, // Converting back to original amount
-        merchantId: responseData.merchantId,
-        upiIntent: responseData.upiIntent,
-        payLink: responseData.payLink,
-        mobileNumber: responseData.mobileNumber,
+        transactionId: merchantTransactionId,
+        amount: amount,
+        merchantId: process.env.PHONEPE_CLIENT_ID,
+        payLink: payLink,
+        mobileNumber: phone,
       },
     });
   } catch (error) {
