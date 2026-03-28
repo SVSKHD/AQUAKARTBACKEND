@@ -6,6 +6,10 @@ const router = express.Router();
 
 router.post("/order/cod", OrderOperations.createCodOrder);
 router.post("/order/pay", paymentOperations.payPhonepe);
+router.post(
+  "/phonepe-verify/:id",
+  paymentOperations.handlePhoneOrderCheck,
+);
 router.get("/order/:id", OrderOperations.getOrdersById);
 router.get(
   "/orders/user/:id",

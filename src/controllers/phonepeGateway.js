@@ -66,6 +66,7 @@ const payPhonepe = async (req, res) => {
         accept: "application/json",
         "Content-Type": "application/json",
         "X-VERIFY": checksum,
+        "X-MERCHANT-ID": process.env.PHONEPE_MERCHANTID,
       },
       data: {
         request: payloadMain,
@@ -92,13 +93,13 @@ const handlePhoneOrderCheck = async (req, res) => {
 
   console.log(id);
   const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
+  const keyIndex = 1;
+  const string =
+    `/pg/v1/status/${merchantId}/${transactionId}` + process.env.PHONEPE_KEY;
   const checksum =
-    crypto
-      .createHash("sha256")
-      .update(
-        `/pg/v1/status/${merchantId}/${transactionId}fb0244a9-34b5-48ae-a7a3-741d3de823d3`,
-      )
-      .digest("hex") + "###1";
+    crypto.createHash("sha256").update(string).digest("hex") +
+    "###" +
+    keyIndex;
 
   try {
     const response = await axios.get(url, {
@@ -159,7 +160,7 @@ const handlePhoneOrderCheck = async (req, res) => {
         res.status(200).json({ success: true, data: updatedOrder });
       } else if (response.data.code === "PAYMENT_ERROR") {
         res.status(200).json({ success: true, data: updatedOrder });
-      } else if ((response.data.code = "PAYMENT_PENDING")) {
+      } else if (response.data.code === "PAYMENT_PENDING") {
         res.status(200).json({ success: true, data: updatedOrder });
       } else {
         res
