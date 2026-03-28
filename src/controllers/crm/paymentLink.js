@@ -40,7 +40,8 @@ const createPaymentLink = async (req, res) => {
     const checksum = sha256 + "###" + keyIndex;
     console.log("checksub", checksum, payloadMain);
 
-    const prod_URL = "https://mercury-t2.phonepe.com/v3/payLink/init";
+    const prod_URL =
+      "https://api.phonepe.com/apis/hermes/v3/payLink/init";
     const options = {
       method: "POST",
       url: prod_URL,
@@ -48,6 +49,7 @@ const createPaymentLink = async (req, res) => {
         accept: "application/json",
         "Content-Type": "application/json",
         "X-VERIFY": checksum,
+        "X-MERCHANT-ID": process.env.PHONEPE_MERCHANTID,
       },
       data: {
         request: payloadMain,
