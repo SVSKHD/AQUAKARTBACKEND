@@ -111,15 +111,26 @@ const AquaProductSchema = new mongoose.Schema({
       user: {
         type: mongoose.Schema.ObjectId,
         ref: "User",
+        required: true,
       },
       name: {
         type: String,
+        required: true,
       },
       rating: {
         type: Number,
+        required: true,
+        min: 1,
+        max: 5,
       },
       comment: {
         type: String,
+        required: true,
+        maxlength: [1000, "Comment must not exceed 1000 characters"],
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
       },
     },
   ],

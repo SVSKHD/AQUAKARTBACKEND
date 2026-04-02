@@ -20,8 +20,18 @@ router.get("/product-title/:title", ProductOperations.getProductByTitle);
 router.get("/products/:count", ProductOperations.getLimitedProducts);
 router.get("/product", ProductOperations.getProductByQuery);
 
-// user opearations
-// router.put("/product/ratings-comments/:id", userAuth.isLoggedIn, ProductOperations.addRatingsComments);
+// ─── Reviews & Comments ────────────────────────────────────────────────────
+router.get("/product/reviews/:id", ProductOperations.getProductReviews);
+router.post(
+  "/product/review/:id",
+  userAuth.isLoggedIn,
+  ProductOperations.addRatingsComments,
+);
+router.delete(
+  "/product/review/:id",
+  userAuth.isLoggedIn,
+  ProductOperations.deleteReview,
+);
 
 router.post(
   "/product-add",
