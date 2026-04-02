@@ -358,6 +358,175 @@ const getProductByQuery = async (req, res) => {
   }
 };
 
+const addRatingsComments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    if (!rating || !comment) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating and comment are required",
+      });
+    }
+
+    const parsedRating = Number(rating);
+    if (parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
+
+    const product = await AquaProduct.findById(id);
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    // One review per user — update if exists, else push new
+    const existingIndex = product.reviews.findIndex(
+      (r) => r.user.toString() === req.user._id.toString(),
+    );
+
+    if (existingIndex !== -1) {
+      product.reviews[existingIndex].rating = parsedRating;
+      product.reviews[existingIndex].comment = comment;
+      product.reviews[existingIndex].createdAt = new Date();
+    } else {
+      product.reviews.push({
+        user: req.user._id,
+        name: req.user.firstName
+          ? `${req.user.firstName} ${req.user.lastName || ""}`.trim()
+          : req.user.name || "Anonymous",
+        rating: parsedRating,
+        comment,
+        createdAt: new Date(),
+      });
+    }
+
+    product.numberOfReviews = product.reviews.length;
+    product.ratings =
+      product.reviews.reduce((acc, r) => acc + r.rating, 0) /
+      product.reviews.length;
+
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        existingIndex !== -1
+          ? "Review updated successfully"
+          : "Review added successfully",
+      data: {
+        ratings: product.ratings,
+        numberOfReviews: product.numberOfReviews,
+        reviews: product.reviews,
+      },
+    });
+  } catch (error) {
+    console.error("Error adding review:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getProductReviews = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const product = await AquaProduct.findById(id)
+      .select("title ratings numberOfReviews reviews")
+      .populate("reviews.user", "firstName lastName name email");
+
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    const sortedReviews = [...product.reviews].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        productId: product._id,
+        title: product.title,
+        ratings: product.ratings,
+        numberOfReviews: product.numberOfReviews,
+        reviews: sortedReviews,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const deleteReview = async (req, res) => {
+  try {
+    const { id } = req.params; // product id
+    const { reviewId } = req.query; // review subdoc _id
+
+    if (!reviewId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "reviewId query param is required" });
+    }
+
+    const product = await AquaProduct.findById(id);
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    const reviewIndex = product.reviews.findIndex(
+      (r) => r._id.toString() === reviewId,
+    );
+
+    if (reviewIndex === -1) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Review not found" });
+    }
+
+    const review = product.reviews[reviewIndex];
+    const isOwner = review.user.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Not authorized to delete this review" });
+    }
+
+    product.reviews.splice(reviewIndex, 1);
+    product.numberOfReviews = product.reviews.length;
+    product.ratings =
+      product.reviews.length > 0
+        ? product.reviews.reduce((acc, r) => acc + r.rating, 0) /
+          product.reviews.length
+        : 0;
+
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Review deleted successfully",
+      data: {
+        ratings: product.ratings,
+        numberOfReviews: product.numberOfReviews,
+      },
+    });
+  } catch (error) {
+    console.error("Error deleting review:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const ProductOperations = {
   getAllProducts,
   getProduct,
@@ -367,5 +536,8 @@ const ProductOperations = {
   CreateProduct,
   updateProduct,
   deleteProduct,
+  addRatingsComments,
+  getProductReviews,
+  deleteReview,
 };
 export default ProductOperations;
