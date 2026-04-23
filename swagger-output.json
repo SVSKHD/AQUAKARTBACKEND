@@ -947,7 +947,7 @@
         }
       }
     },
-    "/v1/product/reviews/{id}": {
+    "/v1/product/review/{id}": {
       "get": {
         "description": "",
         "parameters": [
@@ -969,9 +969,7 @@
             "description": "Internal Server Error"
           }
         }
-      }
-    },
-    "/v1/product/review/{id}": {
+      },
       "post": {
         "description": "",
         "parameters": [

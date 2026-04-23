@@ -20,7 +20,7 @@ router.get("/products/:count", ProductOperations.getLimitedProducts);
 router.get("/product", ProductOperations.getProductByQuery);
 
 // ─── Reviews & Comments ────────────────────────────────────────────────────
-router.get("/product/reviews/:id", ProductOperations.getProductReviews);
+router.get("/product/review/:id", ProductOperations.getProductReviews);
 router.post(
   "/product/review/:id",
   userAuth.isLoggedIn,

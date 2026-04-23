@@ -110,7 +110,7 @@ const AquaProductSchema = new mongoose.Schema({
     {
       user: {
         type: mongoose.Schema.ObjectId,
-        ref: "User",
+        ref: "AquaEcomUser",
         required: true,
       },
       name: {
@@ -136,7 +136,7 @@ const AquaProductSchema = new mongoose.Schema({
   ],
   user: {
     type: mongoose.Schema.ObjectId,
-    ref: "User",
+    ref: "AquaEcomUser",
   },
   createdAt: {
     type: Date,
