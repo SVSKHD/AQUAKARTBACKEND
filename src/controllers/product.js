@@ -436,7 +436,7 @@ const getProductReviews = async (req, res) => {
 
     const product = await AquaProduct.findById(id)
       .select("title ratings numberOfReviews reviews")
-      .populate("reviews.user", "firstName lastName name email");
+      .populate("reviews.user", "firstName lastName email");
 
     if (!product) {
       return res
@@ -444,9 +444,27 @@ const getProductReviews = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    const sortedReviews = [...product.reviews].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-    );
+    const sortedReviews = [...product.reviews]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map((review) => {
+        const fallbackName =
+          `${review.user?.firstName || ""} ${review.user?.lastName || ""}`.trim() ||
+          review.user?.email ||
+          "Anonymous";
+
+        return {
+          _id: review._id,
+          user: review.user?._id || review.user,
+          name:
+            review.name && review.name !== "Anonymous"
+              ? review.name
+              : fallbackName,
+          email: review.user?.email || null,
+          rating: review.rating,
+          comment: review.comment,
+          createdAt: review.createdAt,
+        };
+      });
 
     return res.status(200).json({
       success: true,
@@ -507,6 +525,9 @@ const updateRatingsComments = async (req, res) => {
 
     existingReview.rating = parsedRating;
     existingReview.comment = comment;
+    existingReview.name = req.user.firstName
+      ? `${req.user.firstName} ${req.user.lastName || ""}`.trim()
+      : req.user.name || "Anonymous";
     existingReview.createdAt = new Date();
 
     product.numberOfReviews = product.reviews.length;
