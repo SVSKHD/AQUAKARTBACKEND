@@ -1,7 +1,7 @@
-import AquaOrder from "../models/orders.js";
-import AquaEcomUser from "../models/user.js"; // Ensure you have the correct path
 import crypto from "crypto";
 import axios from "axios";
+import AquaOrder from "../models/orders.js";
+import AquaEcomUser from "../models/user.js"; // Ensure you have the correct path
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
@@ -15,7 +15,7 @@ const payPhonepe = async (req, res) => {
   const createUserName = (email) => {
     if (email) {
       const usernamePart = email.split("@")[0]; // Get the part before '@'
-      return usernamePart.split(".")[0] + "."; // Get the part before the first '.' and add '.' back
+      return `${usernamePart.split(".")[0]}.`; // Get the part before the first '.' and add '.' back
     }
   };
 
@@ -27,7 +27,7 @@ const payPhonepe = async (req, res) => {
         .send({ message: "User not found", success: false });
     }
 
-    let order = new AquaOrder({
+    const order = new AquaOrder({
       ...passedPayload,
       userName:
         getUserById.firstName ||
@@ -54,9 +54,9 @@ const payPhonepe = async (req, res) => {
     const payload = JSON.stringify(data);
     const payloadMain = Buffer.from(payload).toString("base64");
     const keyIndex = 1;
-    const string = payloadMain + "/pg/v1/pay" + process.env.PHONEPE_KEY;
+    const string = `${payloadMain}/pg/v1/pay${process.env.PHONEPE_KEY}`;
     const sha256 = crypto.createHash("sha256").update(string).digest("hex");
-    const checksum = sha256 + "###" + keyIndex;
+    const checksum = `${sha256}###${keyIndex}`;
 
     const prod_URL = "https://api.phonepe.com/apis/hermes/pg/v1/pay";
     const options = {
@@ -94,12 +94,8 @@ const handlePhoneOrderCheck = async (req, res) => {
   console.log(id);
   const url = `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${transactionId}`;
   const keyIndex = 1;
-  const string =
-    `/pg/v1/status/${merchantId}/${transactionId}` + process.env.PHONEPE_KEY;
-  const checksum =
-    crypto.createHash("sha256").update(string).digest("hex") +
-    "###" +
-    keyIndex;
+  const string = `/pg/v1/status/${merchantId}/${transactionId}${process.env.PHONEPE_KEY}`;
+  const checksum = `${crypto.createHash("sha256").update(string).digest("hex")}###${keyIndex}`;
 
   try {
     const response = await axios.get(url, {
@@ -128,8 +124,8 @@ const handlePhoneOrderCheck = async (req, res) => {
 
       const user = await AquaEcomUser.findById(updatedOrder.user);
       if (user) {
-        const phone = user.phone;
-        const email = user.email;
+        const { phone } = user;
+        const { email } = user;
         if (phone) {
           const message = `Welcome to Aquakart Family, We have successfully received the order "${updatedOrder.orderId}"`;
           sendWhatsAppMessage(phone, message);
@@ -149,7 +145,7 @@ const handlePhoneOrderCheck = async (req, res) => {
             email: user.email,
             subject: "Cash on Delivery Order Confirmation",
             message: "Cash on Delivery Order Confirmation - Hello Aquakart",
-            content: content,
+            content,
           });
         }
       }

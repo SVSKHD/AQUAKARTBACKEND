@@ -85,7 +85,7 @@ const AquaProductSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     ref: "AquaBlog",
   },
-  //this field was updated in order videos later
+  // this field was updated in order videos later
   stock: {
     type: Number,
     required: [true, "please add a number in stock"],

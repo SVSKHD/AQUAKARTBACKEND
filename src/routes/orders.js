@@ -2,14 +2,12 @@ import express from "express";
 import OrderOperations from "../controllers/order.js";
 import userAuth from "../middleware/user.js";
 import paymentOperations from "../controllers/phonepeGateway.js";
+
 const router = express.Router();
 
 router.post("/order/cod", OrderOperations.createCodOrder);
 router.post("/order/pay", paymentOperations.payPhonepe);
-router.post(
-  "/phonepe-verify/:id",
-  paymentOperations.handlePhoneOrderCheck,
-);
+router.post("/phonepe-verify/:id", paymentOperations.handlePhoneOrderCheck);
 router.get("/order/:id", OrderOperations.getOrdersById);
 router.get(
   "/orders/user/:id",
@@ -23,7 +21,7 @@ router.get(
 );
 router.put("/order/user/:id", OrderOperations.updateOrder);
 
-//admin routes
+// admin routes
 router.get(
   "/admin/orders",
   userAuth.checkAdmin,

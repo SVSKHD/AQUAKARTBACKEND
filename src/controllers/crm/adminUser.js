@@ -1,7 +1,7 @@
-import AquaAdminUser from "../../models/crm/adminUser.js";
-import AquaEcomUser from "../../models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import AquaAdminUser from "../../models/crm/adminUser.js";
+import AquaEcomUser from "../../models/user.js";
 
 // Signup Function
 const signup = async (req, res) => {
@@ -69,7 +69,7 @@ const getAllEcomUsers = async (req, res) => {
       .status(200)
       .json({ success: false, data: users, totalUsers: users.length });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error });
+    return res.status(500).json({ success: false, error });
   }
 };
 

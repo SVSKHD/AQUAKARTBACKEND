@@ -7,7 +7,7 @@ const AquaCouponSchema = new mongoose.Schema(
       required: true,
       unique: true,
       validate: {
-        validator: function (v) {
+        validator(v) {
           // Ensures the code starts with "AQUA-"
           return /^AQUA-/.test(v);
         },

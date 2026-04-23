@@ -1,5 +1,4 @@
-const signupEmail = (email) => {
-  return `
+const signupEmail = (email) => `
         <!DOCTYPE html>
         <html lang="en">
           <head>
@@ -63,6 +62,5 @@ const signupEmail = (email) => {
           </body>
         </html>
       `;
-};
 
 export default signupEmail;

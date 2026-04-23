@@ -12,7 +12,7 @@ const deletePhoto = async (publicId) => {
 const uploadPhoto = async (filePath, publicId, folder) => {
   try {
     const result = await cloudinary.v2.uploader.upload(filePath, {
-      folder: folder,
+      folder,
       public_id: publicId, // Use the same public_id to replace the photo
       overwrite: true, // Ensure the file is replaced
     });

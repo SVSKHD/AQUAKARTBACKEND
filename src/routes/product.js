@@ -1,8 +1,7 @@
 import express from "express";
+import multer from "multer";
 import ProductOperations from "../controllers/product.js";
 import userAuth from "../middleware/user.js";
-
-import multer from "multer";
 
 const router = express.Router();
 const storage = multer.memoryStorage(); // Use memory storage or disk storage based on your requirement
@@ -27,6 +26,13 @@ router.post(
   userAuth.isLoggedIn,
   ProductOperations.addRatingsComments,
 );
+
+router.put(
+  "/product/review/:id",
+  userAuth.isLoggedIn,
+  ProductOperations.updateRatingsComments,
+);
+
 router.delete(
   "/product/review/:id",
   userAuth.isLoggedIn,

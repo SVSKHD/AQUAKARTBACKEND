@@ -15,7 +15,7 @@ async function sendEmail({ email, subject, message, content }) {
 
   try {
     const info = await transporter.sendMail({
-      from: `"AquaKart Support" <customercare@aquakart.co.in>`,
+      from: '"AquaKart Support" <customercare@aquakart.co.in>',
       to: email,
       subject,
       text: message,

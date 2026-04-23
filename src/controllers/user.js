@@ -1,13 +1,13 @@
-import AquaEcomUser from "../models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import axios from "axios";
+import AquaEcomUser from "../models/user.js";
 import sendEmail from "../notifications/email/send-email.js";
 import signupEmail from "../notifications/email/signupTemplate.js";
 import signupOtpTemplate from "../notifications/email/signupOtp.js";
 import forgotPassword from "../notifications/email/forgotPassword.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import userLoginNotificationTemplateToAdmin from "../notifications/email/adminInfo/NewUserLogin.js";
-import axios from "axios";
 
 // User Login
 const userLogin = async (req, res) => {
@@ -51,7 +51,9 @@ const userEmailOtpLogin = async (req, res) => {
 
     let user = await AquaEcomUser.findOne({ email });
 
-    let subject, message, content;
+    let subject;
+    let message;
+    let content;
     if (user) {
       userExist = true;
       user.emailOtp = sixDigitNumber;
@@ -80,16 +82,15 @@ const userEmailOtpLogin = async (req, res) => {
         emailMessage: emailResult.message,
         userExist,
       });
-    } else {
-      // 🔥 IMPORTANT: expose the internal error for now
-      return res.status(400).json({
-        success: false,
-        message: "Failed to send OTP",
-        emailMessage: emailResult.message,
-        error: emailResult.error || null,
-        code: emailResult.code || null,
-      });
     }
+    // 🔥 IMPORTANT: expose the internal error for now
+    return res.status(400).json({
+      success: false,
+      message: "Failed to send OTP",
+      emailMessage: emailResult.message,
+      error: emailResult.error || null,
+      code: emailResult.code || null,
+    });
   } catch (error) {
     console.error("Error during email OTP login:", error);
     return res.status(500).json({ success: false, message: error.message });
@@ -126,7 +127,7 @@ const userPhoneLogin = async (req, res) => {
     }).lean();
     const userExist = Boolean(existing);
 
-    const otpData = await axios.post(`https://app.whatsera.com/api/send/text`, {
+    const otpData = await axios.post("https://app.whatsera.com/api/send/text", {
       accessToken: "685e311c3d3aacf917650e6f",
       mobile: `91${sanitizedPhone}`,
       text: userExist ? messageExisting : messageNew,
@@ -323,7 +324,7 @@ const userForgetPassword = async (req, res) => {
 
 // Update User Details
 const updateDetails = async (req, res) => {
-  const id = req.params.id;
+  const { id } = req.params;
   const { newDetails } = req.body;
 
   try {

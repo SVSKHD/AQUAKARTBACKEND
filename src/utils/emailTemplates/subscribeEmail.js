@@ -1,5 +1,4 @@
-const subscriptionEmail = (email) => {
-  return `
+const subscriptionEmail = (email) => `
       <!DOCTYPE html>
       <html lang="en">
         <head>
@@ -67,6 +66,5 @@ const subscriptionEmail = (email) => {
         </body>
       </html>
     `;
-};
 
 export default subscriptionEmail;

@@ -1,7 +1,7 @@
 import express from "express";
+import multer from "multer";
 import SoftenerHydOperations from "../controllers/softenersHyd.js";
 import userAuth from "../middleware/user.js";
-import multer from "multer";
 
 const router = express.Router();
 const storage = multer.memoryStorage(); // Use memory storage or disk storage based on your requirement

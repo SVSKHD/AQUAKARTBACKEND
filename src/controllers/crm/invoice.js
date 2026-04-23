@@ -1,6 +1,6 @@
-import AquaInvoice from "../../models/crm/invoice.js";
 import mongoose from "mongoose";
 import { nanoid } from "nanoid";
+import AquaInvoice from "../../models/crm/invoice.js";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
 const createInvoice = async (req, res) => {
@@ -72,7 +72,7 @@ const getInvoices = async (req, res) => {
     const { gst, po, search, user } = req.query;
 
     // Build the filter object dynamically
-    let filter = {};
+    const filter = {};
 
     if (gst === "true") {
       filter.gst = true;
@@ -119,7 +119,7 @@ const getInvoice = async (req, res) => {
     const { id, name, phone, invoiceNo, gstNo, date } = req.query; // Change from req.params to req.query to get query parameters
 
     // Construct a dynamic query object
-    let query = {};
+    const query = {};
     if (id) query._id = id;
     if (name) query["customerDetails.name"] = new RegExp(name, "i"); // Case-insensitive regex search
     if (phone) query["customerDetails.phone"] = phone;
@@ -187,7 +187,7 @@ const getInvoicesByDate = async (req, res) => {
   try {
     const { month, year, startDate, endDate } = req.query;
 
-    let query = {};
+    const query = {};
 
     const parseDate = (dateStr) => {
       if (!dateStr) return null;

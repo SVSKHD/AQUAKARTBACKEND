@@ -22,7 +22,7 @@ const subscribe = async (req, res) => {
       email: newSubscription.email,
       subject: "Email Subscription",
       message: "Email Subscription",
-      content: content,
+      content,
     });
 
     return res

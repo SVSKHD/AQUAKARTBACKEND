@@ -1,6 +1,6 @@
-import AquaPayment from "../../models/crm/paymentLink.js";
 import crypto from "crypto";
 import axios from "axios";
+import AquaPayment from "../../models/crm/paymentLink.js";
 
 const createPaymentLink = async (req, res) => {
   const { name, phone, email, amount, invoiceId, referenceId } = req.body;
@@ -35,13 +35,12 @@ const createPaymentLink = async (req, res) => {
     const payload = JSON.stringify(data);
     const payloadMain = Buffer.from(payload).toString("base64");
     const keyIndex = 1;
-    const string = payloadMain + "/v3/payLink/init" + process.env.PHONEPE_KEY;
+    const string = `${payloadMain}/v3/payLink/init${process.env.PHONEPE_KEY}`;
     const sha256 = crypto.createHash("sha256").update(string).digest("hex");
-    const checksum = sha256 + "###" + keyIndex;
+    const checksum = `${sha256}###${keyIndex}`;
     console.log("checksub", checksum, payloadMain);
 
-    const prod_URL =
-      "https://api.phonepe.com/apis/hermes/v3/payLink/init";
+    const prod_URL = "https://api.phonepe.com/apis/hermes/v3/payLink/init";
     const options = {
       method: "POST",
       url: prod_URL,
@@ -61,8 +60,8 @@ const createPaymentLink = async (req, res) => {
 
     // Save the payment link to the database
     const newPayment = new AquaPayment({
-      referenceId: referenceId, // Use the string directly
-      invoiceId: invoiceId, // Use the string directly
+      referenceId, // Use the string directly
+      invoiceId, // Use the string directly
       paymentLink: responseData.payLink,
       paymentStatus: false,
       paymentinfo: {
@@ -74,8 +73,8 @@ const createPaymentLink = async (req, res) => {
         mobileNumber: responseData.mobileNumber,
       },
       userDetails: {
-        phone: phone,
-        name: name,
+        phone,
+        name,
       },
     });
 

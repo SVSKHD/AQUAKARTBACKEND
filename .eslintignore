@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+coverage/
+.next/
+out/
+pnpm-lock.yaml
+package-lock.json
+.git/
+.vscode/
+.env
+.env.local
+swagger-output.json

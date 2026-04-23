@@ -1,24 +1,21 @@
+import mongoose from "mongoose";
+import moment from "moment";
 import AquaOrder from "../models/orders.js";
 import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
-import mongoose from "mongoose";
-import moment from "moment";
 
 const ADMIN_PHONE = process.env.ADMIN_PHONE || "9014774667";
 
-const formatCurrencyINR = (amount) => {
-  return new Intl.NumberFormat("en-IN", {
+const formatCurrencyINR = (amount) =>
+  new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     minimumFractionDigits: 2,
   }).format(amount);
-};
 
-const formattedDeliveryDate = (date) => {
-  return moment(date).format("DD-MM-YYYY");
-};
+const formattedDeliveryDate = (date) => moment(date).format("DD-MM-YYYY");
 
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
@@ -189,7 +186,7 @@ const createCodOrder = async (req, res) => {
             email: user.email,
             subject: "Cash on Delivery Order Confirmation",
             message: "Cash on Delivery Order Confirmation - Hello Aquakart",
-            content: content,
+            content,
           });
         })().catch((err) =>
           console.error("Failed to send confirmation email:", err),
@@ -308,7 +305,7 @@ const OrderOperations = {
   updateOrder,
   deleteOrder,
   createCodOrder,
-  //admin routes
+  // admin routes
   AdminGetOrders,
   updateOrderByAdmin,
   deleteOrderByAdmin,

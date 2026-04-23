@@ -12,12 +12,11 @@ const sendWhatsAppMessage = async (no, message) => {
 
     if (response.data.success) {
       return { status: true, message: "Message sent successfully" };
-    } else {
-      throw {
-        status: false,
-        error: response.data.error || "Failed to send message",
-      };
     }
+    throw {
+      status: false,
+      error: response.data.error || "Failed to send message",
+    };
   } catch (error) {
     console.error(
       "Error:",

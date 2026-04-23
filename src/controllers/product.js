@@ -1,9 +1,9 @@
-import AquaProduct from "../models/product.js";
 import cloudinary from "cloudinary";
+import AquaProduct from "../models/product.js";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
-const streamUpload = (buffer) => {
-  return new Promise((resolve, reject) => {
+const streamUpload = (buffer) =>
+  new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
       { folder: "products" },
       (error, result) => {
@@ -16,7 +16,6 @@ const streamUpload = (buffer) => {
     );
     stream.end(buffer);
   });
-};
 
 const deleteMedia = async (mediaArray) => {
   try {
@@ -45,7 +44,7 @@ const CreateProduct = async (req, res, next) => {
     if (arPhotos && arPhotos.length > 5) {
       return next(new Error("Maximum of 5 AR files allowed)", 400));
     }
-    let imageArray = [];
+    const imageArray = [];
 
     for (const photo of photos) {
       if (!photo.buffer) {
@@ -465,6 +464,76 @@ const getProductReviews = async (req, res) => {
   }
 };
 
+const updateRatingsComments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    if (!rating || !comment) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating and comment are required",
+      });
+    }
+
+    const parsedRating = Number(rating);
+
+    if (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
+
+    const product = await AquaProduct.findById(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    const existingReview = product.reviews.find(
+      (r) => r.user.toString() === req.user._id.toString(),
+    );
+
+    if (!existingReview) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found for this user",
+      });
+    }
+
+    existingReview.rating = parsedRating;
+    existingReview.comment = comment;
+    existingReview.createdAt = new Date();
+
+    product.numberOfReviews = product.reviews.length;
+    product.ratings =
+      product.reviews.reduce((acc, r) => acc + r.rating, 0) /
+      product.reviews.length;
+
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Review updated successfully",
+      data: {
+        ratings: product.ratings,
+        numberOfReviews: product.numberOfReviews,
+        reviews: product.reviews,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating review:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 const deleteReview = async (req, res) => {
   try {
     const { id } = req.params; // product id
@@ -498,9 +567,10 @@ const deleteReview = async (req, res) => {
     const isAdmin = req.user.role === "admin";
 
     if (!isOwner && !isAdmin) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Not authorized to delete this review" });
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this review",
+      });
     }
 
     product.reviews.splice(reviewIndex, 1);
@@ -539,5 +609,6 @@ const ProductOperations = {
   addRatingsComments,
   getProductReviews,
   deleteReview,
+  updateRatingsComments,
 };
 export default ProductOperations;

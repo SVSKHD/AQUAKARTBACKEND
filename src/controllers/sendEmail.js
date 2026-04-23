@@ -11,13 +11,17 @@ const SendEmail = async (req, res) => {
   }
 
   try {
-    const emailResponse = await sendEmail({ email, subject, message, content });
+    const emailResponse = await sendEmail({
+      email,
+      subject,
+      message,
+      content,
+    });
 
     if (emailResponse.success) {
       return res.status(200).json(emailResponse);
-    } else {
-      return res.status(500).json(emailResponse);
     }
+    return res.status(500).json(emailResponse);
   } catch (error) {
     return res.status(500).json({
       success: false,

@@ -1,8 +1,8 @@
-import AquaSoftenersHyd from "../models/softenersHyd.js";
 import cloudinary from "cloudinary";
+import AquaSoftenersHyd from "../models/softenersHyd.js";
 
-const streamUpload = (buffer) => {
-  return new Promise((resolve, reject) => {
+const streamUpload = (buffer) =>
+  new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
       { folder: "Hyderabadsofteners" },
       (error, result) => {
@@ -15,7 +15,6 @@ const streamUpload = (buffer) => {
     );
     stream.end(buffer);
   });
-};
 
 const deleteMedia = async (mediaArray) => {
   try {
@@ -33,7 +32,7 @@ const createSoftenersHyd = async (req, res, next) => {
   if (!photos || photos.length === 0) {
     return next(new Error("Images are required", 401));
   }
-  let imageArray = [];
+  const imageArray = [];
   for (const photo of photos) {
     if (!photo.buffer) {
       return next(new Error("File buffer is missing", 400));

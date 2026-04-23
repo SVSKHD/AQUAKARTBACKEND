@@ -1,6 +1,4 @@
 import moment from "moment";
 
-const formattedDeliveryDate = (data) => {
-  return moment(data).format("DD-MM-YYYY");
-};
+const formattedDeliveryDate = (data) => moment(data).format("DD-MM-YYYY");
 export default formattedDeliveryDate;

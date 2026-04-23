@@ -13,9 +13,8 @@ const sendWhatsAppMessage = async (no, message) => {
     console.log("response", response);
     if (response.data.success) {
       return { success: true, message: "Message sent successfully" };
-    } else {
-      return { success: false, message: "Failed to send message" };
     }
+    return { success: false, message: "Failed to send message" };
   } catch (error) {
     return { success: false, message: error.message };
   }

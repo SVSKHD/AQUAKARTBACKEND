@@ -1,9 +1,9 @@
-import AquaBlog from "../models/blog.js";
 import cloudinary from "cloudinary";
+import AquaBlog from "../models/blog.js";
 import AquaProduct from "../models/product.js";
 
-const streamUpload = (buffer) => {
-  return new Promise((resolve, reject) => {
+const streamUpload = (buffer) =>
+  new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
       { folder: "Blogs" },
       (error, result) => {
@@ -16,14 +16,13 @@ const streamUpload = (buffer) => {
     );
     stream.end(buffer);
   });
-};
 
 const BlogAdd = async (req, res, next) => {
   console.log("req.files", req.files);
   const photos = req?.files?.photos;
   const titleImages = req?.files?.titleImages;
-  let imageArray = [];
-  let titleImageArray = [];
+  const imageArray = [];
+  const titleImageArray = [];
   if (!titleImages) {
     return res.status(400).json({ message: "Please upload images" });
   }

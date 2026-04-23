@@ -1,4 +1,4 @@
-import formatCurrencyINR from "../../utils/currency.js"; // Adjust the import path as necessary
+import formatCurrencyINR from "../currency.js"; // Adjust the import path as necessary
 
 const orderEmail = (order, email, totalAmount, estimatedDelivery) => {
   const { items, paymentMethod } = order;

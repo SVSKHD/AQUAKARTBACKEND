@@ -24,7 +24,7 @@ import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
 import AdminUserRoutes from "./src/routes/crm/adminUser.js";
 import AdminCategoryRoutes from "./src/routes/crm/category.js";
 import AquaStock from "./src/routes/crm/stock.js";
-//methods
+// methods
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 
 const app = express();

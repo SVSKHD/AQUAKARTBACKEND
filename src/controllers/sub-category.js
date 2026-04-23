@@ -1,6 +1,6 @@
+import cloudinary from "cloudinary";
 import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
-import cloudinary from "cloudinary";
 
 const addSubCategory = async (req, res) => {
   try {
@@ -82,7 +82,12 @@ const updateSubCategory = async (req, res) => {
   const { id } = req.params;
   const { title, description, photos, keywords, category } = req.body;
   try {
-    const updatedData = { title, description, keywords, category };
+    const updatedData = {
+      title,
+      description,
+      keywords,
+      category,
+    };
     if (photos && photos.length > 0) {
       const uploadedPhotos = [];
       for (const photo of photos) {

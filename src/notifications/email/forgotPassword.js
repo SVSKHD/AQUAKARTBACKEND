@@ -1,5 +1,4 @@
-const forgotPassword = (email, otp) => {
-  return `
+const forgotPassword = (email, otp) => `
         <!DOCTYPE html>
         <html lang="en">
           <head>
@@ -73,6 +72,5 @@ const forgotPassword = (email, otp) => {
           </body>
         </html>
       `;
-};
 
 export default forgotPassword;

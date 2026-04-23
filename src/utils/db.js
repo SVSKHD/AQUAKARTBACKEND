@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const mongooseConnect = (url) => {
   mongoose
     .connect(url)

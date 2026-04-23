@@ -1,5 +1,4 @@
-const userLoginNotificationTemplateToAdmin = (email, username, loginTime) => {
-  return `
+const userLoginNotificationTemplateToAdmin = (email, username, loginTime) => `
             <!DOCTYPE html>
             <html lang="en">
               <head>
@@ -76,6 +75,5 @@ const userLoginNotificationTemplateToAdmin = (email, username, loginTime) => {
               </body>
             </html>
           `;
-};
 
 export default userLoginNotificationTemplateToAdmin;

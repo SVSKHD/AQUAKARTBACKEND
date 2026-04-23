@@ -1,10 +1,10 @@
+import cloudinary from "cloudinary";
 import AquaCategory from "../models/category.js";
 import AquaProduct from "../models/product.js";
-import cloudinary from "cloudinary";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
-const streamUpload = (buffer) => {
-  return new Promise((resolve, reject) => {
+const streamUpload = (buffer) =>
+  new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
       { folder: "categories" },
       (error, result) => {
@@ -17,7 +17,6 @@ const streamUpload = (buffer) => {
     );
     stream.end(buffer);
   });
-};
 
 const deletePhoto = async (publicId) => {
   try {

@@ -1,7 +1,7 @@
 import express from "express";
+import multer from "multer";
 import CategoryOperations from "../controllers/category.js";
 import userAuth from "../middleware/user.js";
-import multer from "multer";
 
 const router = express.Router();
 
