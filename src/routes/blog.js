@@ -15,6 +15,8 @@ router.get("/blog-status", (req, res) => {
 });
 router.get("/all-blogs", BlogOperations.getBlogs);
 router.get("/blog/:id", BlogOperations.getBlogById);
+router.get("/blog/:title", BlogOperations.getBlogByTitle);
+router.get("/blog-slug/:slug", BlogOperations.getBlogBySlug);
 router.post(
   "/blog-add",
   userAuth.checkAdmin,

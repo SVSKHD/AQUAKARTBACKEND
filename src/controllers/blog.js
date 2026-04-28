@@ -100,11 +100,54 @@ const getBlogById = async (req, res) => {
       .json({ success: false, message: "sorry we couldn't fetch blog id" });
   }
 };
-const BlogUpdate = async (req, res) => {};
+const getBlogByTitle = async (req, res) => {
+  const { title } = req.params;
+  console.log("title", title);
+  try {
+    const blogByTitle = await AquaBlog.findOne({ title });
+    return res.status(200).json({ success: true, data: blogByTitle });
+  } catch (error) {
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message: "sorry we couldn't fetch blog by title",
+      });
+  }
+};
+
+const getBlogBySlug = async (req, res) => {
+  try {
+    const slug = decodeURIComponent(req.params.slug);
+
+    const blogBySlug = await AquaBlog.findOne({ slug });
+
+    if (!blogBySlug) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: blogBySlug,
+    });
+  } catch (error) {
+    console.error("getBlogBySlug error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Sorry, we couldn't fetch blog by slug",
+    });
+  }
+};
+
 const BlogOperations = {
   BlogAdd,
-  BlogUpdate,
   getBlogs,
   getBlogById,
+  getBlogByTitle,
+  getBlogBySlug,
 };
 export default BlogOperations;
