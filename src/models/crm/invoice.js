@@ -75,6 +75,9 @@ const AquaInvoiceSchema = new mongoose.Schema(
         type: String,
       },
     },
+    review: {
+      type: String,
+    },
     paidStatus: {
       type: String,
     },

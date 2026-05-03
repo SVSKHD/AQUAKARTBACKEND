@@ -28,7 +28,6 @@ const createInvoice = async (req, res) => {
 const updateInvoice = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("id", id);
     const invoice = await AquaInvoice.findById(id);
     req.body.invoiceNo = invoice.invoiceNo;
     req.body.createdAt = invoice.createdAt;
