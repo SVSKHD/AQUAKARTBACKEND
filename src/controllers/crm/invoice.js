@@ -1,38 +1,36 @@
 import mongoose from "mongoose";
 import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
+import NotificationLog from "../../models/crm/notificationLog.js";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
 const INDIAN_CONTACT_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
+const normalizeIndianPhone = (phone) =>
+  String(phone || "")
+    .replace(/\s|-/g, "")
+    .replace(/^\+91/, "")
+    .replace(/^91/, "");
 
 const validateInvoicePayload = (payload = {}) => {
   const errors = {};
-
   const customerName = payload?.customerDetails?.name;
   const customerPhone = payload?.customerDetails?.phone;
   const products = payload?.products;
   const gstEnabled = payload?.gst === true;
 
-  if (
-    !customerName ||
-    typeof customerName !== "string" ||
-    !customerName.trim()
-  ) {
+  if (!customerName || typeof customerName !== "string" || !customerName.trim())
     errors["customerDetails.name"] = "Customer name is required";
-  }
-
   if (
     customerPhone === undefined ||
     customerPhone === null ||
     String(customerPhone).trim() === ""
   ) {
     errors["customerDetails.phone"] = "Customer phone is required";
-  } else {
-    const normalizedPhone = String(customerPhone).replace(/\s|-/g, "");
-    if (!INDIAN_CONTACT_REGEX.test(normalizedPhone)) {
-      errors["customerDetails.phone"] =
-        "Customer phone must be a valid Indian contact number";
-    }
+  } else if (
+    !INDIAN_CONTACT_REGEX.test(String(customerPhone).replace(/\s|-/g, ""))
+  ) {
+    errors["customerDetails.phone"] =
+      "Customer phone must be a valid Indian contact number";
   }
 
   if (!Array.isArray(products) || products.length === 0) {
@@ -44,76 +42,58 @@ const validateInvoicePayload = (payload = {}) => {
         !product?.productName ||
         typeof product.productName !== "string" ||
         !product.productName.trim()
-      ) {
+      )
         errors[`${path}.productName`] = "Product name is required";
-      }
-
       if (
         product?.productQuantity === undefined ||
         product?.productQuantity === null ||
         product.productQuantity === ""
-      ) {
+      )
         errors[`${path}.productQuantity`] = "Product quantity is required";
-      } else if (Number(product.productQuantity) <= 0) {
+      else if (Number(product.productQuantity) <= 0)
         errors[`${path}.productQuantity`] =
           "Product quantity must be greater than 0";
-      }
-
       if (
         product?.productPrice === undefined ||
         product?.productPrice === null ||
         product.productPrice === ""
-      ) {
+      )
         errors[`${path}.productPrice`] = "Product price is required";
-      } else if (Number(product.productPrice) < 0) {
+      else if (Number(product.productPrice) < 0)
         errors[`${path}.productPrice`] = "Product price must be at least 0";
-      }
     });
   }
 
   if (gstEnabled) {
     const gstNo = payload?.gstDetails?.gstNo;
     const gstName = payload?.gstDetails?.gstName;
-
-    if (!gstNo || typeof gstNo !== "string" || !gstNo.trim()) {
+    if (!gstNo || typeof gstNo !== "string" || !gstNo.trim())
       errors["gstDetails.gstNo"] = "GST number is required when gst is true";
-    }
-    if (!gstName || typeof gstName !== "string" || !gstName.trim()) {
+    if (!gstName || typeof gstName !== "string" || !gstName.trim())
       errors["gstDetails.gstName"] = "GST name is required when gst is true";
-    }
   }
 
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors,
-  };
+  return { isValid: Object.keys(errors).length === 0, errors };
 };
 
 const createInvoice = async (req, res) => {
   try {
     const { isValid, errors } = validateInvoicePayload(req.body);
-    if (!isValid) {
-      return res.status(400).json({
-        status: false,
-        message: "Validation failed",
-        errors,
-      });
-    }
+    if (!isValid)
+      return res
+        .status(400)
+        .json({ status: false, message: "Validation failed", errors });
 
-    const uniqueId = nanoid(4);
-    const date = new Date().getDate();
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth() + 1;
-    const formattedDate = new Date().toISOString().split("T")[0];
-    const concateId = `AQB${uniqueId}|${date}${month}${year}`;
-    req.body.invoiceNo = concateId;
+    const uniqueId = nanoid(10);
+    const now = new Date();
+    const formattedDate = now.toISOString().split("T")[0];
+    req.body.invoiceNo = `AQB${uniqueId}|${now.getDate()}${now.getMonth() + 1}${now.getFullYear()}`;
     req.body.createdAt = formattedDate;
     req.body.updatedAt = formattedDate;
     req.body.date = formattedDate;
     req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = formattedDate;
-    const newInvoice = new AquaInvoice(req.body);
-    const savedInvoice = await newInvoice.save();
+    const savedInvoice = await new AquaInvoice(req.body).save();
     res.status(201).json(savedInvoice);
   } catch (error) {
     console.error(error);
@@ -122,214 +102,140 @@ const createInvoice = async (req, res) => {
 };
 
 const updateInvoice = async (req, res) => {
+  /* unchanged logic */
   try {
     const { id } = req.params;
     const invoice = await AquaInvoice.findById(id);
-    if (!invoice) {
-      return res.status(404).json({ message: "Invoice not found" });
-    }
-
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     const { isValid, errors } = validateInvoicePayload(req.body);
-    if (!isValid) {
-      return res.status(400).json({
-        status: false,
-        message: "Validation failed",
-        errors,
-      });
-    }
-
+    if (!isValid)
+      return res
+        .status(400)
+        .json({ status: false, message: "Validation failed", errors });
     req.body.invoiceNo = invoice.invoiceNo;
     req.body.createdAt = invoice.createdAt;
     req.body.updatedAt = new Date().toISOString().split("T")[0];
     req.body.date = invoice.date;
     req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = invoice.transport?.deliveryDate;
-
     const updatedInvoice = await AquaInvoice.findByIdAndUpdate(id, req.body, {
       new: true,
     });
-
-    if (!updatedInvoice) {
+    if (!updatedInvoice)
       return res.status(404).json({ message: "Invoice not found" });
-    }
-
     res.status(200).json(updatedInvoice);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 const deleteInvoice = async (req, res) => {
   try {
-    const { id } = req.params;
-    const deletedInvoice = await AquaInvoice.findByIdAndDelete(id);
-    if (!deletedInvoice) {
+    const deletedInvoice = await AquaInvoice.findByIdAndDelete(req.params.id);
+    if (!deletedInvoice)
       return res.status(404).json({ message: "Invoice not found" });
-    }
     res
       .status(200)
       .json({ status: true, message: "Invoice deleted successfully" });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
 
 const getInvoices = async (req, res) => {
   try {
-    // Extract query parameters
     const { gst, po, search, user } = req.query;
-
-    // Build the filter object dynamically
     const filter = {};
-
-    if (gst === "true") {
-      filter.gst = true;
-    }
-
-    if (po === "true") {
-      filter.po = true;
-    }
-
-    // ✅ If `user=true`, only return invoices where `gst: false`
-    if (user === "true") {
-      filter.gst = false;
-    }
-
-    // If search is provided, filter by relevant fields (assuming invoiceNumber or clientName)
+    if (gst === "true") filter.gst = true;
+    if (po === "true") filter.po = true;
+    if (user === "true") filter.gst = false;
     if (search) {
       filter.$or = [
-        { invoiceNumber: { $regex: search, $options: "i" } }, // Case-insensitive search for invoice number
-        { clientName: { $regex: search, $options: "i" } }, // Case-insensitive search for client name
+        { invoiceNo: { $regex: search, $options: "i" } },
+        { "customerDetails.name": { $regex: search, $options: "i" } },
       ];
     }
-
-    // Fetch invoices from the database with filters applied
     const invoices = await AquaInvoice.find(filter)
-      .sort({ createdAt: -1 }) // Ensure sorting
-      .lean(); // Converts Mongoose documents to plain objects
-
-    return res.status(200).json({
-      status: true,
-      data: invoices,
-      no: invoices.length,
-    });
+      .sort({ createdAt: -1 })
+      .lean();
+    return res
+      .status(200)
+      .json({ status: true, data: invoices, no: invoices.length });
   } catch (error) {
-    console.error("Error fetching invoices:", error);
-    return res.status(400).json({
-      status: false,
-      message: "Sorry, please try again",
-    });
+    return res
+      .status(400)
+      .json({ status: false, message: "Sorry, please try again" });
   }
 };
-
 const getInvoice = async (req, res) => {
   try {
-    const { id, name, phone, invoiceNo, gstNo, date } = req.query; // Change from req.params to req.query to get query parameters
-
-    // Construct a dynamic query object
+    const { id, name, phone, invoiceNo, gstNo } = req.query;
     const query = {};
     if (id) query._id = id;
-    if (name) query["customerDetails.name"] = new RegExp(name, "i"); // Case-insensitive regex search
+    if (name) query["customerDetails.name"] = new RegExp(name, "i");
     if (phone) query["customerDetails.phone"] = phone;
     if (invoiceNo) query.invoiceNo = invoiceNo;
     if (gstNo) query["gstDetails.gstNo"] = gstNo;
-    console.log("invoice", query);
-    const invoices = await AquaInvoice.findOne(query);
-    res.status(200).json(invoices);
+    res.status(200).json(await AquaInvoice.findOne(query));
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
-
 const getInvoiceById = async (req, res) => {
   try {
-    const { id } = req.params; // Extract the id from the request parameters
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ message: "Invalid invoice id" });
-    }
-
     const invoice = await AquaInvoice.findById(id);
-
-    if (!invoice) {
-      return res.status(404).json({ message: "Invoice not found" });
-    }
-
-    // If the invoice is found, return it
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     res.status(200).json(invoice);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
-
-const getMonthDateRange = (monthName, year) => {
-  const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-  const startDate = new Date(year, monthIndex, 1);
-  const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59);
-  return { startDate, endDate };
-};
-
-const getYearDateRange = (year) => {
-  const startDate = new Date(year, 1, 1);
-  const endDate = new Date(year, 11, 31, 23, 59, 59);
-  console.log(startDate, endDate);
-  return { startDate, endDate };
-};
-
 const getInvoiceByPhone = async (req, res) => {
   try {
-    const { phone } = req.params;
-    console.log("phone", phone);
-    const details = await AquaInvoice.find({ "customerDetails.phone": phone });
-    console.log("details", details);
-    res.status(200).json(details);
+    res
+      .status(200)
+      .json(
+        await AquaInvoice.find({ "customerDetails.phone": req.params.phone }),
+      );
   } catch (error) {
-    console.error("Error fetching invoice by phone:", error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
 
 const getInvoicesByDate = async (req, res) => {
+  /* keep existing */
   try {
     const { month, year, startDate, endDate } = req.query;
-
     const query = {};
-
     const parseDate = (dateStr) => {
       if (!dateStr) return null;
       const [day, month, year] = dateStr.split("-").map(Number);
       const fullYear = year < 100 ? 2000 + year : year;
       return new Date(fullYear, month - 1, day);
     };
-
     const parsedStartDate = parseDate(startDate);
     const parsedEndDate = parseDate(endDate);
-
     if (month) {
       const resolvedYear = year || new Date().getFullYear();
-      const { startDate: monthStartDate, endDate: monthEndDate } =
-        getMonthDateRange(month, resolvedYear);
-      query.createdAt = {
-        $gte: monthStartDate.toISOString(),
-        $lte: monthEndDate.toISOString(),
-      };
+      const monthIndex = new Date(`${month} 1, ${resolvedYear}`).getMonth();
+      const s = new Date(resolvedYear, monthIndex, 1);
+      const e = new Date(resolvedYear, monthIndex + 1, 0, 23, 59, 59);
+      query.createdAt = { $gte: s.toISOString(), $lte: e.toISOString() };
     } else if (year && !month) {
-      const { startDate: yearStartDate, endDate: yearEndDate } =
-        getYearDateRange(year);
-      query.createdAt = {
-        $gte: yearStartDate.toISOString(),
-        $lte: yearEndDate.toISOString(),
-      };
+      const s = new Date(year, 1, 1);
+      const e = new Date(year, 11, 31, 23, 59, 59);
+      query.createdAt = { $gte: s.toISOString(), $lte: e.toISOString() };
     } else if (parsedStartDate && !parsedEndDate) {
-      const start = new Date(
+      const s = new Date(
         parsedStartDate.getFullYear(),
         parsedStartDate.getMonth(),
         1,
       );
-      const end = new Date(
+      const e = new Date(
         parsedStartDate.getFullYear(),
         parsedStartDate.getMonth() + 1,
         0,
@@ -337,75 +243,120 @@ const getInvoicesByDate = async (req, res) => {
         59,
         59,
       );
-      query.createdAt = {
-        $gte: start.toISOString(),
-        $lte: end.toISOString(),
-      };
+      query.createdAt = { $gte: s.toISOString(), $lte: e.toISOString() };
     } else if (parsedStartDate && parsedEndDate) {
       query.createdAt = {
         $gte: parsedStartDate.toISOString(),
         $lte: new Date(parsedEndDate.setHours(23, 59, 59)).toISOString(),
       };
     } else {
-      // If no date is provided, use the current date for both startDate and endDate
       const today = new Date();
-      const start = new Date(today.setHours(0, 0, 0, 0)); // Start of the day
-      const end = new Date(today.setHours(23, 59, 59)); // End of the day
-      query.createdAt = {
-        $gte: start.toISOString(),
-        $lte: end.toISOString(),
-      };
+      const s = new Date(today.setHours(0, 0, 0, 0));
+      const e = new Date(today.setHours(23, 59, 59));
+      query.createdAt = { $gte: s.toISOString(), $lte: e.toISOString() };
     }
     const invoices = await AquaInvoice.find(query);
     res
       .status(200)
       .json({ success: true, data: invoices, no: invoices.length });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: "Server Error", error });
   }
 };
-const NotifyInvoiceMembers = async (req, res) => {
+
+const notifySpecificInvoiceMember = async (req, res) => {
   try {
-    const invoices = await AquaInvoice.find({}).lean();
-    let success = false;
-    const data = req.body;
-    const year = new Date().getFullYear();
-
-    if (data.send === "all") {
-      if (!data.festival) {
-        return res.status(400).json({ error: "Festival name is required." });
-      }
-
-      invoices.forEach((invoice) => {
-        const { name: customerName, phone } = invoice.customerDetails;
-        const { invoiceNo, date, totalAmount: amount, _id: id } = invoice;
-
-        const message = `Dear ${customerName}, we wish you a very happy ${data.festival} ${year}! 🎉 Your invoice ${invoiceNo} dated ${date} for Rs.${amount} is available at https://admin.aquakart.co.in/invoice/${id}.  
-
-✨ **Exclusive Festival Offer:** Get special discounts on your next purchase!  
-
-For more products, browse **_aquakart.co.in_** 🛒`;
-
-        success = true;
-      });
-      const message = "hello";
-      await sendWhatsAppMessage("9553419654", message);
-
-      return res.json({
-        success,
-        message: "Notifications sent successfully with offers.",
-      });
-    }
-
-    res.status(400).json({ error: "Invalid request parameters." });
+    const invoice = await AquaInvoice.findById(req.params.id).lean();
+    if (!invoice)
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    const { name, phone } = invoice.customerDetails || {};
+    if (!phone)
+      return res
+        .status(400)
+        .json({ success: false, message: "Invoice has no customer phone" });
+    const message =
+      req.body?.message ||
+      `Dear ${name || "Customer"}, your invoice ${invoice.invoiceNo} dated ${invoice.date} is available at https://admin.aquakart.co.in/invoice/${invoice._id}.`;
+    const delivery = await sendWhatsAppMessage(
+      normalizeIndianPhone(phone),
+      message,
+    );
+    await NotificationLog.create({
+      invoiceId: invoice._id,
+      phone: normalizeIndianPhone(phone),
+      message,
+      status: delivery?.status ? "sent" : "failed",
+      response: delivery,
+    });
+    return res
+      .status(200)
+      .json({ success: true, message: "Notification sent", delivery });
   } catch (error) {
-    console.error("Error notifying invoice members:", error);
-    res.status(500).json({ error: "Internal server error." });
+    await NotificationLog.create({
+      invoiceId: req.params.id,
+      phone: req.body?.phone || "",
+      message: req.body?.message || "",
+      status: "failed",
+      response: error?.error || error?.message || error,
+    });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to send notification", error });
   }
 };
 
-const InvoiceOperations = {
+const NotifyInvoiceMembers = async (req, res) => {
+  try {
+    const invoices = await AquaInvoice.find({}).lean();
+    const data = req.body;
+    const year = new Date().getFullYear();
+    if (data.send !== "all" || !data.festival)
+      return res
+        .status(400)
+        .json({ error: "Festival name and send=all are required." });
+    const results = [];
+    for (const invoice of invoices) {
+      const { name: customerName, phone } = invoice.customerDetails || {};
+      if (!phone) continue;
+      const message = `Dear ${customerName}, we wish you a very happy ${data.festival} ${year}! 🎉 Your invoice ${invoice.invoiceNo} dated ${invoice.date} for Rs.${invoice.totalAmount} is available at https://admin.aquakart.co.in/invoice/${invoice._id}.`;
+      try {
+        const delivery = await sendWhatsAppMessage(
+          normalizeIndianPhone(phone),
+          message,
+        );
+        await NotificationLog.create({
+          invoiceId: invoice._id,
+          phone: normalizeIndianPhone(phone),
+          message,
+          status: "sent",
+          response: delivery,
+        });
+        results.push({ invoiceId: invoice._id, status: "sent" });
+      } catch (err) {
+        await NotificationLog.create({
+          invoiceId: invoice._id,
+          phone: normalizeIndianPhone(phone),
+          message,
+          status: "failed",
+          response: err?.error || err?.message || err,
+        });
+        results.push({ invoiceId: invoice._id, status: "failed" });
+      }
+    }
+    return res.json({
+      success: true,
+      message: "Notifications processed",
+      resultsCount: results.length,
+      results,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+export default {
   createInvoice,
   updateInvoice,
   getInvoice,
@@ -415,6 +366,5 @@ const InvoiceOperations = {
   getInvoiceByPhone,
   getInvoicesByDate,
   NotifyInvoiceMembers,
+  notifySpecificInvoiceMember,
 };
-
-export default InvoiceOperations;
