@@ -8,15 +8,38 @@ router.get("invoice-status", async (req, res) => {
   res.json({ message: "Invoice Status v1 active" });
 });
 
-router.get("/admin/all-invoices", InvoiceOperations.getInvoices);
+router.get(
+  "/admin/all-invoices",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoices,
+);
 router.get("/admin/invoice", userAuth.checkAdmin, InvoiceOperations.getInvoice);
 router.get(
   "/admin/invoice/dates",
   userAuth.checkAdmin,
   InvoiceOperations.getInvoicesByDate,
 );
-router.get("/invoice/:id", InvoiceOperations.getInvoiceById);
-router.get("/invoice/:phone", InvoiceOperations.getInvoiceByPhone);
+router.get(
+  "/invoice/id/:id",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoiceById,
+);
+router.get(
+  "/invoice/phone/:phone",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoiceByPhone,
+);
+// deprecated routes retained temporarily for backward compatibility
+router.get(
+  "/invoice/:id",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoiceById,
+);
+router.get(
+  "/invoice-phone/:phone",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoiceByPhone,
+);
 router.post(
   "/create/invoice",
   userAuth.checkAdmin,
@@ -33,6 +56,15 @@ router.delete(
   InvoiceOperations.deleteInvoice,
 );
 
-router.post("/notify/invoice-members", InvoiceOperations.NotifyInvoiceMembers);
+router.post(
+  "/notify/invoice-members",
+  userAuth.checkAdmin,
+  InvoiceOperations.NotifyInvoiceMembers,
+);
+router.post(
+  "/notify/invoice/:id",
+  userAuth.checkAdmin,
+  InvoiceOperations.notifySpecificInvoiceMember,
+);
 
 export default router;

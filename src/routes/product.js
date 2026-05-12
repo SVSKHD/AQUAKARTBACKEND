@@ -57,10 +57,16 @@ router.put(
   ]),
   ProductOperations.updateProduct,
 );
+router.delete(
+  "/product/:id",
+  userAuth.checkAdmin,
+  ProductOperations.deleteProduct,
+);
+
 router.get(
   "/product-delete/:id",
   userAuth.checkAdmin,
   ProductOperations.deleteProduct,
-);
+); // deprecated: use DELETE /product/:id
 
 export default router;

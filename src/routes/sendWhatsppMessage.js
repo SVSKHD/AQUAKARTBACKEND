@@ -8,6 +8,15 @@ router.get("/status", (req, res) => {
   res.json({ message: "v1 notify is active" });
 });
 
-router.get("/send-whatsapp/:no", WhatsappOperations.sendMessage);
+router.get(
+  "/send-whatsapp/:no",
+  userAuth.checkAdmin,
+  WhatsappOperations.sendMessage,
+);
+router.post(
+  "/send-whatsapp",
+  userAuth.checkAdmin,
+  WhatsappOperations.sendWhatsAppPostMethod,
+);
 
 export default router;
