@@ -3,8 +3,103 @@ import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
+const INDIAN_CONTACT_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
+
+const validateInvoicePayload = (payload = {}) => {
+  const errors = {};
+
+  const customerName = payload?.customerDetails?.name;
+  const customerPhone = payload?.customerDetails?.phone;
+  const products = payload?.products;
+  const gstEnabled = payload?.gst === true;
+
+  if (
+    !customerName ||
+    typeof customerName !== "string" ||
+    !customerName.trim()
+  ) {
+    errors["customerDetails.name"] = "Customer name is required";
+  }
+
+  if (
+    customerPhone === undefined ||
+    customerPhone === null ||
+    String(customerPhone).trim() === ""
+  ) {
+    errors["customerDetails.phone"] = "Customer phone is required";
+  } else {
+    const normalizedPhone = String(customerPhone).replace(/\s|-/g, "");
+    if (!INDIAN_CONTACT_REGEX.test(normalizedPhone)) {
+      errors["customerDetails.phone"] =
+        "Customer phone must be a valid Indian contact number";
+    }
+  }
+
+  if (!Array.isArray(products) || products.length === 0) {
+    errors.products = "At least one product is required";
+  } else {
+    products.forEach((product, index) => {
+      const path = `products[${index}]`;
+      if (
+        !product?.productName ||
+        typeof product.productName !== "string" ||
+        !product.productName.trim()
+      ) {
+        errors[`${path}.productName`] = "Product name is required";
+      }
+
+      if (
+        product?.productQuantity === undefined ||
+        product?.productQuantity === null ||
+        product.productQuantity === ""
+      ) {
+        errors[`${path}.productQuantity`] = "Product quantity is required";
+      } else if (Number(product.productQuantity) <= 0) {
+        errors[`${path}.productQuantity`] =
+          "Product quantity must be greater than 0";
+      }
+
+      if (
+        product?.productPrice === undefined ||
+        product?.productPrice === null ||
+        product.productPrice === ""
+      ) {
+        errors[`${path}.productPrice`] = "Product price is required";
+      } else if (Number(product.productPrice) < 0) {
+        errors[`${path}.productPrice`] = "Product price must be at least 0";
+      }
+    });
+  }
+
+  if (gstEnabled) {
+    const gstNo = payload?.gstDetails?.gstNo;
+    const gstName = payload?.gstDetails?.gstName;
+
+    if (!gstNo || typeof gstNo !== "string" || !gstNo.trim()) {
+      errors["gstDetails.gstNo"] = "GST number is required when gst is true";
+    }
+    if (!gstName || typeof gstName !== "string" || !gstName.trim()) {
+      errors["gstDetails.gstName"] = "GST name is required when gst is true";
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+};
+
 const createInvoice = async (req, res) => {
   try {
+    const { isValid, errors } = validateInvoicePayload(req.body);
+    if (!isValid) {
+      return res.status(400).json({
+        status: false,
+        message: "Validation failed",
+        errors,
+      });
+    }
+
     const uniqueId = nanoid(4);
     const date = new Date().getDate();
     const year = new Date().getFullYear();
@@ -15,6 +110,7 @@ const createInvoice = async (req, res) => {
     req.body.createdAt = formattedDate;
     req.body.updatedAt = formattedDate;
     req.body.date = formattedDate;
+    req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = formattedDate;
     const newInvoice = new AquaInvoice(req.body);
     const savedInvoice = await newInvoice.save();
@@ -29,11 +125,25 @@ const updateInvoice = async (req, res) => {
   try {
     const { id } = req.params;
     const invoice = await AquaInvoice.findById(id);
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+
+    const { isValid, errors } = validateInvoicePayload(req.body);
+    if (!isValid) {
+      return res.status(400).json({
+        status: false,
+        message: "Validation failed",
+        errors,
+      });
+    }
+
     req.body.invoiceNo = invoice.invoiceNo;
     req.body.createdAt = invoice.createdAt;
     req.body.updatedAt = new Date().toISOString().split("T")[0];
     req.body.date = invoice.date;
-    req.body.transport.deliveryDate = invoice.transport.deliveryDate;
+    req.body.transport = req.body.transport || {};
+    req.body.transport.deliveryDate = invoice.transport?.deliveryDate;
 
     const updatedInvoice = await AquaInvoice.findByIdAndUpdate(id, req.body, {
       new: true,
