@@ -5,10 +5,15 @@ import cloudinary from "cloudinary";
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
 import generateSwaggerDocs from "./swagger-autogen.js";
+import { startInvoiceStatusCron } from "./src/jobs/invoiceStatusCron.js";
 
 const PORT = process.env.PORT || 5300; // Default to port 3000 if PORT is not set
 
-mongooseConnect(process.env.DB_URL);
+mongooseConnect(process.env.DB_URL)
+  .then(() => startInvoiceStatusCron())
+  .catch((error) => {
+    console.error("Failed to start invoice status cron:", error);
+  });
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,

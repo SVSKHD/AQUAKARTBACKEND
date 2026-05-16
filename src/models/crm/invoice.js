@@ -96,6 +96,13 @@ const AquaInvoiceSchema = new mongoose.Schema(
     paymentType: {
       type: String,
     },
+    cronStatusNotified: {
+      type: Boolean,
+      default: false,
+    },
+    cronStatusNotifiedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
