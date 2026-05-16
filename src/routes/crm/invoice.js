@@ -30,11 +30,7 @@ router.get(
   InvoiceOperations.getInvoiceByPhone,
 );
 // deprecated routes retained temporarily for backward compatibility
-router.get(
-  "/invoice/:id",
-  userAuth.checkAdmin,
-  InvoiceOperations.getInvoiceById,
-);
+router.get("/invoice/:id", InvoiceOperations.getInvoiceById);
 router.get(
   "/invoice-phone/:phone",
   userAuth.checkAdmin,
