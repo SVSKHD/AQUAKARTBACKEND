@@ -48,8 +48,8 @@ const upload = multer({
 const BASE = process.env.WHATSAPPAPI;
 const KEY = process.env.WHATSAPPAPIKEY;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // CORS configuration
 const corsOptions = {
