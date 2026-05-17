@@ -25,6 +25,7 @@ import AdminUserRoutes from "./src/routes/crm/adminUser.js";
 import AdminCategoryRoutes from "./src/routes/crm/category.js";
 import AquaStock from "./src/routes/crm/stock.js";
 import AdminCustomerRoutes from "./src/routes/crm/customer.js";
+import AdminQuotationRoutes from "./src/routes/crm/quotation.js";
 // methods
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 
@@ -47,8 +48,8 @@ const upload = multer({
 const BASE = process.env.WHATSAPPAPI;
 const KEY = process.env.WHATSAPPAPIKEY;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // CORS configuration
 const corsOptions = {
@@ -100,6 +101,7 @@ app.use("/v1/crm", paymentLinkRoutes);
 app.use("/v1/crm", AquaStock);
 app.use("/v1/crm/user", AdminUserRoutes);
 app.use("/v1/crm/customers", AdminCustomerRoutes);
+app.use("/v1/crm/quotations", AdminQuotationRoutes);
 
 app.post(
   "/v1/notify/send-whatsappp",

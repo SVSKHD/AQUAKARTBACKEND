@@ -1,226 +1,334 @@
+import mongoose from "mongoose";
 import cloudinary from "cloudinary";
 import AquaProduct from "../models/product.js";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
-const streamUpload = (buffer) =>
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+const ADMIN_ROLE = 1;
+
+const handleControllerError = (
+  error,
+  res,
+  fallbackMessage = "Something went wrong, please try again",
+) => {
+  if (error?.name === "CastError") {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid value for ${error.path}`,
+      field: error.path,
+    });
+  }
+  if (error?.name === "ValidationError") {
+    const fields = Object.entries(error.errors || {}).reduce(
+      (acc, [field, err]) => {
+        acc[field] = err.message;
+        return acc;
+      },
+      {},
+    );
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: fields,
+    });
+  }
+  if (error?.code === 11000) {
+    const field = Object.keys(error.keyValue || {})[0] || "field";
+    return res.status(409).json({
+      success: false,
+      message: `Duplicate ${field}: a product with this ${field} already exists`,
+      field,
+    });
+  }
+  console.error(`${fallbackMessage}:`, error);
+  return res.status(500).json({
+    success: false,
+    message: fallbackMessage,
+  });
+};
+
+const streamUpload = (buffer, folder = "products") =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
-      { folder: "products" },
+      { folder },
       (error, result) => {
-        if (result) {
-          resolve(result);
-        } else {
-          reject(error);
-        }
+        if (result) resolve(result);
+        else reject(error);
       },
     );
     stream.end(buffer);
   });
 
-const deleteMedia = async (mediaArray) => {
-  try {
-    for (const media of mediaArray) {
-      await cloudinary.v2.uploader.destroy(media.id);
-    }
-  } catch (error) {
-    console.error("Error deleting media:", error);
-    throw new Error("Failed to delete old media");
+const deleteMedia = async (mediaArray = []) => {
+  for (const media of mediaArray) {
+    if (!media?.id) continue;
+    await cloudinary.v2.uploader.destroy(media.id);
   }
 };
 
-const CreateProduct = async (req, res, next) => {
+const uploadFiles = async (files = [], folder) => {
+  const uploaded = [];
+  for (const file of files) {
+    if (!file?.buffer) {
+      const err = new Error("Uploaded file is missing data");
+      err.statusCode = 400;
+      throw err;
+    }
+    try {
+      const result = await streamUpload(file.buffer, folder);
+      uploaded.push({ id: result.public_id, secure_url: result.secure_url });
+    } catch (cloudinaryError) {
+      const err = new Error(
+        `Image upload failed: ${cloudinaryError?.message || "Cloudinary error"}`,
+      );
+      err.statusCode = 502;
+      throw err;
+    }
+  }
+  return uploaded;
+};
+
+const validateProductPayload = (body, { partial = false } = {}) => {
+  const errors = {};
+
+  if (!partial || body.title !== undefined) {
+    if (!body.title || typeof body.title !== "string" || !body.title.trim()) {
+      errors.title = "Product title is required";
+    } else if (body.title.length > 120) {
+      errors.title = "Product title must not exceed 120 characters";
+    }
+  }
+
+  if (!partial || body.price !== undefined) {
+    const price = Number(body.price);
+    if (body.price === undefined || body.price === null || body.price === "") {
+      errors.price = "Product price is required";
+    } else if (Number.isNaN(price) || price < 0) {
+      errors.price = "Product price must be a non-negative number";
+    } else if (String(Math.trunc(price)).length > 6) {
+      errors.price = "Product price must not exceed 6 digits";
+    }
+  }
+
+  if (!partial || body.description !== undefined) {
+    if (
+      !body.description ||
+      typeof body.description !== "string" ||
+      !body.description.trim()
+    ) {
+      errors.description = "Product description is required";
+    }
+  }
+
+  if (!partial || body.stock !== undefined) {
+    const stock = Number(body.stock);
+    if (body.stock === undefined || body.stock === null || body.stock === "") {
+      errors.stock = "Product stock is required";
+    } else if (Number.isNaN(stock) || stock < 0) {
+      errors.stock = "Product stock must be a non-negative number";
+    }
+  }
+
+  if (!partial || body.brand !== undefined) {
+    if (!body.brand || typeof body.brand !== "string" || !body.brand.trim()) {
+      errors.brand = "Product brand is required";
+    }
+  }
+
+  if (body.notes && body.notes.length > 300) {
+    errors.notes = "Notes must not exceed 300 characters";
+  }
+
+  ["category", "subCategory", "blog"].forEach((field) => {
+    if (body[field] && !isValidObjectId(String(body[field]).trim())) {
+      errors[field] = `Invalid ${field} id`;
+    }
+  });
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+};
+
+// ─────────────────────────────── CRUD ────────────────────────────────────
+
+const CreateProduct = async (req, res) => {
   try {
-    const photos = req.files?.photos;
-    const arPhotos = req.files?.ar;
-    if (!photos || photos.length === 0) {
-      return next(new Error("Images are required", 401));
+    const photos = req.files?.photos || [];
+    const arPhotos = req.files?.ar || [];
+
+    if (photos.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "At least one product image is required" });
     }
     if (photos.length > 10) {
-      return next(new Error("Maximum of 10 images allowed", 400));
+      return res
+        .status(400)
+        .json({ success: false, message: "A maximum of 10 product images is allowed" });
     }
-    // if (!arPhotos || arPhotos.length === 0) {
-    //   return next(new Error("AR files are required", 401));
-    // }
-    if (arPhotos && arPhotos.length > 5) {
-      return next(new Error("Maximum of 5 AR files allowed)", 400));
+    if (arPhotos.length > 5) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A maximum of 5 AR files is allowed" });
     }
-    const imageArray = [];
 
-    for (const photo of photos) {
-      if (!photo.buffer) {
-        return next(new Error("File buffer is missing", 400));
-      }
-      const result = await streamUpload(photo.buffer);
-      imageArray.push({
-        id: result.public_id,
-        secure_url: result.secure_url,
-      });
+    const { isValid, errors } = validateProductPayload(req.body);
+    if (!isValid) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Validation failed", errors });
     }
-    // Add the uploaded images to the request body
-    req.body.photos = imageArray;
 
-    // Assign the current user to the product
-    req.body.user = req.user;
+    const uploadedPhotos = await uploadFiles(photos, "products");
+    let uploadedArPhotos = [];
+    if (arPhotos.length > 0) {
+      uploadedArPhotos = await uploadFiles(arPhotos, "ar_products");
+    }
 
-    // Trim and validate ObjectId fields
-    const category = req.body.category ? req.body.category.trim() : null;
-    const subCategory = req.body.subCategory
-      ? req.body.subCategory.trim()
-      : null;
-    const blog = req.body.blog ? req.body.blog.trim() : null;
+    const payload = {
+      ...req.body,
+      photos: uploadedPhotos,
+      arPhotos: uploadedArPhotos,
+      user: req.user?._id,
+      category: req.body.category ? String(req.body.category).trim() : undefined,
+      subCategory: req.body.subCategory
+        ? String(req.body.subCategory).trim()
+        : undefined,
+      blog: req.body.blog ? String(req.body.blog).trim() : undefined,
+    };
 
-    // if (category && !mongoose.Types.ObjectId.isValid(category)) {
-    //   return next(new Error("Invalid category ID format", 400));
-    // }
-
-    // if (subCategory && !mongoose.Types.ObjectId.isValid(subCategory)) {
-    //   return next(new Error("Invalid subCategory ID format", 400));
-    // }
-
-    // if (blog && !mongoose.Types.ObjectId.isValid(blog)) {
-    //   return next(new Error("Invalid blog ID format", 400));
-    // }
-
-    // req.body.category = category;
-    // req.body.subCategory = subCategory; // req.body.blog = blog;
-
-    // Create the product in the database
-    const product = await AquaProduct.create(req.body);
-
-    // Send response
-    res.status(200).json({
-      success: true,
-      product,
-    });
+    const product = await AquaProduct.create(payload);
+    return res.status(201).json({ success: true, data: product });
   } catch (error) {
-    console.error("Error creating product:", error);
-    res.status(500).json({
-      success: false,
-      message: "Product creation failed",
-      error: error.message || error,
-    });
+    if (error?.statusCode) {
+      return res
+        .status(error.statusCode)
+        .json({ success: false, message: error.message });
+    }
+    return handleControllerError(error, res, "Failed to create product");
   }
 };
 
 const updateProduct = async (req, res) => {
   try {
-    const { id } = req?.params;
-    const files = req?.files;
-
-    let newImageArray = [];
-    let newArImageArray = [];
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
 
     const product = await AquaProduct.findById(id);
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    console.log("Existing product:", product);
 
-    // Handle photo uploads
-    if (files?.photos?.length > 0) {
-      for (const file of files.photos) {
-        const result = await streamUpload(file.buffer, "products");
-        newImageArray.push({
-          id: result.public_id,
-          secure_url: result.secure_url,
-        });
+    const { isValid, errors } = validateProductPayload(req.body, { partial: true });
+    if (!isValid) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Validation failed", errors });
+    }
+
+    const files = req.files || {};
+    const newPhotos = files.photos || [];
+    const newArPhotos = files.ar || [];
+
+    if (newPhotos.length > 10) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A maximum of 10 product images is allowed" });
+    }
+    if (newArPhotos.length > 5) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A maximum of 5 AR files is allowed" });
+    }
+
+    let photosPayload = product.photos;
+    let arPayload = product.arPhotos;
+
+    if (newPhotos.length > 0) {
+      photosPayload = await uploadFiles(newPhotos, "products");
+      if (product.photos?.length) {
+        try {
+          await deleteMedia(product.photos);
+        } catch (cleanupError) {
+          console.error("Failed to remove old product photos:", cleanupError);
+        }
       }
-    } else {
-      newImageArray = product.photos; // Retain existing photos if none are uploaded
     }
-
-    // Handle AR image uploads
-    if (files?.ar?.length > 0) {
-      for (const file of files.ar) {
-        const result = await streamUpload(file.buffer, "ar_products");
-        newArImageArray.push({
-          id: result.public_id,
-          secure_url: result.secure_url,
-        });
+    if (newArPhotos.length > 0) {
+      arPayload = await uploadFiles(newArPhotos, "ar_products");
+      if (product.arPhotos?.length) {
+        try {
+          await deleteMedia(product.arPhotos);
+        } catch (cleanupError) {
+          console.error("Failed to remove old AR photos:", cleanupError);
+        }
       }
-    } else {
-      newArImageArray = product.arPhotos; // Retain existing AR photos if none are uploaded
     }
 
-    // Delete old photos if new ones are uploaded
-    if (
-      newImageArray.length > 0 &&
-      product.photos?.length > 0 &&
-      files?.photos?.length > 0
-    ) {
-      console.log("Deleting old photos:", product.photos);
-      await deleteMedia(product.photos);
-    }
+    const updatePayload = {
+      ...req.body,
+      photos: photosPayload,
+      arPhotos: arPayload,
+    };
+    delete updatePayload._id;
+    delete updatePayload.reviews;
+    delete updatePayload.ratings;
+    delete updatePayload.numberOfReviews;
 
-    if (
-      newArImageArray.length > 0 &&
-      product.arPhotos?.length > 0 &&
-      files?.ar?.length > 0
-    ) {
-      console.log("Deleting old AR photos:", product.arPhotos);
-      await deleteMedia(product.arPhotos);
-    }
-
-    // Update the request body with new or retained images
-    req.body.photos = newImageArray;
-    req.body.arPhotos = newArImageArray;
-
-    console.log("Updated photos:", req.body.photos);
-    console.log("Updated AR photos:", req.body.arPhotos);
-
-    // Proceed with updating the product in the database
-    const updatedProduct = await AquaProduct.findByIdAndUpdate(id, req.body, {
+    const updated = await AquaProduct.findByIdAndUpdate(id, updatePayload, {
       new: true,
+      runValidators: true,
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Product updated successfully",
-      data: updatedProduct,
-    });
+    return res
+      .status(200)
+      .json({ success: true, message: "Product updated successfully", data: updated });
   } catch (error) {
-    console.error("Error updating product:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    if (error?.statusCode) {
+      return res
+        .status(error.statusCode)
+        .json({ success: false, message: error.message });
+    }
+    return handleControllerError(error, res, "Failed to update product");
   }
 };
 
 const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("Deleting product with ID:", id);
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
+
     const product = await AquaProduct.findById(id);
-
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
-    // Delete photos from Cloudinary
-    if (product.photos?.length > 0) {
-      await deleteMedia(product.photos);
-    }
-
-    // Delete AR photos from Cloudinary
-    if (product.arPhotos?.length > 0) {
-      await deleteMedia(product.arPhotos);
+    try {
+      if (product.photos?.length) await deleteMedia(product.photos);
+      if (product.arPhotos?.length) await deleteMedia(product.arPhotos);
+    } catch (cleanupError) {
+      console.error("Failed to remove product media:", cleanupError);
     }
 
     await AquaProduct.findByIdAndDelete(id);
 
-    res.status(200).json({
-      success: true,
-      message: "Product deleted successfully",
-    });
+    return res
+      .status(200)
+      .json({ success: true, message: "Product deleted successfully" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return handleControllerError(error, res, "Failed to delete product");
   }
 };
 
@@ -236,7 +344,7 @@ const getAllProducts = async (req, res) => {
       products = products.map((product) => ({
         ...product._doc,
         photos: (product.photos || []).map((photo) => ({
-          ...photo._doc, // important: keep id, secure_url, _id
+          ...photo._doc,
           delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(photo.secure_url),
         })),
         arPhotos: (product.arPhotos || []).map((photo) => ({
@@ -246,94 +354,116 @@ const getAllProducts = async (req, res) => {
       }));
     }
 
-    return res.status(200).json({ status: true, data: products });
+    return res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
-    console.error("Error getting products:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to fetch products");
   }
 };
 
 const getLimitedProducts = async (req, res) => {
-  const { count } = req.params; // Extracting the 'count' parameter from route params
-  const limit = parseInt(count); // Convert the count to a number
-
-  if (isNaN(limit) || limit <= 0) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Invalid product count specified." });
-  }
-
   try {
+    const { count } = req.params;
+    const limit = parseInt(count, 10);
+
+    if (Number.isNaN(limit) || limit <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Count must be a positive integer" });
+    }
+
     const products = await AquaProduct.find({}).limit(limit);
-    return res.status(200).json({ status: true, data: products });
+    return res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
-    console.error("Error getting limited products:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to fetch products");
   }
 };
+
 const getProduct = async (req, res) => {
-  const { id } = req.params;
   try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
+
     const product = await AquaProduct.findById(id).populate("category");
     if (!product) {
       return res
         .status(404)
-        .json({ success: false, message: "product not found" });
+        .json({ success: false, message: "Product not found" });
     }
-    let relatedProducts = await AquaProduct.find({
-      category: product.category,
-    });
-    relatedProducts = relatedProducts.filter((p) => p.id !== product.id);
+
+    let relatedProducts = await AquaProduct.find({ category: product.category });
+    relatedProducts = relatedProducts.filter(
+      (p) => String(p._id) !== String(product._id),
+    );
 
     return res
       .status(200)
       .json({ success: true, data: product, related: relatedProducts });
   } catch (error) {
-    console.error("Error getting product:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to fetch product");
   }
 };
 
 const getProductByTitle = async (req, res) => {
-  const { title } = req.params;
   try {
+    const { title } = req.params;
+    if (!title || !title.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Product title is required" });
+    }
+
     const product = await AquaProduct.findOne({ title }).populate("category");
     if (!product) {
       return res
         .status(404)
-        .json({ success: false, message: "product not found" });
+        .json({ success: false, message: "Product not found" });
     }
-    let relatedProducts = await AquaProduct.find({
-      category: product.category,
-    });
-    relatedProducts = relatedProducts.filter((p) => p.id !== product.id);
+
+    let relatedProducts = await AquaProduct.find({ category: product.category });
+    relatedProducts = relatedProducts.filter(
+      (p) => String(p._id) !== String(product._id),
+    );
 
     return res
       .status(200)
       .json({ success: true, data: product, related: relatedProducts });
   } catch (error) {
-    console.error("Error getting product:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to fetch product");
   }
 };
 
 const getProductByQuery = async (req, res) => {
-  const { searchField, value } = req.query; // Dynamically pass the field and value via query parameters
-
-  if (!searchField || !value) {
-    return res.status(400).json({
-      success: false,
-      message: "Missing search field or value",
-    });
-  }
-
   try {
-    // Dynamically build the query object
-    const query = {};
-    query[searchField] = value;
+    const { searchField, value } = req.query;
 
-    // Search for the product based on the dynamic query
-    const product = await AquaProduct.findOne(query).populate("category");
+    if (!searchField || !value) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Both searchField and value are required" });
+    }
+
+    const allowedFields = [
+      "title",
+      "slug",
+      "seoSlug",
+      "code",
+      "ShortName",
+      "brand",
+    ];
+    if (!allowedFields.includes(searchField)) {
+      return res.status(400).json({
+        success: false,
+        message: `searchField must be one of: ${allowedFields.join(", ")}`,
+      });
+    }
+
+    const product = await AquaProduct.findOne({ [searchField]: value }).populate(
+      "category",
+    );
 
     if (!product) {
       return res
@@ -341,40 +471,58 @@ const getProductByQuery = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    // Fetch related products within the same category, excluding the current product
-    let relatedProducts = await AquaProduct.find({
-      category: product.category,
-    });
-
-    relatedProducts = relatedProducts.filter((p) => p.id !== product.id);
+    let relatedProducts = await AquaProduct.find({ category: product.category });
+    relatedProducts = relatedProducts.filter(
+      (p) => String(p._id) !== String(product._id),
+    );
 
     return res
       .status(200)
       .json({ success: true, data: product, related: relatedProducts });
   } catch (error) {
-    console.error("Error getting product:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to fetch product");
   }
 };
+
+// ─────────────────────────────── Reviews ─────────────────────────────────
 
 const addRatingsComments = async (req, res) => {
   try {
     const { id } = req.params;
     const { rating, comment } = req.body;
 
-    if (!rating || !comment) {
-      return res.status(400).json({
-        success: false,
-        message: "Rating and comment are required",
-      });
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
+    if (rating === undefined || rating === null || rating === "") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Rating is required" });
+    }
+    if (!comment || typeof comment !== "string" || !comment.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Comment is required" });
+    }
+    if (comment.length > 1000) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Comment must not exceed 1000 characters" });
     }
 
     const parsedRating = Number(rating);
-    if (parsedRating < 1 || parsedRating > 5) {
-      return res.status(400).json({
-        success: false,
-        message: "Rating must be between 1 and 5",
-      });
+    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Rating must be a number between 1 and 5" });
+    }
+
+    if (!req.user?._id) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
     }
 
     const product = await AquaProduct.findById(id);
@@ -384,10 +532,13 @@ const addRatingsComments = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    // One review per user — update if exists, else push new
     const existingIndex = product.reviews.findIndex(
       (r) => r.user.toString() === req.user._id.toString(),
     );
+
+    const reviewerName = req.user.firstName
+      ? `${req.user.firstName} ${req.user.lastName || ""}`.trim()
+      : req.user.name || "Anonymous";
 
     if (existingIndex !== -1) {
       product.reviews[existingIndex].rating = parsedRating;
@@ -396,9 +547,7 @@ const addRatingsComments = async (req, res) => {
     } else {
       product.reviews.push({
         user: req.user._id,
-        name: req.user.firstName
-          ? `${req.user.firstName} ${req.user.lastName || ""}`.trim()
-          : req.user.name || "Anonymous",
+        name: reviewerName,
         rating: parsedRating,
         comment,
         createdAt: new Date(),
@@ -425,14 +574,18 @@ const addRatingsComments = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error adding review:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to save review");
   }
 };
 
 const getProductReviews = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
 
     const product = await AquaProduct.findById(id)
       .select("title ratings numberOfReviews reviews")
@@ -477,8 +630,7 @@ const getProductReviews = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching reviews:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to fetch product reviews");
   }
 };
 
@@ -487,40 +639,54 @@ const updateRatingsComments = async (req, res) => {
     const { id } = req.params;
     const { rating, comment } = req.body;
 
-    if (!rating || !comment) {
-      return res.status(400).json({
-        success: false,
-        message: "Rating and comment are required",
-      });
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
+    if (rating === undefined || rating === null || rating === "") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Rating is required" });
+    }
+    if (!comment || typeof comment !== "string" || !comment.trim()) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Comment is required" });
+    }
+    if (comment.length > 1000) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Comment must not exceed 1000 characters" });
     }
 
     const parsedRating = Number(rating);
+    if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Rating must be a number between 1 and 5" });
+    }
 
-    if (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
-      return res.status(400).json({
-        success: false,
-        message: "Rating must be between 1 and 5",
-      });
+    if (!req.user?._id) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
     }
 
     const product = await AquaProduct.findById(id);
-
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
     const existingReview = product.reviews.find(
       (r) => r.user.toString() === req.user._id.toString(),
     );
-
     if (!existingReview) {
-      return res.status(404).json({
-        success: false,
-        message: "Review not found for this user",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "You have not reviewed this product yet" });
     }
 
     existingReview.rating = parsedRating;
@@ -547,23 +713,34 @@ const updateRatingsComments = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error updating review:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return handleControllerError(error, res, "Failed to update review");
   }
 };
 
 const deleteReview = async (req, res) => {
   try {
-    const { id } = req.params; // product id
-    const { reviewId } = req.query; // review subdoc _id
+    const { id } = req.params;
+    const { reviewId } = req.query;
 
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product id" });
+    }
     if (!reviewId) {
       return res
         .status(400)
-        .json({ success: false, message: "reviewId query param is required" });
+        .json({ success: false, message: "reviewId query parameter is required" });
+    }
+    if (!isValidObjectId(reviewId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid reviewId" });
+    }
+    if (!req.user?._id) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
     }
 
     const product = await AquaProduct.findById(id);
@@ -576,7 +753,6 @@ const deleteReview = async (req, res) => {
     const reviewIndex = product.reviews.findIndex(
       (r) => r._id.toString() === reviewId,
     );
-
     if (reviewIndex === -1) {
       return res
         .status(404)
@@ -585,12 +761,12 @@ const deleteReview = async (req, res) => {
 
     const review = product.reviews[reviewIndex];
     const isOwner = review.user.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === "admin";
+    const isAdmin = Number(req.user.role) === ADMIN_ROLE;
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to delete this review",
+        message: "You are not allowed to delete this review",
       });
     }
 
@@ -613,8 +789,7 @@ const deleteReview = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error deleting review:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return handleControllerError(error, res, "Failed to delete review");
   }
 };
 
@@ -632,4 +807,5 @@ const ProductOperations = {
   deleteReview,
   updateRatingsComments,
 };
+
 export default ProductOperations;
