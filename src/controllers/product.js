@@ -48,10 +48,10 @@ const handleControllerError = (
   });
 };
 
-const streamUpload = (buffer, folder = "products") =>
+const streamUpload = (buffer, folder = "products", resourceType = "auto") =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.v2.uploader.upload_stream(
-      { folder },
+      { folder, resource_type: resourceType },
       (error, result) => {
         if (result) resolve(result);
         else reject(error);
@@ -63,11 +63,11 @@ const streamUpload = (buffer, folder = "products") =>
 const deleteMedia = async (mediaArray = []) => {
   for (const media of mediaArray) {
     if (!media?.id) continue;
-    await cloudinary.v2.uploader.destroy(media.id);
+    await cloudinary.v2.uploader.destroy(media.id, { resource_type: "auto" });
   }
 };
 
-const uploadFiles = async (files = [], folder) => {
+const uploadFiles = async (files = [], folder, resourceType = "auto") => {
   const uploaded = [];
   for (const file of files) {
     if (!file?.buffer) {
@@ -76,8 +76,12 @@ const uploadFiles = async (files = [], folder) => {
       throw err;
     }
     try {
-      const result = await streamUpload(file.buffer, folder);
-      uploaded.push({ id: result.public_id, secure_url: result.secure_url });
+      const result = await streamUpload(file.buffer, folder, resourceType);
+      uploaded.push({
+        id: result.public_id,
+        secure_url: result.secure_url,
+        delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(result.secure_url),
+      });
     } catch (cloudinaryError) {
       const err = new Error(
         `Image upload failed: ${cloudinaryError?.message || "Cloudinary error"}`,
@@ -87,6 +91,56 @@ const uploadFiles = async (files = [], folder) => {
     }
   }
   return uploaded;
+};
+
+const parseBoolean = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return value;
+
+  if (["true", "1", "yes", "on"].includes(value.toLowerCase())) return true;
+  if (["false", "0", "no", "off"].includes(value.toLowerCase())) return false;
+
+  return value;
+};
+
+const cleanObjectIdField = (value) => {
+  if (value === undefined || value === null || value === "") return undefined;
+  return String(value).trim();
+};
+
+const buildProductPayload = (body, extraPayload = {}) => {
+  const payload = {
+    ...body,
+    ...extraPayload,
+  };
+
+  [
+    "price",
+    "stock",
+    "discountPricePercentage",
+    "discountPrice",
+    "dpPrice",
+  ].forEach((field) => {
+    if (payload[field] !== undefined && payload[field] !== null && payload[field] !== "") {
+      payload[field] = Number(payload[field]);
+    }
+  });
+
+  if (payload.discountPriceStatus !== undefined) {
+    payload.discountPriceStatus = parseBoolean(payload.discountPriceStatus);
+  }
+
+  payload.category = cleanObjectIdField(payload.category);
+  payload.subCategory = cleanObjectIdField(payload.subCategory);
+  payload.blog = cleanObjectIdField(payload.blog);
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined || payload[key] === "") {
+      delete payload[key];
+    }
+  });
+
+  return payload;
 };
 
 const validateProductPayload = (body, { partial = false } = {}) => {
@@ -179,23 +233,17 @@ const CreateProduct = async (req, res) => {
         .json({ success: false, message: "Validation failed", errors });
     }
 
-    const uploadedPhotos = await uploadFiles(photos, "products");
+    const uploadedPhotos = await uploadFiles(photos, "products", "image");
     let uploadedArPhotos = [];
     if (arPhotos.length > 0) {
-      uploadedArPhotos = await uploadFiles(arPhotos, "ar_products");
+      uploadedArPhotos = await uploadFiles(arPhotos, "ar_products", "auto");
     }
 
-    const payload = {
-      ...req.body,
+    const payload = buildProductPayload(req.body, {
       photos: uploadedPhotos,
       arPhotos: uploadedArPhotos,
       user: req.user?._id,
-      category: req.body.category ? String(req.body.category).trim() : undefined,
-      subCategory: req.body.subCategory
-        ? String(req.body.subCategory).trim()
-        : undefined,
-      blog: req.body.blog ? String(req.body.blog).trim() : undefined,
-    };
+    });
 
     const product = await AquaProduct.create(payload);
     return res.status(201).json({ success: true, data: product });
@@ -251,7 +299,7 @@ const updateProduct = async (req, res) => {
     let arPayload = product.arPhotos;
 
     if (newPhotos.length > 0) {
-      photosPayload = await uploadFiles(newPhotos, "products");
+      photosPayload = await uploadFiles(newPhotos, "products", "image");
       if (product.photos?.length) {
         try {
           await deleteMedia(product.photos);
@@ -261,7 +309,7 @@ const updateProduct = async (req, res) => {
       }
     }
     if (newArPhotos.length > 0) {
-      arPayload = await uploadFiles(newArPhotos, "ar_products");
+      arPayload = await uploadFiles(newArPhotos, "ar_products", "auto");
       if (product.arPhotos?.length) {
         try {
           await deleteMedia(product.arPhotos);
@@ -271,11 +319,10 @@ const updateProduct = async (req, res) => {
       }
     }
 
-    const updatePayload = {
-      ...req.body,
+    const updatePayload = buildProductPayload(req.body, {
       photos: photosPayload,
       arPhotos: arPayload,
-    };
+    });
     delete updatePayload._id;
     delete updatePayload.reviews;
     delete updatePayload.ratings;
