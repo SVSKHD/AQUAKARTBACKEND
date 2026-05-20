@@ -60,6 +60,27 @@ const streamUpload = (buffer, folder = "products", resourceType = "auto") =>
     stream.end(buffer);
   });
 
+const uploadDataUrl = async (dataUrl, folder = "products", resourceType = "image") => {
+  try {
+    const result = await cloudinary.v2.uploader.upload(dataUrl, {
+      folder,
+      resource_type: resourceType,
+    });
+
+    return {
+      id: result.public_id,
+      secure_url: result.secure_url,
+      delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(result.secure_url),
+    };
+  } catch (cloudinaryError) {
+    const err = new Error(
+      `Image upload failed: ${cloudinaryError?.message || "Cloudinary error"}`,
+    );
+    err.statusCode = 502;
+    throw err;
+  }
+};
+
 const deleteMedia = async (mediaArray = []) => {
   for (const media of mediaArray) {
     if (!media?.id) continue;
@@ -91,6 +112,65 @@ const uploadFiles = async (files = [], folder, resourceType = "auto") => {
     }
   }
   return uploaded;
+};
+
+const toArray = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [value];
+    }
+  }
+
+  return [value];
+};
+
+const isDataUrl = (value) =>
+  typeof value === "string" && /^data:[\w/+.-]+;base64,/.test(value);
+
+const normalizeBodyMedia = async (mediaInput, folder, resourceType = "image") => {
+  const mediaItems = toArray(mediaInput);
+  const normalized = [];
+
+  for (const item of mediaItems) {
+    if (!item) continue;
+
+    if (isDataUrl(item)) {
+      normalized.push(await uploadDataUrl(item, folder, resourceType));
+      continue;
+    }
+
+    if (typeof item === "string") {
+      normalized.push({
+        id: `external_${Date.now()}_${normalized.length}`,
+        secure_url: item,
+        delivery_url: CloudinaryUtils.cloudinaryDeliveryUrl(item),
+      });
+      continue;
+    }
+
+    const url = item.secure_url || item.url || item.src || item.dataUrl || item.base64;
+
+    if (isDataUrl(url)) {
+      normalized.push(await uploadDataUrl(url, folder, resourceType));
+      continue;
+    }
+
+    if (url) {
+      normalized.push({
+        id: item.id || item.public_id || `external_${Date.now()}_${normalized.length}`,
+        secure_url: url,
+        delivery_url: item.delivery_url || CloudinaryUtils.cloudinaryDeliveryUrl(url),
+      });
+    }
+  }
+
+  return normalized;
 };
 
 const parseBoolean = (value) => {
@@ -209,18 +289,23 @@ const CreateProduct = async (req, res) => {
   try {
     const photos = req.files?.photos || [];
     const arPhotos = req.files?.ar || [];
+    const bodyPhotos = await normalizeBodyMedia(req.body.photos, "products", "image");
+    const bodyArPhotos = await normalizeBodyMedia(req.body.arPhotos || req.body.ar, "ar_products", "auto");
 
-    if (photos.length === 0) {
+    const totalPhotos = photos.length + bodyPhotos.length;
+    const totalArPhotos = arPhotos.length + bodyArPhotos.length;
+
+    if (totalPhotos === 0) {
       return res
         .status(400)
         .json({ success: false, message: "At least one product image is required" });
     }
-    if (photos.length > 10) {
+    if (totalPhotos > 10) {
       return res
         .status(400)
         .json({ success: false, message: "A maximum of 10 product images is allowed" });
     }
-    if (arPhotos.length > 5) {
+    if (totalArPhotos > 5) {
       return res
         .status(400)
         .json({ success: false, message: "A maximum of 5 AR files is allowed" });
@@ -233,11 +318,14 @@ const CreateProduct = async (req, res) => {
         .json({ success: false, message: "Validation failed", errors });
     }
 
-    const uploadedPhotos = await uploadFiles(photos, "products", "image");
-    let uploadedArPhotos = [];
-    if (arPhotos.length > 0) {
-      uploadedArPhotos = await uploadFiles(arPhotos, "ar_products", "auto");
-    }
+    const uploadedPhotos = [
+      ...bodyPhotos,
+      ...(await uploadFiles(photos, "products", "image")),
+    ];
+    const uploadedArPhotos = [
+      ...bodyArPhotos,
+      ...(await uploadFiles(arPhotos, "ar_products", "auto")),
+    ];
 
     const payload = buildProductPayload(req.body, {
       photos: uploadedPhotos,
@@ -283,13 +371,18 @@ const updateProduct = async (req, res) => {
     const files = req.files || {};
     const newPhotos = files.photos || [];
     const newArPhotos = files.ar || [];
+    const bodyPhotos = await normalizeBodyMedia(req.body.photos, "products", "image");
+    const bodyArPhotos = await normalizeBodyMedia(req.body.arPhotos || req.body.ar, "ar_products", "auto");
 
-    if (newPhotos.length > 10) {
+    const totalNewPhotos = newPhotos.length + bodyPhotos.length;
+    const totalNewArPhotos = newArPhotos.length + bodyArPhotos.length;
+
+    if (totalNewPhotos > 10) {
       return res
         .status(400)
         .json({ success: false, message: "A maximum of 10 product images is allowed" });
     }
-    if (newArPhotos.length > 5) {
+    if (totalNewArPhotos > 5) {
       return res
         .status(400)
         .json({ success: false, message: "A maximum of 5 AR files is allowed" });
@@ -298,8 +391,11 @@ const updateProduct = async (req, res) => {
     let photosPayload = product.photos;
     let arPayload = product.arPhotos;
 
-    if (newPhotos.length > 0) {
-      photosPayload = await uploadFiles(newPhotos, "products", "image");
+    if (totalNewPhotos > 0) {
+      photosPayload = [
+        ...bodyPhotos,
+        ...(await uploadFiles(newPhotos, "products", "image")),
+      ];
       if (product.photos?.length) {
         try {
           await deleteMedia(product.photos);
@@ -308,8 +404,11 @@ const updateProduct = async (req, res) => {
         }
       }
     }
-    if (newArPhotos.length > 0) {
-      arPayload = await uploadFiles(newArPhotos, "ar_products", "auto");
+    if (totalNewArPhotos > 0) {
+      arPayload = [
+        ...bodyArPhotos,
+        ...(await uploadFiles(newArPhotos, "ar_products", "auto")),
+      ];
       if (product.arPhotos?.length) {
         try {
           await deleteMedia(product.arPhotos);
