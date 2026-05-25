@@ -52,7 +52,7 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
   const selectedAddress = user.selectedAddress || {};
 
   const addressParts = [
-    shippingAddress.street || selectedAddress.street,
+    shippingAddress.street || shippingAddress.address || selectedAddress.street,
     shippingAddress.city || selectedAddress.city,
     shippingAddress.state || selectedAddress.state,
     shippingAddress.postalCode || selectedAddress.postalCode,
@@ -61,7 +61,6 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
   const customerAddress =
     addressParts.join(", ") ||
     billingAddress.address ||
-    shippingAddress.address ||
     selectedAddress.address ||
     "";
 
@@ -188,6 +187,80 @@ const buildQuery = async (queryParams = {}) => {
   return query;
 };
 
+const buildEcomOrderUpdatePayload = (payload = {}, existingOrder = {}) => {
+  const updatePayload = {};
+
+  if (payload.deliveryDate !== undefined) {
+    updatePayload.deliveryDate = payload.deliveryDate || null;
+    updatePayload.estimatedDelivery = payload.deliveryDate || null;
+  }
+
+  if (payload.orderStatus) {
+    updatePayload.orderStatus = normalizeOrderStatus(payload.orderStatus);
+  }
+
+  if (payload.paymentStatus) {
+    updatePayload.paymentStatus = normalizePaymentStatus(payload.paymentStatus);
+  }
+
+  if (payload.notes !== undefined) updatePayload.notes = payload.notes;
+  if (payload.deliveryCharge !== undefined) updatePayload.shippingCost = Number(payload.deliveryCharge || 0);
+  if (payload.discount !== undefined) updatePayload.discounts = Number(payload.discount || 0);
+
+  if (payload.customer) {
+    const customer = payload.customer;
+    updatePayload.shippingAddress = {
+      ...(existingOrder.shippingAddress || {}),
+      address: customer.address || existingOrder.shippingAddress?.address || "",
+      street: customer.address || existingOrder.shippingAddress?.street || "",
+      city: customer.city || existingOrder.shippingAddress?.city || "",
+      postalCode: customer.pincode || existingOrder.shippingAddress?.postalCode || "",
+      phone: customer.phone || existingOrder.shippingAddress?.phone || "",
+    };
+    updatePayload.billingAddress = {
+      ...(existingOrder.billingAddress || {}),
+      address: customer.address || existingOrder.billingAddress?.address || "",
+      street: customer.address || existingOrder.billingAddress?.street || "",
+      city: customer.city || existingOrder.billingAddress?.city || "",
+      postalCode: customer.pincode || existingOrder.billingAddress?.postalCode || "",
+      phone: customer.phone || existingOrder.billingAddress?.phone || "",
+    };
+  }
+
+  if (Array.isArray(payload.products)) {
+    updatePayload.items = payload.products.map((product) => ({
+      productId: product.productId || null,
+      name: product.productName || product.name || "Unknown Product",
+      quantity: Number(product.quantity || 1),
+      price: Number(product.unitPrice || product.price || 0),
+    }));
+  }
+
+  const products = updatePayload.items || existingOrder.items || [];
+  const subtotal = products.reduce(
+    (sum, product) => sum + Number(product.price || 0) * Number(product.quantity || 1),
+    0,
+  );
+  const discount = Number(updatePayload.discounts ?? existingOrder.discounts ?? 0);
+  const deliveryCharge = Number(updatePayload.shippingCost ?? existingOrder.shippingCost ?? 0);
+  updatePayload.totalAmount = subtotal - discount + deliveryCharge;
+
+  return updatePayload;
+};
+
+const updateLinkedUserDetails = async (userId, customer = {}) => {
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) return;
+
+  const update = {};
+  if (customer.name) update.name = customer.name;
+  if (customer.phone) update.phone = customer.phone;
+  if (customer.email) update.email = customer.email;
+
+  if (Object.keys(update).length) {
+    await AquaEcomUser.findByIdAndUpdate(userId, update, { new: false });
+  }
+};
+
 const getOrders = async (req, res) => {
   try {
     const page = Math.max(Number(req.query.page || 1), 1);
@@ -271,6 +344,45 @@ const getOrderById = async (req, res) => {
   }
 };
 
+const updateOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: false, message: "Invalid order id" });
+    }
+
+    const existingOrder = await AquaOrder.findById(id).lean();
+    if (!existingOrder) {
+      return res.status(404).json({ status: false, message: "Order not found" });
+    }
+
+    const updatePayload = buildEcomOrderUpdatePayload(req.body, existingOrder);
+    await updateLinkedUserDetails(existingOrder.user, req.body.customer || {});
+
+    const order = await AquaOrder.findByIdAndUpdate(id, updatePayload, {
+      new: true,
+      runValidators: true,
+    })
+      .populate("user items.productId")
+      .lean();
+
+    return res.status(200).json({
+      status: true,
+      success: true,
+      message: "Order updated successfully",
+      data: mapEcomOrderToCRMOrder(order),
+    });
+  } catch (error) {
+    console.error("Full CRM ecommerce order update error:", error);
+    return res.status(500).json({
+      status: false,
+      success: false,
+      message: "Failed to update order",
+      error: error.message,
+    });
+  }
+};
+
 const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -326,6 +438,7 @@ const CRMEcommerceOrderOperations = {
   getTodayOrders,
   getTomorrowOrders,
   getOrderById,
+  updateOrder,
   updateOrderStatus,
 };
 
