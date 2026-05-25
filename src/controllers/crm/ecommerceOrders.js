@@ -45,6 +45,15 @@ const normalizePaymentStatus = (status) => {
   return PAYMENT_STATUS_MAP[key] || status;
 };
 
+const getProductSlug = (product = {}) =>
+  product.slug || product.seoSlug || product.ShortName || product.code || "";
+
+const buildProductLink = (slug) =>
+  slug ? `https://aquakart.co.in/product/${slug}` : "";
+
+const buildInvoiceUrl = (invoiceId) =>
+  invoiceId ? `https://admin.aquakart.co.in/invoice/${invoiceId}` : "";
+
 const mapEcomOrderToCRMOrder = (order = {}) => {
   const user = order.user || {};
   const shippingAddress = order.shippingAddress || {};
@@ -69,6 +78,7 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
         const product = item.productId || {};
         const quantity = Number(item.quantity || 1);
         const unitPrice = Number(item.price || product.price || 0);
+        const productSlug = getProductSlug(product);
         return {
           productId: product._id || item.productId || null,
           productName: item.name || product.title || "Unknown Product",
@@ -76,6 +86,8 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
           unitPrice,
           totalPrice: quantity * unitPrice,
           image: product.photos?.[0]?.secure_url || "",
+          productSlug,
+          productLink: buildProductLink(productSlug),
         };
       })
     : [];
@@ -84,6 +96,7 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
   const discount = Number(order.discounts || 0);
   const deliveryCharge = Number(order.shippingCost || 0);
   const grandTotal = Number(order.totalAmount || subtotal - discount + deliveryCharge);
+  const invoiceId = order.invoiceId || null;
 
   return {
     _id: order._id,
@@ -112,7 +125,11 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
     paymentMethod: order.paymentMethod || order.orderType || "",
     transactionId: order.transactionId || "",
     source: "website",
-    invoiceId: null,
+    invoiceId,
+    invoiceUrl: buildInvoiceUrl(invoiceId),
+    invoiceCreated: Boolean(invoiceId),
+    aquakartOnlineUser: Boolean(order.aquakartOnlineUser),
+    invoiceCreatedAt: order.invoiceCreatedAt || null,
     notes: order.notes || "",
     raw: order,
     createdAt: order.createdAt,
