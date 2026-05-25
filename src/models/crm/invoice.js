@@ -65,6 +65,16 @@ const AquaInvoiceSchema = new mongoose.Schema(
         productSerialNo: {
           type: String,
         },
+        productId: {
+          type: ObjectId,
+          ref: "AquaProduct",
+        },
+        productSlug: {
+          type: String,
+        },
+        productLink: {
+          type: String,
+        },
       },
     ],
     transport: {
@@ -88,6 +98,20 @@ const AquaInvoiceSchema = new mongoose.Schema(
     aquakartInvoice: {
       type: Boolean,
       default: false,
+    },
+    sourceOrderId: {
+      type: ObjectId,
+      ref: "AquaOrder",
+      default: null,
+      index: true,
+    },
+    sourceOrderNo: {
+      type: String,
+    },
+    sourceOrderCollection: {
+      type: String,
+      enum: ["AquaOrder", "AquaCRMOrder", "manual"],
+      default: "manual",
     },
     productId: {
       type: ObjectId,
