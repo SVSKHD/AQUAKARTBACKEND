@@ -16,7 +16,7 @@ const OrderSchema = new mongoose.Schema(
   {
     user: {
       type: ObjectId,
-      ref: "AquaEcomUser", // Assuming you have a User model
+      ref: "AquaEcomUser",
       required: true,
     },
     orderId: { type: String },
@@ -28,8 +28,8 @@ const OrderSchema = new mongoose.Schema(
         "Payment Method Gateway",
         "Payment Method Razorpay",
         "Payment Method",
-      ], // Allowed values
-      required: true, // Making this field required; adjust as necessary
+      ],
+      required: true,
     },
     transactionId: { type: String },
     items: [OrderItemSchema],
@@ -42,11 +42,11 @@ const OrderSchema = new mongoose.Schema(
     },
     paymentGatewayDetails: {
       type: Map,
-      of: mongoose.Schema.Types.Mixed, // Allows for flexible data types within the Map
+      of: mongoose.Schema.Types.Mixed,
     },
     paymentInstrument: {
       type: Map,
-      of: mongoose.Schema.Types.Mixed, // Allows for flexible data types within the Map
+      of: mongoose.Schema.Types.Mixed,
     },
     currency: String,
     billingAddress: {
@@ -104,6 +104,19 @@ const OrderSchema = new mongoose.Schema(
     taxes: Number,
     notes: String,
     gst: Number,
+    invoiceId: {
+      type: ObjectId,
+      ref: "AquaInvoice",
+      default: null,
+    },
+    aquakartOnlineUser: {
+      type: Boolean,
+      default: false,
+    },
+    invoiceCreatedAt: {
+      type: Date,
+      default: null,
+    },
     paymentGatewayResponse: {
       type: Map,
       of: String,
@@ -114,7 +127,7 @@ const OrderSchema = new mongoose.Schema(
     },
     offerApplied: {
       type: Boolean,
-      default: false, // Assuming default value is false
+      default: false,
     },
     offerAppliedDetails: {
       code: { type: String },
