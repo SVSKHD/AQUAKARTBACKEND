@@ -13,5 +13,6 @@ router.get("/today", userAuth.checkAdmin, CRMEcommerceOrderOperations.getTodayOr
 router.get("/tomorrow", userAuth.checkAdmin, CRMEcommerceOrderOperations.getTomorrowOrders);
 router.get("/:id", userAuth.checkAdmin, CRMEcommerceOrderOperations.getOrderById);
 router.patch("/:id/status", userAuth.checkAdmin, CRMEcommerceOrderOperations.updateOrderStatus);
+router.put("/:id/status", userAuth.checkAdmin, CRMEcommerceOrderOperations.updateOrderStatus);
 
 export default router;
