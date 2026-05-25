@@ -27,6 +27,7 @@ import AquaStock from "./src/routes/crm/stock.js";
 import AdminCustomerRoutes from "./src/routes/crm/customer.js";
 import AdminQuotationRoutes from "./src/routes/crm/quotation.js";
 import CRMOrderRoutes from "./src/routes/crm/order.js";
+import CRMEcommerceOrderRoutes from "./src/routes/crm/ecommerceOrders.js";
 // methods
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 
@@ -104,6 +105,7 @@ app.use("/v1/crm/user", AdminUserRoutes);
 app.use("/v1/crm/customers", AdminCustomerRoutes);
 app.use("/v1/crm/quotations", AdminQuotationRoutes);
 app.use("/v1/crm/orders", CRMOrderRoutes);
+app.use("/v1/crm/ecom-orders", CRMEcommerceOrderRoutes);
 
 app.post(
   "/v1/notify/send-whatsappp",
