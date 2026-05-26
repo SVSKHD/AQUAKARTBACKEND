@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
 
-const mongooseConnect = (url) => {
+const mongooseConnect = (url) =>
   mongoose
     .connect(url)
-    .then(() => {
+    .then((connection) => {
       console.log("Connected to MongoDB");
+      return connection;
     })
     .catch((error) => {
       console.log(error);
+      throw error;
     });
-};
 
 export default mongooseConnect;
