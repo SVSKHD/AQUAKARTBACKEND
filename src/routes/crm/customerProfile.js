@@ -1,5 +1,5 @@
 import express from "express";
-import CustomerProfileOperations from "../../controllers/crm/customerProfile.js";
+import CustomerProfileOperations from "../../controllers/crm/customerProfileSchemaCrud.js";
 import userAuth from "../../middleware/user.js";
 
 const router = express.Router();
