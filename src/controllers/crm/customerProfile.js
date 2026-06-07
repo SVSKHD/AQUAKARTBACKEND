@@ -24,6 +24,13 @@ const normalizePhone = (phone) =>
 
 const normalizeEmail = (email) => String(email || "").toLowerCase().trim();
 
+const toPhoneValue = (phone) => {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return undefined;
+  const asNumber = Number(normalized);
+  return Number.isNaN(asNumber) ? normalized : asNumber;
+};
+
 const compactAddress = (address) => {
   if (!address) return "";
   if (typeof address === "string") return address;
@@ -40,6 +47,13 @@ const invoiceAmount = (invoice) =>
       sum + Number(product.productQuantity || 0) * Number(product.productPrice || 0),
     0,
   );
+
+const sanitizeAddress = (address = {}) => ({
+  street: address.street || "",
+  city: address.city || "",
+  state: address.state || "",
+  postalCode: address.postalCode || "",
+});
 
 const sanitizeUserPayload = (payload = {}) => {
   const blocked = [
@@ -62,6 +76,11 @@ const sanitizeUserPayload = (payload = {}) => {
   const clean = { ...payload };
   blocked.forEach((field) => delete clean[field]);
   if (typeof clean.email === "string") clean.email = normalizeEmail(clean.email);
+  if (clean.phone !== undefined) clean.phone = toPhoneValue(clean.phone);
+  if (clean.gstDetails?.gstEmail) clean.gstDetails.gstEmail = normalizeEmail(clean.gstDetails.gstEmail);
+  if (clean.gstDetails?.gstPhone !== undefined) clean.gstDetails.gstPhone = toPhoneValue(clean.gstDetails.gstPhone);
+  if (Array.isArray(clean.addresses)) clean.addresses = clean.addresses.map(sanitizeAddress);
+  if (clean.selectedAddress) clean.selectedAddress = sanitizeAddress(clean.selectedAddress);
   return clean;
 };
 
@@ -84,10 +103,7 @@ const buildOnlineFilter = (query = {}) => {
   }
 
   if (email) filter.email = normalizeEmail(email);
-  if (phone) {
-    const asNumber = Number(phone);
-    filter.phone = Number.isNaN(asNumber) ? phone : asNumber;
-  }
+  if (phone) filter.phone = toPhoneValue(phone);
   if (role !== undefined && role !== "") {
     const asNumber = Number(role);
     if (!Number.isNaN(asNumber)) filter.role = asNumber;
@@ -116,12 +132,26 @@ const buildInvoiceSearchFilter = (query = {}) => {
   }
 
   if (email) filter["customerDetails.email"] = normalizeEmail(email);
-  if (phone) {
-    const asNumber = Number(normalizePhone(phone));
-    filter["customerDetails.phone"] = Number.isNaN(asNumber) ? phone : asNumber;
-  }
+  if (phone) filter["customerDetails.phone"] = toPhoneValue(phone);
 
   return filter;
+};
+
+const buildOfflineIdentityFilter = (key) => {
+  const normalizedPhone = normalizePhone(key);
+  const normalizedEmail = normalizeEmail(key);
+  const phoneNumber = Number(normalizedPhone);
+  const or = [];
+
+  if (normalizedPhone) {
+    or.push({ "customerDetails.phone": normalizedPhone });
+    if (!Number.isNaN(phoneNumber)) or.push({ "customerDetails.phone": phoneNumber });
+  }
+  if (normalizedEmail && normalizedEmail.includes("@")) {
+    or.push({ "customerDetails.email": normalizedEmail });
+  }
+
+  return or.length ? { $or: or } : null;
 };
 
 const getReviewListForUsers = async (userIds = []) => {
@@ -172,6 +202,15 @@ const getInvoicesForIdentity = async ({ phone, email }) => {
   if (!or.length) return [];
 
   return AquaInvoice.find({ $or: or }).sort({ createdAt: -1 }).lean();
+};
+
+const recalculateProductReviewStats = async (product) => {
+  const reviews = product.reviews || [];
+  product.numberOfReviews = reviews.length;
+  product.ratings = reviews.length
+    ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
+    : 0;
+  await product.save();
 };
 
 const mapOnlineCustomer = ({ customer, orders = [], reviews = [], invoices = [] }) => {
@@ -365,15 +404,11 @@ const listCustomerProfiles = async (req, res) => {
 
     const [onlinePayload, offlinePayload] = await Promise.all([
       new Promise((resolve, reject) => {
-        const fakeRes = {
-          status: () => ({ json: resolve }),
-        };
+        const fakeRes = { status: () => ({ json: resolve }) };
         listOnlineProfiles(req, fakeRes).catch(reject);
       }),
       new Promise((resolve, reject) => {
-        const fakeRes = {
-          status: () => ({ json: resolve }),
-        };
+        const fakeRes = { status: () => ({ json: resolve }) };
         listOfflineProfiles(req, fakeRes).catch(reject);
       }),
     ]);
@@ -395,6 +430,30 @@ const listCustomerProfiles = async (req, res) => {
     });
   } catch (error) {
     console.error("CRM listCustomerProfiles error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const createOnlineProfile = async (req, res) => {
+  try {
+    const payload = sanitizeUserPayload(req.body);
+    if (!payload.email && !payload.phone) {
+      return res.status(400).json({ success: false, message: "Email or phone is required" });
+    }
+
+    payload.role = payload.role ?? 2;
+    payload.userSignedupDate = payload.userSignedupDate || new Date();
+    payload.lastDetailsUpdatedDate = new Date();
+    payload.profileUpdated = new Date();
+
+    const created = await AquaEcomUser.create(payload);
+    const data = await AquaEcomUser.findById(created._id).select("-password").lean();
+    return res.status(201).json({ success: true, data });
+  } catch (error) {
+    console.error("CRM createOnlineProfile error:", error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ success: false, message: "Duplicate email or phone" });
+    }
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -478,6 +537,41 @@ const updateOnlineProfile = async (req, res) => {
   }
 };
 
+const deleteOnlineProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid customer id" });
+    }
+
+    const customer = await AquaEcomUser.findById(id).select("-password");
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found" });
+    }
+
+    const { cascade } = req.query;
+    if (cascade === "reviews") {
+      const products = await AquaProduct.find({ "reviews.user": id });
+      await Promise.all(
+        products.map(async (product) => {
+          product.reviews = product.reviews.filter((review) => String(review.user) !== String(id));
+          await recalculateProductReviewStats(product);
+        }),
+      );
+    }
+
+    await customer.deleteOne();
+    return res.status(200).json({
+      success: true,
+      message: "Online ecommerce customer deleted",
+      cascade: cascade === "reviews" ? "reviews removed" : "orders and reviews preserved",
+    });
+  } catch (error) {
+    console.error("CRM deleteOnlineProfile error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 const updateOnlineAddresses = async (req, res) => {
   try {
     const { id } = req.params;
@@ -487,8 +581,8 @@ const updateOnlineAddresses = async (req, res) => {
 
     const { addresses, selectedAddress } = req.body;
     const update = { lastDetailsUpdatedDate: new Date(), profileUpdated: new Date() };
-    if (Array.isArray(addresses)) update.addresses = addresses;
-    if (selectedAddress !== undefined) update.selectedAddress = selectedAddress;
+    if (Array.isArray(addresses)) update.addresses = addresses.map(sanitizeAddress);
+    if (selectedAddress !== undefined) update.selectedAddress = sanitizeAddress(selectedAddress);
 
     const updated = await AquaEcomUser.findByIdAndUpdate(
       id,
@@ -507,26 +601,211 @@ const updateOnlineAddresses = async (req, res) => {
   }
 };
 
+const createOnlineAddress = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid customer id" });
+    }
+
+    const customer = await AquaEcomUser.findById(id).select("-password");
+    if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+
+    const address = sanitizeAddress(req.body);
+    customer.addresses.push(address);
+    if (req.body.makeSelected || !customer.selectedAddress) customer.selectedAddress = address;
+    customer.lastDetailsUpdatedDate = new Date();
+    customer.profileUpdated = new Date();
+    await customer.save();
+
+    return res.status(201).json({ success: true, data: customer });
+  } catch (error) {
+    console.error("CRM createOnlineAddress error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const updateOnlineAddress = async (req, res) => {
+  try {
+    const { id, addressId } = req.params;
+    if (!isValidObjectId(id) || !isValidObjectId(addressId)) {
+      return res.status(400).json({ success: false, message: "Invalid customer or address id" });
+    }
+
+    const customer = await AquaEcomUser.findById(id).select("-password");
+    if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+
+    const address = customer.addresses.id(addressId);
+    if (!address) return res.status(404).json({ success: false, message: "Address not found" });
+
+    const clean = sanitizeAddress({ ...address.toObject(), ...req.body });
+    address.set(clean);
+    if (req.body.makeSelected) customer.selectedAddress = clean;
+    customer.lastDetailsUpdatedDate = new Date();
+    customer.profileUpdated = new Date();
+    await customer.save();
+
+    return res.status(200).json({ success: true, data: customer });
+  } catch (error) {
+    console.error("CRM updateOnlineAddress error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const deleteOnlineAddress = async (req, res) => {
+  try {
+    const { id, addressId } = req.params;
+    if (!isValidObjectId(id) || !isValidObjectId(addressId)) {
+      return res.status(400).json({ success: false, message: "Invalid customer or address id" });
+    }
+
+    const customer = await AquaEcomUser.findById(id).select("-password");
+    if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+
+    const address = customer.addresses.id(addressId);
+    if (!address) return res.status(404).json({ success: false, message: "Address not found" });
+
+    address.deleteOne();
+    if (String(customer.selectedAddress?._id || "") === String(addressId)) {
+      customer.selectedAddress = customer.addresses[0] || undefined;
+    }
+    customer.lastDetailsUpdatedDate = new Date();
+    customer.profileUpdated = new Date();
+    await customer.save();
+
+    return res.status(200).json({ success: true, data: customer });
+  } catch (error) {
+    console.error("CRM deleteOnlineAddress error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const createOnlineReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productId, rating, comment, name } = req.body;
+    if (!isValidObjectId(id) || !isValidObjectId(productId)) {
+      return res.status(400).json({ success: false, message: "Valid customer id and productId are required" });
+    }
+    if (!rating || !comment) {
+      return res.status(400).json({ success: false, message: "Rating and comment are required" });
+    }
+
+    const [customer, product] = await Promise.all([
+      AquaEcomUser.findById(id).select("firstName lastName email phone"),
+      AquaProduct.findById(productId),
+    ]);
+    if (!customer) return res.status(404).json({ success: false, message: "Customer not found" });
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+
+    product.reviews.push({
+      user: customer._id,
+      name: name || [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "Customer",
+      rating: Number(rating),
+      comment,
+      createdAt: req.body.createdAt || new Date(),
+    });
+    await recalculateProductReviewStats(product);
+
+    return res.status(201).json({ success: true, data: product.reviews[product.reviews.length - 1] });
+  } catch (error) {
+    console.error("CRM createOnlineReview error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const updateOnlineReview = async (req, res) => {
+  try {
+    const { id, reviewId } = req.params;
+    if (!isValidObjectId(id) || !isValidObjectId(reviewId)) {
+      return res.status(400).json({ success: false, message: "Invalid customer or review id" });
+    }
+
+    const product = await AquaProduct.findOne({
+      "reviews._id": reviewId,
+      "reviews.user": id,
+    });
+    if (!product) return res.status(404).json({ success: false, message: "Review not found" });
+
+    const review = product.reviews.id(reviewId);
+    if (req.body.name !== undefined) review.name = req.body.name;
+    if (req.body.rating !== undefined) review.rating = Number(req.body.rating);
+    if (req.body.comment !== undefined) review.comment = req.body.comment;
+    await recalculateProductReviewStats(product);
+
+    return res.status(200).json({ success: true, data: review });
+  } catch (error) {
+    console.error("CRM updateOnlineReview error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const deleteOnlineReview = async (req, res) => {
+  try {
+    const { id, reviewId } = req.params;
+    if (!isValidObjectId(id) || !isValidObjectId(reviewId)) {
+      return res.status(400).json({ success: false, message: "Invalid customer or review id" });
+    }
+
+    const product = await AquaProduct.findOne({
+      "reviews._id": reviewId,
+      "reviews.user": id,
+    });
+    if (!product) return res.status(404).json({ success: false, message: "Review not found" });
+
+    const review = product.reviews.id(reviewId);
+    review.deleteOne();
+    await recalculateProductReviewStats(product);
+
+    return res.status(200).json({ success: true, message: "Review deleted" });
+  } catch (error) {
+    console.error("CRM deleteOnlineReview error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const createOfflineProfile = async (req, res) => {
+  try {
+    const customerDetails = {
+      name: req.body.name || req.body.customerDetails?.name || "Offline invoice customer",
+      phone: toPhoneValue(req.body.phone ?? req.body.customerDetails?.phone),
+      email: normalizeEmail(req.body.email ?? req.body.customerDetails?.email),
+      address: req.body.address || req.body.customerDetails?.address || "",
+    };
+
+    if (!customerDetails.phone && !customerDetails.email) {
+      return res.status(400).json({ success: false, message: "Phone or email is required" });
+    }
+
+    const invoice = await AquaInvoice.create({
+      invoiceNo: req.body.invoiceNo || `CRM-CUSTOMER-${Date.now()}`,
+      date: req.body.date || new Date().toISOString().slice(0, 10),
+      customerDetails,
+      products: req.body.products || [],
+      review: req.body.review || "",
+      paidStatus: req.body.paidStatus || "customer-profile",
+      aquakartOnlineUser: false,
+      aquakartInvoice: true,
+      sourceOrderCollection: "manual",
+      paymentType: req.body.paymentType || "manual",
+    });
+
+    return res.status(201).json({ success: true, data: invoice });
+  } catch (error) {
+    console.error("CRM createOfflineProfile error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 const getOfflineProfile = async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key || "");
-    const normalizedPhone = normalizePhone(key);
-    const normalizedEmail = normalizeEmail(key);
-    const phoneNumber = Number(normalizedPhone);
-    const or = [];
-
-    if (normalizedPhone) {
-      or.push({ "customerDetails.phone": normalizedPhone });
-      if (!Number.isNaN(phoneNumber)) or.push({ "customerDetails.phone": phoneNumber });
-    }
-    if (normalizedEmail && normalizedEmail.includes("@")) {
-      or.push({ "customerDetails.email": normalizedEmail });
-    }
-    if (!or.length) {
+    const filter = buildOfflineIdentityFilter(key);
+    if (!filter) {
       return res.status(400).json({ success: false, message: "Phone or email key is required" });
     }
 
-    const invoices = await AquaInvoice.find({ $or: or }).sort({ createdAt: -1 }).lean();
+    const invoices = await AquaInvoice.find(filter).sort({ createdAt: -1 }).lean();
     if (!invoices.length) {
       return res.status(404).json({ success: false, message: "Offline customer not found" });
     }
@@ -582,19 +861,8 @@ const getOfflineProfile = async (req, res) => {
 const updateOfflineProfile = async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key || "");
-    const normalizedPhone = normalizePhone(key);
-    const normalizedEmail = normalizeEmail(key);
-    const phoneNumber = Number(normalizedPhone);
-    const or = [];
-
-    if (normalizedPhone) {
-      or.push({ "customerDetails.phone": normalizedPhone });
-      if (!Number.isNaN(phoneNumber)) or.push({ "customerDetails.phone": phoneNumber });
-    }
-    if (normalizedEmail && normalizedEmail.includes("@")) {
-      or.push({ "customerDetails.email": normalizedEmail });
-    }
-    if (!or.length) {
+    const filter = buildOfflineIdentityFilter(key);
+    if (!filter) {
       return res.status(400).json({ success: false, message: "Phone or email key is required" });
     }
 
@@ -610,17 +878,14 @@ const updateOfflineProfile = async (req, res) => {
       customerDetails["customerDetails.email"] = normalizeEmail(customerDetails["customerDetails.email"]);
     }
     if (customerDetails["customerDetails.phone"]) {
-      const asNumber = Number(normalizePhone(customerDetails["customerDetails.phone"]));
-      customerDetails["customerDetails.phone"] = Number.isNaN(asNumber)
-        ? customerDetails["customerDetails.phone"]
-        : asNumber;
+      customerDetails["customerDetails.phone"] = toPhoneValue(customerDetails["customerDetails.phone"]);
     }
 
     if (!Object.keys(customerDetails).length) {
       return res.status(400).json({ success: false, message: "No editable fields supplied" });
     }
 
-    const result = await AquaInvoice.updateMany({ $or: or }, { $set: customerDetails });
+    const result = await AquaInvoice.updateMany(filter, { $set: customerDetails });
     return res.status(200).json({
       success: true,
       message: "Offline invoice customer updated",
@@ -633,11 +898,124 @@ const updateOfflineProfile = async (req, res) => {
   }
 };
 
+const deleteOfflineProfile = async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key || "");
+    const filter = buildOfflineIdentityFilter(key);
+    if (!filter) {
+      return res.status(400).json({ success: false, message: "Phone or email key is required" });
+    }
+
+    if (req.query.confirm !== "true") {
+      return res.status(400).json({
+        success: false,
+        message: "Deleting an offline customer removes all matching invoices. Pass ?confirm=true to continue.",
+      });
+    }
+
+    const result = await AquaInvoice.deleteMany(filter);
+    return res.status(200).json({
+      success: true,
+      message: "Offline invoice customer and matching invoices deleted",
+      deleted: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("CRM deleteOfflineProfile error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const createOfflineReview = async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key || "");
+    const filter = buildOfflineIdentityFilter(key);
+    const { invoiceId, review } = req.body;
+    if (!filter) return res.status(400).json({ success: false, message: "Phone or email key is required" });
+    if (!isValidObjectId(invoiceId)) {
+      return res.status(400).json({ success: false, message: "Valid invoiceId is required" });
+    }
+    if (!review) return res.status(400).json({ success: false, message: "Review is required" });
+
+    const updated = await AquaInvoice.findOneAndUpdate(
+      { _id: invoiceId, ...filter },
+      { $set: { review } },
+      { new: true, runValidators: true },
+    );
+    if (!updated) return res.status(404).json({ success: false, message: "Invoice not found" });
+    return res.status(201).json({ success: true, data: updated });
+  } catch (error) {
+    console.error("CRM createOfflineReview error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const updateOfflineReview = async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key || "");
+    const filter = buildOfflineIdentityFilter(key);
+    const { invoiceId } = req.params;
+    if (!filter) return res.status(400).json({ success: false, message: "Phone or email key is required" });
+    if (!isValidObjectId(invoiceId)) {
+      return res.status(400).json({ success: false, message: "Valid invoice id is required" });
+    }
+    if (req.body.review === undefined) {
+      return res.status(400).json({ success: false, message: "Review is required" });
+    }
+
+    const updated = await AquaInvoice.findOneAndUpdate(
+      { _id: invoiceId, ...filter },
+      { $set: { review: req.body.review } },
+      { new: true, runValidators: true },
+    );
+    if (!updated) return res.status(404).json({ success: false, message: "Invoice not found" });
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error("CRM updateOfflineReview error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const deleteOfflineReview = async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key || "");
+    const filter = buildOfflineIdentityFilter(key);
+    const { invoiceId } = req.params;
+    if (!filter) return res.status(400).json({ success: false, message: "Phone or email key is required" });
+    if (!isValidObjectId(invoiceId)) {
+      return res.status(400).json({ success: false, message: "Valid invoice id is required" });
+    }
+
+    const updated = await AquaInvoice.findOneAndUpdate(
+      { _id: invoiceId, ...filter },
+      { $unset: { review: "" } },
+      { new: true, runValidators: true },
+    );
+    if (!updated) return res.status(404).json({ success: false, message: "Invoice not found" });
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error("CRM deleteOfflineReview error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 export default {
   listCustomerProfiles,
+  createOnlineProfile,
   getOnlineProfile,
   updateOnlineProfile,
+  deleteOnlineProfile,
   updateOnlineAddresses,
+  createOnlineAddress,
+  updateOnlineAddress,
+  deleteOnlineAddress,
+  createOnlineReview,
+  updateOnlineReview,
+  deleteOnlineReview,
+  createOfflineProfile,
   getOfflineProfile,
   updateOfflineProfile,
+  deleteOfflineProfile,
+  createOfflineReview,
+  updateOfflineReview,
+  deleteOfflineReview,
 };
