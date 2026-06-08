@@ -51,8 +51,34 @@ const AquaQuotationSchema = new mongoose.Schema(
     currency: { type: String, default: "INR" },
     status: {
       type: String,
-      enum: ["Draft", "Sent", "Accepted", "Rejected", "Expired", "Converted"],
+      enum: [
+        "Draft",
+        "Sent",
+        "Accepted",
+        "Rejected",
+        "Expired",
+        "Payment Pending",
+        "Paid",
+        "Converted",
+      ],
       default: "Draft",
+    },
+    payment: {
+      status: {
+        type: String,
+        enum: ["Unpaid", "Partial", "Paid"],
+        default: "Unpaid",
+      },
+      amountPaid: { type: Number, default: 0 },
+      balanceAmount: { type: Number, default: 0 },
+      mode: {
+        type: String,
+        enum: ["Cash", "UPI", "Bank Transfer", "Card", "Cheque", "Other", ""],
+        default: "",
+      },
+      transactionId: { type: String },
+      paidAt: { type: Date },
+      notes: { type: String },
     },
     convertedToInvoice: {
       type: ObjectId,
