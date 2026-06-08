@@ -62,6 +62,18 @@ const AquaInvoiceSchema = new mongoose.Schema(
         productPrice: {
           type: Number,
         },
+        productDiscount: {
+          type: Number,
+          default: 0,
+        },
+        productTax: {
+          type: Number,
+          default: 0,
+        },
+        productTotal: {
+          type: Number,
+          default: 0,
+        },
         productSerialNo: {
           type: String,
         },
@@ -77,6 +89,22 @@ const AquaInvoiceSchema = new mongoose.Schema(
         },
       },
     ],
+    subTotal: {
+      type: Number,
+      default: 0,
+    },
+    discount: {
+      type: Number,
+      default: 0,
+    },
+    tax: {
+      type: Number,
+      default: 0,
+    },
+    totalAmount: {
+      type: Number,
+      default: 0,
+    },
     transport: {
       deliveredBy: {
         type: String,
@@ -110,8 +138,17 @@ const AquaInvoiceSchema = new mongoose.Schema(
     },
     sourceOrderCollection: {
       type: String,
-      enum: ["AquaOrder", "AquaCRMOrder", "manual"],
+      enum: ["AquaOrder", "AquaCRMOrder", "AquaQuotation", "manual"],
       default: "manual",
+    },
+    sourceQuotationId: {
+      type: ObjectId,
+      ref: "AquaQuotation",
+      default: null,
+      index: true,
+    },
+    sourceQuotationNo: {
+      type: String,
     },
     productId: {
       type: ObjectId,
