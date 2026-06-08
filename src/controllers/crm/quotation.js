@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { nanoid } from "nanoid";
+import AquaInvoice from "../../models/crm/invoice.js";
 import AquaQuotation from "../../models/crm/quotation.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -16,6 +17,12 @@ const generateQuotationNo = () => {
   const now = new Date();
   const uniqueId = nanoid(10);
   return `AQQ${uniqueId}|${now.getDate()}${now.getMonth() + 1}${now.getFullYear()}`;
+};
+
+const generateInvoiceNo = () => {
+  const now = new Date();
+  const uniqueId = nanoid(10);
+  return `AQB${uniqueId}|${now.getDate()}${now.getMonth() + 1}${now.getFullYear()}`;
 };
 
 const validateQuotationPayload = (payload = {}) => {
@@ -110,6 +117,73 @@ const computeTotals = (payload) => {
   };
 };
 
+const resolvePaymentStatus = (amountPaid, totalAmount) => {
+  if (amountPaid <= 0) return "Unpaid";
+  if (amountPaid < totalAmount) return "Partial";
+  return "Paid";
+};
+
+const buildInvoiceFromQuotation = (quotation) => {
+  const now = new Date();
+  const formattedDate = now.toISOString().split("T")[0];
+
+  return {
+    invoiceNo: generateInvoiceNo(),
+    date: formattedDate,
+    customerDetails: quotation.customerDetails,
+    gst: quotation.gst,
+    quotation: true,
+    gstDetails: quotation.gstDetails,
+    products: quotation.products?.map((product) => ({
+      productName: product.productName,
+      productQuantity: product.productQuantity,
+      productPrice: product.productPrice,
+      productDiscount: product.productDiscount,
+      productTax: product.productTax,
+      productTotal: product.productTotal,
+      productSerialNo: product.productSerialNo,
+      productId: product.productId,
+    })),
+    subTotal: quotation.subTotal,
+    discount: quotation.discount,
+    tax: quotation.tax,
+    totalAmount: quotation.totalAmount,
+    paidStatus: "Paid",
+    aquakartInvoice: true,
+    sourceOrderCollection: "AquaQuotation",
+    sourceQuotationId: quotation._id,
+    sourceQuotationNo: quotation.quotationNo,
+    paymentType: quotation.payment?.mode,
+    transport: {
+      deliveryDate: formattedDate,
+    },
+  };
+};
+
+const createInvoiceForPaidQuotation = async (quotation) => {
+  if (quotation.convertedToInvoice) {
+    const existingInvoice = await AquaInvoice.findById(quotation.convertedToInvoice);
+    if (existingInvoice) return existingInvoice;
+  }
+
+  const existingBySource = await AquaInvoice.findOne({
+    sourceQuotationId: quotation._id,
+  });
+  if (existingBySource) {
+    quotation.convertedToInvoice = existingBySource._id;
+    quotation.status = "Converted";
+    await quotation.save();
+    return existingBySource;
+  }
+
+  const invoice = await AquaInvoice.create(buildInvoiceFromQuotation(quotation));
+  quotation.convertedToInvoice = invoice._id;
+  quotation.status = "Converted";
+  await quotation.save();
+
+  return invoice;
+};
+
 // ─────────────────────────────── CRUD ────────────────────────────────────
 
 const createQuotation = async (req, res) => {
@@ -122,11 +196,24 @@ const createQuotation = async (req, res) => {
     }
 
     const totals = computeTotals(req.body);
+    const amountPaid = Number(req.body?.payment?.amountPaid) || 0;
+    const paymentStatus =
+      req.body?.payment?.status || resolvePaymentStatus(amountPaid, totals.totalAmount);
     const payload = {
       ...req.body,
       ...totals,
       quotationNo: req.body.quotationNo || generateQuotationNo(),
       date: req.body.date || new Date().toISOString().split("T")[0],
+      status:
+        paymentStatus === "Paid"
+          ? "Paid"
+          : req.body.status || (paymentStatus === "Partial" ? "Payment Pending" : "Draft"),
+      payment: {
+        ...req.body.payment,
+        amountPaid,
+        balanceAmount: Math.max(totals.totalAmount - amountPaid, 0),
+        status: paymentStatus,
+      },
       createdBy: req.user?._id,
     };
 
@@ -159,6 +246,13 @@ const updateQuotation = async (req, res) => {
         .json({ success: false, message: "Quotation not found" });
     }
 
+    if (quotation.convertedToInvoice) {
+      return res.status(409).json({
+        success: false,
+        message: "Converted quotation cannot be edited",
+      });
+    }
+
     const { isValid, errors } = validateQuotationPayload(req.body);
     if (!isValid) {
       return res
@@ -167,13 +261,23 @@ const updateQuotation = async (req, res) => {
     }
 
     const totals = computeTotals(req.body);
+    const amountPaid = Number(req.body?.payment?.amountPaid) || 0;
+    const paymentStatus =
+      req.body?.payment?.status || resolvePaymentStatus(amountPaid, totals.totalAmount);
     const updatePayload = {
       ...req.body,
       ...totals,
       quotationNo: quotation.quotationNo,
+      payment: {
+        ...req.body.payment,
+        amountPaid,
+        balanceAmount: Math.max(totals.totalAmount - amountPaid, 0),
+        status: paymentStatus,
+      },
     };
     delete updatePayload._id;
     delete updatePayload.createdAt;
+    delete updatePayload.convertedToInvoice;
 
     const updated = await AquaQuotation.findByIdAndUpdate(id, updatePayload, {
       new: true,
@@ -195,12 +299,19 @@ const deleteQuotation = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Invalid quotation id" });
     }
-    const deleted = await AquaQuotation.findByIdAndDelete(id);
-    if (!deleted) {
+    const quotation = await AquaQuotation.findById(id);
+    if (!quotation) {
       return res
         .status(404)
         .json({ success: false, message: "Quotation not found" });
     }
+    if (quotation.convertedToInvoice) {
+      return res.status(409).json({
+        success: false,
+        message: "Converted quotation cannot be deleted",
+      });
+    }
+    await quotation.deleteOne();
     return res
       .status(200)
       .json({ success: true, message: "Quotation deleted successfully" });
@@ -213,10 +324,11 @@ const deleteQuotation = async (req, res) => {
 const getQuotations = async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const { status, gst, search, customer } = req.query;
+    const { status, paymentStatus, gst, search, customer } = req.query;
 
     const filter = {};
     if (status) filter.status = status;
+    if (paymentStatus) filter["payment.status"] = paymentStatus;
     if (gst === "true") filter.gst = true;
     if (gst === "false") filter.gst = false;
     if (customer && isValidObjectId(customer)) filter.customer = customer;
@@ -226,6 +338,7 @@ const getQuotations = async (req, res) => {
         { quotationNo: regex },
         { "customerDetails.name": regex },
         { "customerDetails.email": regex },
+        { "gstDetails.gstNo": regex },
       ];
     }
 
@@ -235,6 +348,7 @@ const getQuotations = async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate("customer", "firstName lastName email phone")
+        .populate("convertedToInvoice", "invoiceNo date totalAmount")
         .lean(),
       AquaQuotation.countDocuments(filter),
     ]);
@@ -264,6 +378,7 @@ const getQuotationById = async (req, res) => {
     }
     const quotation = await AquaQuotation.findById(id)
       .populate("customer", "firstName lastName email phone")
+      .populate("convertedToInvoice", "invoiceNo date totalAmount")
       .populate("products.productId", "title slug photos price");
     if (!quotation) {
       return res
@@ -282,6 +397,7 @@ const getQuotationByNumber = async (req, res) => {
     const { quotationNo } = req.params;
     const quotation = await AquaQuotation.findOne({ quotationNo })
       .populate("customer", "firstName lastName email phone")
+      .populate("convertedToInvoice", "invoiceNo date totalAmount")
       .populate("products.productId", "title slug photos price");
     if (!quotation) {
       return res
@@ -305,6 +421,7 @@ const getQuotationsByCustomer = async (req, res) => {
     }
     const quotations = await AquaQuotation.find({ customer: customerId })
       .sort({ createdAt: -1 })
+      .populate("convertedToInvoice", "invoiceNo date totalAmount")
       .lean();
     return res
       .status(200)
@@ -325,6 +442,8 @@ const updateQuotationStatus = async (req, res) => {
       "Accepted",
       "Rejected",
       "Expired",
+      "Payment Pending",
+      "Paid",
       "Converted",
     ];
     if (!allowed.includes(status)) {
@@ -339,7 +458,7 @@ const updateQuotationStatus = async (req, res) => {
       id,
       { $set: { status } },
       { new: true },
-    );
+    ).populate("convertedToInvoice", "invoiceNo date totalAmount");
     if (!updated) {
       return res
         .status(404)
@@ -348,6 +467,113 @@ const updateQuotationStatus = async (req, res) => {
     return res.status(200).json({ success: true, data: updated });
   } catch (error) {
     console.error("updateQuotationStatus error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const updateQuotationPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid quotation id" });
+    }
+
+    const quotation = await AquaQuotation.findById(id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    const amountPaid = Number(req.body.amountPaid ?? quotation.payment?.amountPaid) || 0;
+    const paymentStatus =
+      req.body.status || resolvePaymentStatus(amountPaid, quotation.totalAmount);
+    const balanceAmount = Math.max(Number(quotation.totalAmount || 0) - amountPaid, 0);
+
+    quotation.payment = {
+      ...(quotation.payment?.toObject?.() || {}),
+      status: paymentStatus,
+      amountPaid,
+      balanceAmount,
+      mode: req.body.mode ?? quotation.payment?.mode,
+      transactionId: req.body.transactionId ?? quotation.payment?.transactionId,
+      paidAt:
+        req.body.paidAt ||
+        (paymentStatus === "Paid" ? quotation.payment?.paidAt || new Date() : undefined),
+      notes: req.body.notes ?? quotation.payment?.notes,
+    };
+
+    if (paymentStatus === "Paid") {
+      quotation.status = "Paid";
+    } else if (paymentStatus === "Partial") {
+      quotation.status = "Payment Pending";
+    }
+
+    await quotation.save();
+
+    let invoice = null;
+    if (paymentStatus === "Paid" && req.body.autoConvert !== false) {
+      invoice = await createInvoiceForPaidQuotation(quotation);
+    }
+
+    const populatedQuotation = await AquaQuotation.findById(quotation._id).populate(
+      "convertedToInvoice",
+      "invoiceNo date totalAmount",
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: populatedQuotation,
+      invoice,
+      message: invoice
+        ? "Payment saved and invoice generated"
+        : "Payment saved successfully",
+    });
+  } catch (error) {
+    console.error("updateQuotationPayment error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const convertQuotationToInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid quotation id" });
+    }
+
+    const quotation = await AquaQuotation.findById(id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    if (quotation.payment?.status !== "Paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Quotation payment must be Paid before invoice conversion",
+      });
+    }
+
+    const invoice = await createInvoiceForPaidQuotation(quotation);
+    const populatedQuotation = await AquaQuotation.findById(quotation._id).populate(
+      "convertedToInvoice",
+      "invoiceNo date totalAmount",
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Quotation converted to invoice",
+      data: populatedQuotation,
+      invoice,
+    });
+  } catch (error) {
+    console.error("convertQuotationToInvoice error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -361,6 +587,8 @@ const QuotationOperations = {
   getQuotationByNumber,
   getQuotationsByCustomer,
   updateQuotationStatus,
+  updateQuotationPayment,
+  convertQuotationToInvoice,
 };
 
 export default QuotationOperations;
