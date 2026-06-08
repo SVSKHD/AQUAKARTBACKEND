@@ -29,6 +29,16 @@ router.patch(
   userAuth.checkAdmin,
   QuotationOperations.updateQuotationStatus,
 );
+router.patch(
+  "/:id/payment",
+  userAuth.checkAdmin,
+  QuotationOperations.updateQuotationPayment,
+);
+router.post(
+  "/:id/convert-to-invoice",
+  userAuth.checkAdmin,
+  QuotationOperations.convertQuotationToInvoice,
+);
 router.delete("/:id", userAuth.checkAdmin, QuotationOperations.deleteQuotation);
 
 export default router;
