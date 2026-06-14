@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
-import AquaProduct from "../../models/product.js";
+import AquaStock from "../../models/crm/stock.js";
 import NotificationLog from "../../models/crm/notificationLog.js";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
@@ -86,7 +86,7 @@ const collectProductQuantities = (products = []) => {
     const productId = product?.productId ? String(product.productId) : "";
     const quantity = Number(product?.productQuantity || 0);
 
-    // Manual invoice rows without productId should not affect product collection stock.
+    // Manual invoice rows without productId should not affect CRM stock.
     if (!productId || !mongoose.Types.ObjectId.isValid(productId) || quantity <= 0)
       return;
 
@@ -99,7 +99,7 @@ const collectProductQuantities = (products = []) => {
   return quantityByProductId;
 };
 
-const buildProductStockChanges = (newProducts = [], oldProducts = []) => {
+const buildStockChanges = (newProducts = [], oldProducts = []) => {
   const newQuantities = collectProductQuantities(newProducts);
   const oldQuantities = collectProductQuantities(oldProducts);
   const productIds = new Set([...newQuantities.keys(), ...oldQuantities.keys()]);
@@ -119,64 +119,86 @@ const assertStockAvailable = async (stockChanges = []) => {
   const consumingChanges = stockChanges.filter(({ stockDelta }) => stockDelta < 0);
   if (!consumingChanges.length) return;
 
-  const products = await AquaProduct.find({
-    _id: { $in: consumingChanges.map(({ productId }) => productId) },
-  }).select("_id title stock");
+  const stockRecords = await AquaStock.find({
+    productId: { $in: consumingChanges.map(({ productId }) => productId) },
+  }).select("_id productId productName quantity");
 
-  const productById = new Map(
-    products.map((product) => [String(product._id), product]),
+  const stockByProductId = new Map(
+    stockRecords.map((stock) => [String(stock.productId), stock]),
   );
 
   const stockErrors = [];
 
   consumingChanges.forEach(({ productId, stockDelta }) => {
-    const product = productById.get(productId);
+    const stock = stockByProductId.get(productId);
     const requiredQuantity = Math.abs(stockDelta);
 
-    if (!product) {
-      stockErrors.push({ productId, message: "Product not found" });
+    if (!stock) {
+      stockErrors.push({
+        productId,
+        availableStock: 0,
+        requiredQuantity,
+        message: "CRM stock record not found",
+      });
       return;
     }
 
-    if (Number(product.stock || 0) < requiredQuantity) {
+    if (Number(stock.quantity || 0) < requiredQuantity) {
       stockErrors.push({
         productId,
-        productName: product.title,
-        availableStock: Number(product.stock || 0),
+        productName: stock.productName,
+        availableStock: Number(stock.quantity || 0),
         requiredQuantity,
-        message: "Insufficient stock",
+        message: "Insufficient CRM stock",
       });
     }
   });
 
   if (stockErrors.length) {
-    const error = new Error("Insufficient product stock");
+    const error = new Error("Insufficient CRM stock");
     error.statusCode = 400;
     error.errors = stockErrors;
     throw error;
   }
 };
 
-const applyProductStockChanges = async (stockChanges = []) => {
-  const operations = stockChanges.map(({ productId, stockDelta }) => ({
-    updateOne: {
-      filter: { _id: productId },
-      update: { $inc: { stock: stockDelta } },
-    },
-  }));
+const applyStockChanges = async (stockChanges = []) => {
+  if (!stockChanges.length) return [];
 
-  if (!operations.length) return null;
+  return Promise.all(
+    stockChanges.map(async ({ productId, stockDelta }) => {
+      const updatedStock = await AquaStock.findOneAndUpdate(
+        { productId },
+        { $inc: { quantity: stockDelta }, $set: { lastUpdated: new Date() } },
+        { new: true },
+      );
 
-  return AquaProduct.bulkWrite(operations);
+      if (!updatedStock && stockDelta < 0) {
+        const error = new Error("CRM stock record not found");
+        error.statusCode = 400;
+        error.errors = [{ productId, message: "CRM stock record not found" }];
+        throw error;
+      }
+
+      if (updatedStock) {
+        updatedStock.totalValue =
+          Number(updatedStock.quantity || 0) *
+          Number(updatedStock.distributorPrice || 0);
+        await updatedStock.save();
+      }
+
+      return updatedStock;
+    }),
+  );
 };
 
-const rollbackProductStockChanges = async (stockChanges = []) => {
+const rollbackStockChanges = async (stockChanges = []) => {
   const rollbackChanges = stockChanges.map(({ productId, stockDelta }) => ({
     productId,
     stockDelta: stockDelta * -1,
   }));
 
-  return applyProductStockChanges(rollbackChanges);
+  return applyStockChanges(rollbackChanges);
 };
 
 const createInvoice = async (req, res) => {
@@ -190,9 +212,9 @@ const createInvoice = async (req, res) => {
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
 
-    stockChanges = buildProductStockChanges(req.body.products, []);
+    stockChanges = buildStockChanges(req.body.products, []);
     await assertStockAvailable(stockChanges);
-    await applyProductStockChanges(stockChanges);
+    await applyStockChanges(stockChanges);
     stockUpdated = true;
 
     const uniqueId = nanoid(10);
@@ -208,7 +230,7 @@ const createInvoice = async (req, res) => {
     const savedInvoice = await new AquaInvoice(req.body).save();
     res.status(201).json(savedInvoice);
   } catch (error) {
-    if (stockUpdated) await rollbackProductStockChanges(stockChanges);
+    if (stockUpdated) await rollbackStockChanges(stockChanges);
     console.error(error);
     res.status(error.statusCode || 500).json({
       status: false,
@@ -234,9 +256,9 @@ const updateInvoice = async (req, res) => {
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
 
-    stockChanges = buildProductStockChanges(req.body.products, invoice.products);
+    stockChanges = buildStockChanges(req.body.products, invoice.products);
     await assertStockAvailable(stockChanges);
-    await applyProductStockChanges(stockChanges);
+    await applyStockChanges(stockChanges);
     stockUpdated = true;
 
     req.body.invoiceNo = invoice.invoiceNo;
@@ -251,13 +273,13 @@ const updateInvoice = async (req, res) => {
     });
 
     if (!updatedInvoice) {
-      await rollbackProductStockChanges(stockChanges);
+      await rollbackStockChanges(stockChanges);
       return res.status(404).json({ message: "Invoice not found" });
     }
 
     res.status(200).json(updatedInvoice);
   } catch (error) {
-    if (stockUpdated) await rollbackProductStockChanges(stockChanges);
+    if (stockUpdated) await rollbackStockChanges(stockChanges);
     console.error(error);
     res.status(error.statusCode || 500).json({
       status: false,
@@ -276,13 +298,13 @@ const deleteInvoice = async (req, res) => {
     const invoice = await AquaInvoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
 
-    stockChanges = buildProductStockChanges([], invoice.products);
-    await applyProductStockChanges(stockChanges);
+    stockChanges = buildStockChanges([], invoice.products);
+    await applyStockChanges(stockChanges);
     stockUpdated = true;
 
     const deletedInvoice = await AquaInvoice.findByIdAndDelete(req.params.id);
     if (!deletedInvoice) {
-      await rollbackProductStockChanges(stockChanges);
+      await rollbackStockChanges(stockChanges);
       return res.status(404).json({ message: "Invoice not found" });
     }
 
@@ -290,7 +312,7 @@ const deleteInvoice = async (req, res) => {
       .status(200)
       .json({ status: true, message: "Invoice deleted successfully" });
   } catch (error) {
-    if (stockUpdated) await rollbackProductStockChanges(stockChanges);
+    if (stockUpdated) await rollbackStockChanges(stockChanges);
     res.status(500).json({ message: "Server Error", error });
   }
 };
