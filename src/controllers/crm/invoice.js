@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
+import AquaProduct from "../../models/product.js";
 import NotificationLog from "../../models/crm/notificationLog.js";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
 
@@ -76,13 +77,123 @@ const validateInvoicePayload = (payload = {}) => {
   return { isValid: Object.keys(errors).length === 0, errors };
 };
 
+const collectProductQuantities = (products = []) => {
+  const quantityByProductId = new Map();
+
+  if (!Array.isArray(products)) return quantityByProductId;
+
+  products.forEach((product) => {
+    const productId = product?.productId ? String(product.productId) : "";
+    const quantity = Number(product?.productQuantity || 0);
+
+    // Manual invoice rows without productId should not affect product collection stock.
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId) || quantity <= 0)
+      return;
+
+    quantityByProductId.set(
+      productId,
+      (quantityByProductId.get(productId) || 0) + quantity,
+    );
+  });
+
+  return quantityByProductId;
+};
+
+const buildProductStockChanges = (newProducts = [], oldProducts = []) => {
+  const newQuantities = collectProductQuantities(newProducts);
+  const oldQuantities = collectProductQuantities(oldProducts);
+  const productIds = new Set([...newQuantities.keys(), ...oldQuantities.keys()]);
+
+  return [...productIds]
+    .map((productId) => {
+      const oldQuantity = oldQuantities.get(productId) || 0;
+      const newQuantity = newQuantities.get(productId) || 0;
+
+      // Positive delta returns stock. Negative delta consumes stock.
+      return { productId, stockDelta: oldQuantity - newQuantity };
+    })
+    .filter(({ stockDelta }) => stockDelta !== 0);
+};
+
+const assertStockAvailable = async (stockChanges = []) => {
+  const consumingChanges = stockChanges.filter(({ stockDelta }) => stockDelta < 0);
+  if (!consumingChanges.length) return;
+
+  const products = await AquaProduct.find({
+    _id: { $in: consumingChanges.map(({ productId }) => productId) },
+  }).select("_id title stock");
+
+  const productById = new Map(
+    products.map((product) => [String(product._id), product]),
+  );
+
+  const stockErrors = [];
+
+  consumingChanges.forEach(({ productId, stockDelta }) => {
+    const product = productById.get(productId);
+    const requiredQuantity = Math.abs(stockDelta);
+
+    if (!product) {
+      stockErrors.push({ productId, message: "Product not found" });
+      return;
+    }
+
+    if (Number(product.stock || 0) < requiredQuantity) {
+      stockErrors.push({
+        productId,
+        productName: product.title,
+        availableStock: Number(product.stock || 0),
+        requiredQuantity,
+        message: "Insufficient stock",
+      });
+    }
+  });
+
+  if (stockErrors.length) {
+    const error = new Error("Insufficient product stock");
+    error.statusCode = 400;
+    error.errors = stockErrors;
+    throw error;
+  }
+};
+
+const applyProductStockChanges = async (stockChanges = []) => {
+  const operations = stockChanges.map(({ productId, stockDelta }) => ({
+    updateOne: {
+      filter: { _id: productId },
+      update: { $inc: { stock: stockDelta } },
+    },
+  }));
+
+  if (!operations.length) return null;
+
+  return AquaProduct.bulkWrite(operations);
+};
+
+const rollbackProductStockChanges = async (stockChanges = []) => {
+  const rollbackChanges = stockChanges.map(({ productId, stockDelta }) => ({
+    productId,
+    stockDelta: stockDelta * -1,
+  }));
+
+  return applyProductStockChanges(rollbackChanges);
+};
+
 const createInvoice = async (req, res) => {
+  let stockChanges = [];
+  let stockUpdated = false;
+
   try {
     const { isValid, errors } = validateInvoicePayload(req.body);
     if (!isValid)
       return res
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
+
+    stockChanges = buildProductStockChanges(req.body.products, []);
+    await assertStockAvailable(stockChanges);
+    await applyProductStockChanges(stockChanges);
+    stockUpdated = true;
 
     const uniqueId = nanoid(10);
     const now = new Date();
@@ -93,52 +204,93 @@ const createInvoice = async (req, res) => {
     req.body.date = formattedDate;
     req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = formattedDate;
+
     const savedInvoice = await new AquaInvoice(req.body).save();
     res.status(201).json(savedInvoice);
   } catch (error) {
+    if (stockUpdated) await rollbackProductStockChanges(stockChanges);
     console.error(error);
-    res.status(500).json({ message: "Server Error", error });
+    res.status(error.statusCode || 500).json({
+      status: false,
+      message: error.statusCode ? error.message : "Server Error",
+      errors: error.errors,
+      error,
+    });
   }
 };
 
 const updateInvoice = async (req, res) => {
-  /* unchanged logic */
+  let stockChanges = [];
+  let stockUpdated = false;
+
   try {
     const { id } = req.params;
     const invoice = await AquaInvoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
     const { isValid, errors } = validateInvoicePayload(req.body);
     if (!isValid)
       return res
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
+
+    stockChanges = buildProductStockChanges(req.body.products, invoice.products);
+    await assertStockAvailable(stockChanges);
+    await applyProductStockChanges(stockChanges);
+    stockUpdated = true;
+
     req.body.invoiceNo = invoice.invoiceNo;
     req.body.createdAt = invoice.createdAt;
     req.body.updatedAt = new Date().toISOString().split("T")[0];
     req.body.date = invoice.date;
     req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = invoice.transport?.deliveryDate;
+
     const updatedInvoice = await AquaInvoice.findByIdAndUpdate(id, req.body, {
       new: true,
     });
-    if (!updatedInvoice)
+
+    if (!updatedInvoice) {
+      await rollbackProductStockChanges(stockChanges);
       return res.status(404).json({ message: "Invoice not found" });
+    }
+
     res.status(200).json(updatedInvoice);
   } catch (error) {
+    if (stockUpdated) await rollbackProductStockChanges(stockChanges);
     console.error(error);
-    res.status(500).json({ message: "Server Error", error });
+    res.status(error.statusCode || 500).json({
+      status: false,
+      message: error.statusCode ? error.message : "Server Error",
+      errors: error.errors,
+      error,
+    });
   }
 };
 
 const deleteInvoice = async (req, res) => {
+  let stockChanges = [];
+  let stockUpdated = false;
+
   try {
+    const invoice = await AquaInvoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+    stockChanges = buildProductStockChanges([], invoice.products);
+    await applyProductStockChanges(stockChanges);
+    stockUpdated = true;
+
     const deletedInvoice = await AquaInvoice.findByIdAndDelete(req.params.id);
-    if (!deletedInvoice)
+    if (!deletedInvoice) {
+      await rollbackProductStockChanges(stockChanges);
       return res.status(404).json({ message: "Invoice not found" });
+    }
+
     res
       .status(200)
       .json({ status: true, message: "Invoice deleted successfully" });
   } catch (error) {
+    if (stockUpdated) await rollbackProductStockChanges(stockChanges);
     res.status(500).json({ message: "Server Error", error });
   }
 };
@@ -168,6 +320,7 @@ const getInvoices = async (req, res) => {
       .json({ status: false, message: "Sorry, please try again" });
   }
 };
+
 const getInvoice = async (req, res) => {
   try {
     const { id, name, phone, invoiceNo, gstNo } = req.query;
@@ -182,6 +335,7 @@ const getInvoice = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 const getInvoiceById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -194,6 +348,7 @@ const getInvoiceById = async (req, res) => {
     res.status(500).json({ message: "Server Error", error });
   }
 };
+
 const getInvoiceByPhone = async (req, res) => {
   try {
     res
@@ -207,7 +362,6 @@ const getInvoiceByPhone = async (req, res) => {
 };
 
 const getInvoicesByDate = async (req, res) => {
-  /* keep existing */
   try {
     const { month, year, startDate, endDate } = req.query;
     const query = {};
