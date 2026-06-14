@@ -41,7 +41,6 @@ const mapStockResponse = (stockRecord) => {
     productSlug: product?.slug,
     productCode: product?.code,
     quantity,
-    stock: quantity,
     distributorPrice,
     dpPrice: distributorPrice,
     productPrice: product?.price,
