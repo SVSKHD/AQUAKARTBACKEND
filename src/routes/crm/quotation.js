@@ -22,6 +22,7 @@ router.get(
   QuotationOperations.getQuotationsByCustomer,
 );
 
+router.get("/public/:id", QuotationOperations.getQuotationById);
 router.get("/:id", userAuth.checkAdmin, QuotationOperations.getQuotationById);
 router.put("/:id", userAuth.checkAdmin, QuotationOperations.updateQuotation);
 router.patch(
