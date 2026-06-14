@@ -4,14 +4,14 @@ const stockSchema = new mongoose.Schema(
   {
     productId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
+      ref: "AquaProduct",
       required: true,
       index: true,
       unique: true,
     },
     productName: {
       type: String,
-      unique: true,
+      trim: true,
     },
     quantity: {
       type: Number,
@@ -22,6 +22,7 @@ const stockSchema = new mongoose.Schema(
     distributorPrice: {
       type: Number,
       required: true,
+      default: 0,
       min: 0,
     },
     totalValue: {
@@ -36,5 +37,5 @@ const stockSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const AquaStock = mongoose.model("AquaStock", stockSchema);
+const AquaStock = mongoose.models.AquaStock || mongoose.model("AquaStock", stockSchema);
 export default AquaStock;
