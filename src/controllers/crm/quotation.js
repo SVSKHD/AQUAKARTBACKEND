@@ -1,7 +1,18 @@
 import mongoose from "mongoose";
 import AquaQuotation from "../../models/crm/quotation.js";
 
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
+
+const allowedStatus = [
+  "Draft",
+  "Sent",
+  "Accepted",
+  "Rejected",
+  "Expired",
+  "Payment Pending",
+  "Paid",
+  "Converted",
+];
 
 const formatDateKey = (date = new Date()) => {
   const year = date.getFullYear();
@@ -134,6 +145,19 @@ const buildQuotationPayload = async (body = {}, existingQuotation = null) => {
   };
 };
 
+const updateStatusById = async (id, status) => {
+  return AquaQuotation.findByIdAndUpdate(
+    id,
+    { status },
+    { new: true, runValidators: true },
+  ).populate("convertedToInvoice", "invoiceNo date");
+};
+
+const isStatusOnlyPayload = (body = {}) => {
+  const keys = Object.keys(body).filter((key) => body[key] !== undefined);
+  return keys.length === 1 && keys[0] === "status";
+};
+
 const createQuotation = async (req, res) => {
   try {
     const { isValid, errors } = validateQuotationPayload(req.body);
@@ -155,7 +179,7 @@ const createQuotation = async (req, res) => {
         .status(409)
         .json({ success: false, message: "Quotation number already exists" });
     }
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
@@ -207,7 +231,7 @@ const getQuotations = async (req, res) => {
     });
   } catch (error) {
     console.error("getQuotations error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
@@ -233,7 +257,7 @@ const getQuotationById = async (req, res) => {
     return res.status(200).json({ success: true, data: quotation });
   } catch (error) {
     console.error("getQuotationById error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
@@ -255,7 +279,7 @@ const getQuotationByNumber = async (req, res) => {
     return res.status(200).json({ success: true, data: quotation });
   } catch (error) {
     console.error("getQuotationByNumber error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
@@ -279,7 +303,7 @@ const getQuotationsByCustomer = async (req, res) => {
     });
   } catch (error) {
     console.error("getQuotationsByCustomer error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
@@ -296,6 +320,19 @@ const updateQuotation = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Quotation not found" });
+    }
+
+    if (isStatusOnlyPayload(req.body)) {
+      if (!allowedStatus.includes(req.body.status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status",
+          allowedStatus,
+        });
+      }
+
+      const quotation = await updateStatusById(req.params.id, req.body.status);
+      return res.status(200).json({ success: true, data: quotation });
     }
 
     if (existingQuotation.convertedToInvoice) {
@@ -326,25 +363,18 @@ const updateQuotation = async (req, res) => {
     return res.status(200).json({ success: true, data: quotation });
   } catch (error) {
     console.error("updateQuotation error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
 const updateQuotationStatus = async (req, res) => {
   try {
-    const allowedStatus = [
-      "Draft",
-      "Sent",
-      "Accepted",
-      "Rejected",
-      "Expired",
-      "Payment Pending",
-      "Paid",
-      "Converted",
-    ];
-
     if (!allowedStatus.includes(req.body.status)) {
-      return res.status(400).json({ success: false, message: "Invalid status" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+        allowedStatus,
+      });
     }
 
     if (!isValidObjectId(req.params.id)) {
@@ -353,11 +383,7 @@ const updateQuotationStatus = async (req, res) => {
         .json({ success: false, message: "Invalid quotation id" });
     }
 
-    const quotation = await AquaQuotation.findByIdAndUpdate(
-      req.params.id,
-      { status: req.body.status },
-      { new: true, runValidators: true },
-    ).populate("convertedToInvoice", "invoiceNo date");
+    const quotation = await updateStatusById(req.params.id, req.body.status);
 
     if (!quotation) {
       return res
@@ -368,7 +394,7 @@ const updateQuotationStatus = async (req, res) => {
     return res.status(200).json({ success: true, data: quotation });
   } catch (error) {
     console.error("updateQuotationStatus error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
@@ -400,7 +426,7 @@ const deleteQuotation = async (req, res) => {
       .json({ success: true, message: "Quotation deleted successfully" });
   } catch (error) {
     console.error("deleteQuotation error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: error.message || "Server error" });
   }
 };
 
