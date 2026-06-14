@@ -3,7 +3,6 @@ import AquaStock from "../../models/crm/stock.js";
 import AquaProduct from "../../models/product.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
-
 const numberOrZero = (value) => Number(value || 0);
 
 const buildStockPayload = ({ productId, quantity, distributorPrice, product }) => {
@@ -28,63 +27,45 @@ const resolveStockRecord = async (id) => {
   });
 };
 
-const syncProductStock = async ({ productId, quantity, distributorPrice }) => {
-  if (!isValidObjectId(productId)) return null;
+const mapStockResponse = (stockRecord) => {
+  const product = stockRecord.productId || {};
+  const productId = product?._id || stockRecord.productId;
+  const quantity = numberOrZero(stockRecord.quantity);
+  const distributorPrice = numberOrZero(stockRecord.distributorPrice);
 
-  const update = {
-    stock: numberOrZero(quantity),
+  return {
+    _id: stockRecord._id,
+    id: stockRecord._id,
+    productId,
+    productName: stockRecord.productName || product?.title || "Product",
+    productSlug: product?.slug,
+    productCode: product?.code,
+    quantity,
+    stock: quantity,
+    distributorPrice,
+    dpPrice: distributorPrice,
+    productPrice: product?.price,
+    totalValue: quantity * distributorPrice,
+    lastUpdated: stockRecord.lastUpdated || stockRecord.updatedAt || stockRecord.createdAt,
+    source: "stock",
   };
-
-  if (distributorPrice !== undefined && distributorPrice !== null) {
-    update.dpPrice = numberOrZero(distributorPrice);
-  }
-
-  return AquaProduct.findByIdAndUpdate(productId, { $set: update }, { new: true });
 };
 
 const getAllStock = async (req, res) => {
   try {
-    const [stockRecords, products] = await Promise.all([
-      AquaStock.find({}).lean(),
-      AquaProduct.find({}).select("_id title slug code stock price dpPrice").lean(),
-    ]);
+    const stockRecords = await AquaStock.find({})
+      .populate("productId", "title slug code price dpPrice")
+      .sort({ updatedAt: -1 })
+      .lean();
 
-    const stockByProductId = new Map(
-      stockRecords.map((record) => [String(record.productId), record]),
-    );
-
-    const productStocks = products.map((product) => {
-      const productId = String(product._id);
-      const stockRecord = stockByProductId.get(productId);
-      const quantity = numberOrZero(product.stock ?? stockRecord?.quantity);
-      const distributorPrice = numberOrZero(
-        product.dpPrice ?? stockRecord?.distributorPrice ?? product.price,
-      );
-
-      return {
-        _id: stockRecord?._id || product._id,
-        id: stockRecord?._id || product._id,
-        productId,
-        productName: product.title,
-        productSlug: product.slug,
-        productCode: product.code,
-        quantity,
-        stock: quantity,
-        distributorPrice,
-        dpPrice: distributorPrice,
-        price: product.price,
-        totalValue: quantity * distributorPrice,
-        lastUpdated: stockRecord?.lastUpdated || product.updatedAt || product.createdAt,
-        source: stockRecord ? "stock" : "product",
-      };
-    });
+    const stocks = stockRecords.map(mapStockResponse);
 
     return res.status(200).json({
       success: true,
-      data: productStocks,
-      count: productStocks.length,
-      totalQuantity: productStocks.reduce((sum, item) => sum + item.quantity, 0),
-      totalValue: productStocks.reduce((sum, item) => sum + item.totalValue, 0),
+      data: stocks,
+      count: stocks.length,
+      totalQuantity: stocks.reduce((sum, item) => sum + item.quantity, 0),
+      totalValue: stocks.reduce((sum, item) => sum + item.totalValue, 0),
     });
   } catch (error) {
     return res.status(500).json({
@@ -106,7 +87,7 @@ const createStock = async (req, res) => {
       });
     }
 
-    const product = await AquaProduct.findById(productId);
+    const product = await AquaProduct.findById(productId).select("title name price dpPrice");
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -127,17 +108,10 @@ const createStock = async (req, res) => {
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
 
-    const updatedProduct = await syncProductStock({
-      productId,
-      quantity: payload.quantity,
-      distributorPrice: payload.distributorPrice,
-    });
-
     return res.status(201).json({
       success: true,
       message: "Stock saved successfully",
       data: savedStock,
-      product: updatedProduct,
     });
   } catch (error) {
     return res.status(500).json({
@@ -170,7 +144,7 @@ const updateStock = async (req, res) => {
       });
     }
 
-    const product = await AquaProduct.findById(productId);
+    const product = await AquaProduct.findById(productId).select("title name price dpPrice");
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -191,17 +165,10 @@ const updateStock = async (req, res) => {
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
 
-    const updatedProduct = await syncProductStock({
-      productId,
-      quantity: payload.quantity,
-      distributorPrice: payload.distributorPrice,
-    });
-
     return res.status(200).json({
       success: true,
       message: "Stock updated successfully",
       data: updatedStock,
-      product: updatedProduct,
     });
   } catch (error) {
     return res.status(500).json({
@@ -223,22 +190,14 @@ const deleteStock = async (req, res) => {
       });
     }
 
-    const existingStock = await resolveStockRecord(id);
-    const productId = existingStock?.productId || id;
-
     const deletedStock = await AquaStock.findOneAndDelete({
       $or: [{ _id: id }, { productId: id }],
     });
 
-    const updatedProduct = await syncProductStock({
-      productId,
-      quantity: 0,
-    });
-
-    if (!deletedStock && !updatedProduct) {
+    if (!deletedStock) {
       return res.status(404).json({
         success: false,
-        message: "Stock record or product not found",
+        message: "Stock record not found",
       });
     }
 
@@ -246,7 +205,6 @@ const deleteStock = async (req, res) => {
       success: true,
       message: "Stock deleted successfully",
       data: deletedStock,
-      product: updatedProduct,
     });
   } catch (error) {
     return res.status(500).json({
