@@ -5,9 +5,24 @@ import AquaProduct from "../../models/product.js";
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 const numberOrZero = (value) => Number(value || 0);
 
-const buildStockPayload = ({ productId, quantity, distributorPrice, product }) => {
+const getProductDpPrice = (product) =>
+  numberOrZero(
+    product?.dpPrice ??
+      product?.DPPrice ??
+      product?.dealerPrice ??
+      product?.distributorPrice ??
+      product?.price,
+  );
+
+const getProductId = (productOrId) => {
+  if (!productOrId) return "";
+  if (typeof productOrId === "object") return String(productOrId._id || productOrId.id || "");
+  return String(productOrId);
+};
+
+const buildStockPayload = ({ productId, quantity, product }) => {
   const stockQuantity = numberOrZero(quantity);
-  const dpPrice = numberOrZero(distributorPrice ?? product?.dpPrice ?? product?.price);
+  const dpPrice = getProductDpPrice(product);
 
   return {
     productId,
@@ -29,22 +44,24 @@ const resolveStockRecord = async (id) => {
 
 const mapStockResponse = (stockRecord) => {
   const product = stockRecord.productId || {};
-  const productId = product?._id || stockRecord.productId;
+  const productId = getProductId(product) || getProductId(stockRecord.productId);
   const quantity = numberOrZero(stockRecord.quantity);
-  const distributorPrice = numberOrZero(stockRecord.distributorPrice);
+  const dpPrice = getProductDpPrice(product);
+  const totalValue = quantity * dpPrice;
 
   return {
     _id: stockRecord._id,
     id: stockRecord._id,
+    stockId: stockRecord._id,
     productId,
     productName: stockRecord.productName || product?.title || "Product",
     productSlug: product?.slug,
     productCode: product?.code,
     quantity,
-    distributorPrice,
-    dpPrice: distributorPrice,
+    dpPrice,
+    distributorPrice: dpPrice,
     productPrice: product?.price,
-    totalValue: quantity * distributorPrice,
+    totalValue,
     lastUpdated: stockRecord.lastUpdated || stockRecord.updatedAt || stockRecord.createdAt,
     source: "stock",
   };
@@ -53,7 +70,7 @@ const mapStockResponse = (stockRecord) => {
 const getAllStock = async (req, res) => {
   try {
     const stockRecords = await AquaStock.find({})
-      .populate("productId", "title slug code price dpPrice")
+      .populate("productId", "title slug code price dpPrice DPPrice dealerPrice distributorPrice")
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -77,7 +94,7 @@ const getAllStock = async (req, res) => {
 
 const createStock = async (req, res) => {
   try {
-    const { productId, quantity, distributorPrice } = req.body;
+    const { productId, quantity } = req.body;
 
     if (!isValidObjectId(productId)) {
       return res.status(400).json({
@@ -86,7 +103,9 @@ const createStock = async (req, res) => {
       });
     }
 
-    const product = await AquaProduct.findById(productId).select("title name price dpPrice");
+    const product = await AquaProduct.findById(productId).select(
+      "title name price dpPrice DPPrice dealerPrice distributorPrice",
+    );
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -97,7 +116,6 @@ const createStock = async (req, res) => {
     const payload = buildStockPayload({
       productId,
       quantity,
-      distributorPrice,
       product,
     });
 
@@ -124,7 +142,7 @@ const createStock = async (req, res) => {
 const updateStock = async (req, res) => {
   try {
     const { id } = req.params;
-    const { productId: bodyProductId, quantity, distributorPrice } = req.body;
+    const { productId: bodyProductId, quantity } = req.body;
 
     if (!isValidObjectId(id) && !isValidObjectId(bodyProductId)) {
       return res.status(400).json({
@@ -143,7 +161,9 @@ const updateStock = async (req, res) => {
       });
     }
 
-    const product = await AquaProduct.findById(productId).select("title name price dpPrice");
+    const product = await AquaProduct.findById(productId).select(
+      "title name price dpPrice DPPrice dealerPrice distributorPrice",
+    );
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -154,7 +174,6 @@ const updateStock = async (req, res) => {
     const payload = buildStockPayload({
       productId,
       quantity,
-      distributorPrice,
       product,
     });
 
