@@ -1,6 +1,5 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import axios from "axios";
 import AquaEcomUser from "../models/user.js";
 import sendEmail from "../notifications/email/send-email.js";
 import signupEmail from "../notifications/email/signupTemplate.js";
@@ -8,6 +7,26 @@ import signupOtpTemplate from "../notifications/email/signupOtp.js";
 import forgotPassword from "../notifications/email/forgotPassword.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import userLoginNotificationTemplateToAdmin from "../notifications/email/adminInfo/NewUserLogin.js";
+
+const normalizeLoginPhone = (phone) => {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+
+  if (digits.length === 10) {
+    return {
+      localPhone: digits,
+      whatsappPhone: `91${digits}`,
+    };
+  }
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return {
+      localPhone: digits.slice(2),
+      whatsappPhone: digits,
+    };
+  }
+
+  return null;
+};
 
 // User Login
 const userLogin = async (req, res) => {
@@ -100,70 +119,61 @@ const userPhoneLogin = async (req, res) => {
   const { phone } = req.body;
 
   const generateOtp = () => Math.floor(100000 + Math.random() * 900000);
+  const normalizedPhone = normalizeLoginPhone(phone);
 
-  // sanitize and keep as string
-  const sanitizedPhone = String(phone ?? "").replace(/\D/g, "");
-  if (!sanitizedPhone) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Phone number is required" });
+  if (!normalizedPhone) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Invalid phone number. Use a 10-digit Indian mobile number or a 12-digit number starting with 91.",
+    });
   }
 
-  // optional: prepend country code if your WA provider expects it
-  const whatsappPhone = sanitizedPhone.startsWith("91")
-    ? `+${sanitizedPhone}`
-    : `+91${sanitizedPhone}`; // adjust to your rules/provider
-
+  const { localPhone, whatsappPhone } = normalizedPhone;
   const otp = generateOtp();
 
   try {
-    // Send OTP first (so we don't persist if provider fails)
+    const existing = await AquaEcomUser.findOne({ phone: localPhone }).lean();
+    const userExist = Boolean(existing);
+
     const messageNew = `Welcome to Aquakart! Your Signup OTP is: ${otp}. Enjoy your shopping experience with us!`;
     const messageExisting = `Welcome back to Aquakart! Your Login OTP is: ${otp}. Enjoy your shopping experience with us!`;
 
-    // Check existence
-    const existing = await AquaEcomUser.findOne({
-      phone: sanitizedPhone,
-    }).lean();
-    const userExist = Boolean(existing);
+    const whatsappResult = await sendWhatsAppMessage(
+      whatsappPhone,
+      userExist ? messageExisting : messageNew,
+    );
 
-    const otpData = await axios.post("https://app.whatsera.com/api/send/text", {
-      accessToken: "685e311c3d3aacf917650e6f",
-      mobile: `91${sanitizedPhone}`,
-      text: userExist ? messageExisting : messageNew,
-    });
-
-    if (!otpData?.data.success) {
+    if (!whatsappResult.success) {
       return res.status(400).json({
         success: false,
         message: "Failed to send OTP",
-        otpMessage: otpData?.message || "Provider error",
+        otpMessage: whatsappResult.message || "Provider error",
+        stage: whatsappResult.stage,
       });
     }
 
-    // Atomic upsert: set mobileOtp always; set email only on insert
-    // Use a stable placeholder email (NOT dependent on OTP)
-    const placeholderEmail = `${sanitizedPhone}@aquakart.co.in`;
+    const placeholderEmail = `${localPhone}@aquakart.co.in`;
 
     await AquaEcomUser.findOneAndUpdate(
-      { phone: sanitizedPhone },
+      { phone: localPhone },
       {
         $set: { mobileOtp: otp },
-        $setOnInsert: { phone: sanitizedPhone, email: placeholderEmail },
+        $setOnInsert: { phone: localPhone, email: placeholderEmail },
       },
-      { new: true, upsert: true },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
     );
 
     return res.status(200).json({
       success: true,
-      otpMessage: otpData.message,
+      otpMessage: whatsappResult.message,
       userExist,
     });
   } catch (error) {
     if (error?.code === 11000) {
       try {
         await AquaEcomUser.updateOne(
-          { phone: sanitizedPhone },
+          { phone: localPhone },
           { $set: { mobileOtp: otp } },
         );
         return res.status(200).json({
@@ -183,10 +193,18 @@ const userPhoneLogin = async (req, res) => {
 
 const verifyPhoneLogin = async (req, res) => {
   const { phone, otp } = req.body;
+  const normalizedPhone = normalizeLoginPhone(phone);
+
+  if (!normalizedPhone) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Invalid phone number. Use a 10-digit Indian mobile number or a 12-digit number starting with 91.",
+    });
+  }
 
   try {
-    // Find the user by phone number
-    const user = await AquaEcomUser.findOne({ phone });
+    const user = await AquaEcomUser.findOne({ phone: normalizedPhone.localPhone });
 
     if (!user) {
       return res
@@ -194,20 +212,20 @@ const verifyPhoneLogin = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    // Check if the provided OTP matches the stored OTP
-    if (user.mobileOtp !== otp) {
+    if (Number(user.mobileOtp) !== Number(otp)) {
       return res.status(400).json({ success: false, message: "Invalid OTP" });
     }
 
-    // Generate the auth token
     const token = user.generateAuthToken();
-
-    // Fetch user details excluding the password
     const userDetails = await AquaEcomUser.findById(user._id).select(
       "-password",
     );
 
-    // Send the response
+    await AquaEcomUser.updateOne(
+      { _id: user._id },
+      { $unset: { mobileOtp: "" } },
+    );
+
     res.status(200).json({ success: true, token, user: userDetails });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
