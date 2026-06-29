@@ -18,6 +18,7 @@ import SendEmail from "./src/routes/sendEmail.js";
 import Subscritions from "./src/routes/subscribe.js";
 import Coupons from "./src/routes/coupon.js";
 import SoftenerHydRoutes from "./src/routes/SoftenersHyd.js";
+import metaWhatsAppWebhookRoutes from "./src/routes/whatsappMetaWebhook.js";
 // crm route imports
 import invoiceRoutes from "./src/routes/crm/invoice.js";
 import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
@@ -83,6 +84,9 @@ app.post("/v1", (req, res) => {
   console.log("res", data);
   res.status(200).json(data);
 });
+
+// meta whatsapp cloud api webhook
+app.use("/v1/whatsapp/webhook/meta", metaWhatsAppWebhookRoutes);
 
 // ecom routes
 app.use("/v1", userRoutes);
