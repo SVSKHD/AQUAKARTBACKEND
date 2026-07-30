@@ -23,6 +23,7 @@ const UserSchema = new mongoose.Schema(
       enum: ["google.com"],
     },
     photoURL: { type: String, trim: true },
+    emailVerified: { type: Boolean, default: false },
     firstLoginAt: { type: Date },
     lastLoginAt: { type: Date },
     loginCount: { type: Number, default: 0 },

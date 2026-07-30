@@ -11,12 +11,14 @@ const splitName = (name = "") => {
 };
 
 const safeUser = (user) => ({
+  _id: user._id,
   id: user._id,
   firebaseUid: user.firebaseUid,
   email: user.email,
   firstName: user.firstName || "",
   lastName: user.lastName || "",
   photoURL: user.photoURL || user.photo?.secure_url || "",
+  emailVerified: Boolean(user.emailVerified || user.isEmailVerfied),
   phone: user.phone || null,
   role: user.role,
 });
@@ -37,11 +39,20 @@ const googleLogin = async (req, res) => {
     const isNewUser = !user;
     const googleName = splitName(firebaseUser.name);
 
+    if (user?.firebaseUid && user.firebaseUid !== firebaseUser.uid) {
+      return res.status(409).json({
+        success: false,
+        authenticated: false,
+        message: "This email is already linked to another Google account",
+      });
+    }
+
     if (isNewUser) {
       user = await AquaEcomUser.create({
         firebaseUid: firebaseUser.uid,
         email: firebaseUser.email,
         isEmailVerfied: firebaseUser.emailVerified,
+        emailVerified: firebaseUser.emailVerified,
         isGoogleLogin: true,
         authProvider: "google.com",
         firstName: googleName.firstName,
@@ -61,6 +72,7 @@ const googleLogin = async (req, res) => {
       user.firebaseUid ||= firebaseUser.uid;
       user.isGoogleLogin = true;
       user.isEmailVerfied = firebaseUser.emailVerified;
+      user.emailVerified = firebaseUser.emailVerified;
       user.authProvider = "google.com";
       user.firstName ||= googleName.firstName;
       user.lastName ||= googleName.lastName;
@@ -108,4 +120,18 @@ const googleLogin = async (req, res) => {
   }
 };
 
-export default { googleLogin };
+const me = async (req, res) =>
+  res.status(200).json({
+    success: true,
+    authenticated: true,
+    user: safeUser(req.user),
+  });
+
+const logout = async (req, res) =>
+  res.status(200).json({
+    success: true,
+    authenticated: false,
+    message: "Signed out successfully",
+  });
+
+export default { googleLogin, me, logout };
