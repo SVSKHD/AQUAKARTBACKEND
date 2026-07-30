@@ -11,92 +11,67 @@ const addressSchema = new mongoose.Schema({
 
 const UserSchema = new mongoose.Schema(
   {
-    // user id unique for every one
     id: { type: String },
-    // reset info and required info
+    firebaseUid: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    authProvider: {
+      type: String,
+      enum: ["google.com"],
+    },
+    photoURL: { type: String, trim: true },
+    firstLoginAt: { type: Date },
+    lastLoginAt: { type: Date },
+    loginCount: { type: Number, default: 0 },
     resetPasswordOtp: { type: Number },
     resetPasswordDate: { type: Date },
     confirmationOtp: { type: Number },
     confirmationOtpDate: { type: Date },
-    // mobile confirmation
     mobileOtp: { type: Number },
     ismobileLoginConfirmation: { type: Boolean },
     isMobileConfirmationDate: { type: Date },
-    // social credentials
     isGoogleLogin: { type: Boolean },
     isFaceBookLogin: { type: Boolean },
     isTwitterLogin: { type: Boolean },
     googleData: { type: Object },
     facebookData: { type: Object },
     twitterData: { type: Object },
-    // email verifications
     emailOtp: { type: Number },
     isEmailVerfied: { type: Boolean },
-    // user signedup date
     userSignedupDate: { type: Date, default: Date.now },
-    // login creds info
     email: {
       type: String,
       trim: true,
       lowercase: true,
       set: (value) => {
-        if (typeof value !== "string") return undefined; // drop null/undefined
+        if (typeof value !== "string") return undefined;
         const cleaned = value.trim();
-        return cleaned.length ? cleaned : undefined; // drop empty strings
+        return cleaned.length ? cleaned : undefined;
       },
     },
-
-    firstName: {
-      type: String,
-      trim: true,
-    },
-    lastName: {
-      type: String,
-      trim: true,
-    },
-    password: {
-      type: String,
-    },
-    lastDetailsUpdatedDate: {
-      type: Date,
-    },
-    forgotPasswordDate: {
-      type: Date,
-    },
-    lastPasswordUpdated: {
-      type: Date,
-    },
-    dob: {
-      type: Date,
-    },
-    EmailOtp: {
-      type: Number,
-    },
-    MobileOtp: {
-      type: Number,
-    },
-    verificationOtp: {
-      type: Number,
-    },
-    profileUpdated: {
-      type: Date,
-    },
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    password: { type: String },
+    lastDetailsUpdatedDate: { type: Date },
+    forgotPasswordDate: { type: Date },
+    lastPasswordUpdated: { type: Date },
+    dob: { type: Date },
+    EmailOtp: { type: Number },
+    MobileOtp: { type: Number },
+    verificationOtp: { type: Number },
+    profileUpdated: { type: Date },
     phone: {
       type: Number,
       unique: true,
       sparse: true,
     },
-    alternativeEmail: {
-      type: String,
-      trim: true,
-    },
+    alternativeEmail: { type: String, trim: true },
     photo: {
-      id: {
-        type: String,
-      },
-      secure_url: {
-        type: String,
-      },
+      id: { type: String },
+      secure_url: { type: String },
     },
     gstDetails: {
       gstEmail: { type: String },
@@ -104,24 +79,21 @@ const UserSchema = new mongoose.Schema(
       gstPhone: { type: Number },
       gstAddres: { type: String },
     },
-
     cart: [
       {
-        // Define the structure of items in the cart
-        productId: mongoose.Schema.Types.ObjectId, // Reference to the product
+        productId: mongoose.Schema.Types.ObjectId,
         quantity: Number,
       },
     ],
     orders: [
       {
-        orderId: mongoose.Schema.Types.ObjectId, // Reference to the order
+        orderId: mongoose.Schema.Types.ObjectId,
         orderDate: Date,
       },
     ],
     wishes: [
       {
-        // Define the structure of user wishes
-        productId: mongoose.Schema.Types.ObjectId, // Reference to the product
+        productId: mongoose.Schema.Types.ObjectId,
         addedDate: Date,
       },
     ],
@@ -131,7 +103,7 @@ const UserSchema = new mongoose.Schema(
     },
     referral: [
       {
-        userId: mongoose.Schema.Types.ObjectId, // Reference to the referred user
+        userId: mongoose.Schema.Types.ObjectId,
         userSignupDate: Date,
       },
     ],
@@ -149,30 +121,24 @@ UserSchema.index(
   },
 );
 
-// Pre-save hook to hash password
 UserSchema.pre("save", async function () {
-  // Only hash if password is new or changed
   if (!this.isModified("password")) return;
-
-  if (!this.password) return; // nothing to hash, skip
+  if (!this.password) return;
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Method to generate JWT token
 UserSchema.methods.generateAuthToken = function () {
-  const token = jwt.sign(
+  return jwt.sign(
     { _id: this._id, email: this.email, role: this.role },
     process.env.JWT_SECRET,
     { expiresIn: "30d" },
   );
-  return token;
 };
 
-// Method to validate password
 UserSchema.methods.validatePassword = async function (password) {
-  return await bcrypt.compare(password, this.password);
+  return bcrypt.compare(password, this.password);
 };
 
 const AquaEcomUser =
