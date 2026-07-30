@@ -17,7 +17,6 @@ const isLoggedIn = async (req, res, next) => {
       return res.status(401).json({ message: "Token is not valid" });
     }
 
-    req.user = decoded;
     const user = await AquaEcomUser.findById(decoded._id);
 
     if (!user) {
@@ -25,6 +24,7 @@ const isLoggedIn = async (req, res, next) => {
       return res.status(401).json({ message: "User not found" });
     }
 
+    req.user = user;
     next();
   } catch (err) {
     console.error("Error during token validation or DB lookup:", err); // Log detailed error
