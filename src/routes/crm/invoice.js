@@ -1,5 +1,7 @@
 import express from "express";
 import InvoiceOperations from "../../controllers/crm/invoice.js";
+import PublicInvoiceLookupOperations from "../../controllers/crm/publicInvoiceLookup.js";
+import optionalUserAuth from "../../middleware/optionalUser.js";
 import userAuth from "../../middleware/user.js";
 
 const router = express.Router();
@@ -8,6 +10,11 @@ router.get("invoice-status", async (req, res) => {
   res.json({ message: "Invoice Status v1 active" });
 });
 
+router.get(
+  "/public/invoices/phone",
+  optionalUserAuth,
+  PublicInvoiceLookupOperations.getInvoicesByPhone,
+);
 router.get(
   "/admin/all-invoices",
   userAuth.checkAdmin,
