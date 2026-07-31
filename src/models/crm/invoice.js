@@ -1,4 +1,8 @@
 import mongoose, { ObjectId } from "mongoose";
+import {
+  normalizeEmail,
+  normalizeIndianPhone,
+} from "../../utils/invoiceAccess.js";
 
 const AquaInvoiceSchema = new mongoose.Schema(
   {
@@ -9,6 +13,13 @@ const AquaInvoiceSchema = new mongoose.Schema(
       phone: { type: Number },
       email: { type: String },
       address: { type: String },
+    },
+    customerPhoneNormalized: { type: String, index: true },
+    customerEmailNormalized: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      index: true,
     },
     gst: { type: Boolean, default: false },
     po: { type: Boolean, default: false },
@@ -56,6 +67,25 @@ const AquaInvoiceSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+AquaInvoiceSchema.pre("save", function normalizeInvoiceOwnership() {
+  this.customerPhoneNormalized = normalizeIndianPhone(
+    this.customerDetails?.phone,
+  );
+  this.customerEmailNormalized = normalizeEmail(this.customerDetails?.email);
+});
+
+AquaInvoiceSchema.pre("findOneAndUpdate", function normalizeUpdatedOwnership() {
+  const update = this.getUpdate() || {};
+  const details = update.customerDetails || update.$set?.customerDetails;
+  if (!details) return;
+  const normalized = {
+    customerPhoneNormalized: normalizeIndianPhone(details.phone),
+    customerEmailNormalized: normalizeEmail(details.email),
+  };
+  if (update.$set) Object.assign(update.$set, normalized);
+  else Object.assign(update, normalized);
+});
 
 const AquaInvoice =
   mongoose.models.AquaInvoice ||

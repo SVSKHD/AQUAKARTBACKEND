@@ -21,6 +21,7 @@ import Coupons from "./src/routes/coupon.js";
 import SoftenerHydRoutes from "./src/routes/SoftenersHyd.js";
 import metaWhatsAppWebhookRoutes from "./src/routes/whatsappMetaWebhook.js";
 import invoiceRoutes from "./src/routes/crm/invoice.js";
+import publicInvoiceRoutes from "./src/routes/publicInvoice.js";
 import paymentLinkRoutes from "./src/routes/crm/paymentLink.js";
 import AdminUserRoutes from "./src/routes/crm/adminUser.js";
 import AdminCategoryRoutes from "./src/routes/crm/category.js";
@@ -93,6 +94,7 @@ app.use("/v1/email", SendEmail);
 app.use("/v1/subscription", Subscritions);
 
 app.use("/v1/crm", invoiceRoutes);
+app.use("/v1/invoices/public", publicInvoiceRoutes);
 app.use("/v1/crm", paymentLinkRoutes);
 app.use("/v1/crm", AquaStock);
 app.use("/v1/crm/user", AdminUserRoutes);

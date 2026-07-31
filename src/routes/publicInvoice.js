@@ -1,0 +1,43 @@
+import express from "express";
+import { rateLimit } from "express-rate-limit";
+import publicInvoiceController from "../controllers/publicInvoice.js";
+import requireInvoiceAccess from "../middleware/invoiceAccess.js";
+
+const router = express.Router();
+const limiter = (windowMs, limit) =>
+  rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: {
+      success: false,
+      message: "Too many requests. Please try again later.",
+    },
+  });
+
+router.post(
+  "/lookup",
+  limiter(15 * 60 * 1000, 5),
+  publicInvoiceController.lookup,
+);
+router.post(
+  "/request-access",
+  limiter(60 * 60 * 1000, 3),
+  publicInvoiceController.requestAccess,
+);
+router.post(
+  "/exchange",
+  limiter(15 * 60 * 1000, 5),
+  publicInvoiceController.exchange,
+);
+router.get("/", requireInvoiceAccess, publicInvoiceController.list);
+router.get("/:id", requireInvoiceAccess, publicInvoiceController.getById);
+router.post(
+  "/:id/email",
+  limiter(24 * 60 * 60 * 1000, 3),
+  requireInvoiceAccess,
+  publicInvoiceController.emailById,
+);
+
+export default router;

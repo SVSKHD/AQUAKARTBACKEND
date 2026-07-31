@@ -29,8 +29,8 @@ router.get(
   userAuth.checkAdmin,
   InvoiceOperations.getInvoiceByPhone,
 );
-// deprecated routes retained temporarily for backward compatibility
-router.get("/invoice/:id", InvoiceOperations.getInvoiceById);
+// Deprecated public route removed: customer invoice access now requires a
+// short-lived token through /v1/invoices/public/:id.
 router.get(
   "/invoice-phone/:phone",
   userAuth.checkAdmin,
