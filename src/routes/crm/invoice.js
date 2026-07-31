@@ -29,6 +29,7 @@ router.get(
   userAuth.checkAdmin,
   InvoiceOperations.getInvoiceByPhone,
 );
+router.post("/public/invoices/lookup", InvoiceOperations.findCustomerInvoices);
 // deprecated routes retained temporarily for backward compatibility
 router.get("/invoice/:id", InvoiceOperations.getInvoiceById);
 router.get(

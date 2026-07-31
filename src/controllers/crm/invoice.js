@@ -87,7 +87,11 @@ const collectProductQuantities = (products = []) => {
     const quantity = Number(product?.productQuantity || 0);
 
     // Manual invoice rows without productId should not affect CRM stock.
-    if (!productId || !mongoose.Types.ObjectId.isValid(productId) || quantity <= 0)
+    if (
+      !productId ||
+      !mongoose.Types.ObjectId.isValid(productId) ||
+      quantity <= 0
+    )
       return;
 
     quantityByProductId.set(
@@ -102,7 +106,10 @@ const collectProductQuantities = (products = []) => {
 const buildStockChanges = (newProducts = [], oldProducts = []) => {
   const newQuantities = collectProductQuantities(newProducts);
   const oldQuantities = collectProductQuantities(oldProducts);
-  const productIds = new Set([...newQuantities.keys(), ...oldQuantities.keys()]);
+  const productIds = new Set([
+    ...newQuantities.keys(),
+    ...oldQuantities.keys(),
+  ]);
 
   return [...productIds]
     .map((productId) => {
@@ -116,7 +123,9 @@ const buildStockChanges = (newProducts = [], oldProducts = []) => {
 };
 
 const assertStockAvailable = async (stockChanges = []) => {
-  const consumingChanges = stockChanges.filter(({ stockDelta }) => stockDelta < 0);
+  const consumingChanges = stockChanges.filter(
+    ({ stockDelta }) => stockDelta < 0,
+  );
   if (!consumingChanges.length) return;
 
   const stockRecords = await AquaStock.find({
@@ -383,6 +392,58 @@ const getInvoiceByPhone = async (req, res) => {
   }
 };
 
+const findCustomerInvoices = async (req, res) => {
+  try {
+    const phone = normalizeIndianPhone(req.body?.phone);
+
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid 10-digit Indian mobile number",
+      });
+    }
+
+    const phoneValues = [Number(phone), Number(`91${phone}`)];
+    const invoices = await AquaInvoice.find({
+      "customerDetails.phone": { $in: phoneValues },
+    })
+      .select("_id invoiceNo date paidStatus products createdAt")
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    const purchases = invoices.map((invoice) => ({
+      id: invoice._id,
+      invoiceNo: invoice.invoiceNo || "Aquakart invoice",
+      date: invoice.date || invoice.createdAt || null,
+      paidStatus: invoice.paidStatus || "Not available",
+      itemCount: Array.isArray(invoice.products)
+        ? invoice.products.reduce(
+            (total, product) =>
+              total + Math.max(Number(product?.productQuantity || 0), 0),
+            0,
+          )
+        : 0,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      found: purchases.length > 0,
+      count: purchases.length,
+      message: purchases.length
+        ? "We found your Aquakart purchases"
+        : "You have no purchases yet",
+      purchases,
+    });
+  } catch (error) {
+    console.error("Public invoice lookup failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: "We could not check your purchases right now",
+    });
+  }
+};
+
 const getInvoicesByDate = async (req, res) => {
   try {
     const { month, year, startDate, endDate } = req.query;
@@ -540,6 +601,7 @@ export default {
   deleteInvoice,
   getInvoiceById,
   getInvoiceByPhone,
+  findCustomerInvoices,
   getInvoicesByDate,
   NotifyInvoiceMembers,
   notifySpecificInvoiceMember,
