@@ -21,6 +21,11 @@ const AquaInvoiceSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    firebaseUid: { type: String, index: true, sparse: true },
+    accessMetrics: {
+      openCount: { type: Number, default: 0, min: 0 },
+      lastOpenedAt: { type: Date },
+    },
     gst: { type: Boolean, default: false },
     po: { type: Boolean, default: false },
     quotation: { type: Boolean, default: false },
