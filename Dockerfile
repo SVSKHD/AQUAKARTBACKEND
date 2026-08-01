@@ -1,22 +1,27 @@
-# Use an official Node.js runtime as the base image
-FROM node:20
+FROM node:22-alpine
 
-# Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json to the working directory
+ENV NODE_ENV=production
+ENV PORT=5300
+ENV NPM_CONFIG_LOGLEVEL=warn
+
+# Copy dependency files first for Docker caching
 COPY package*.json ./
 
-# Install app dependencies including pm2
-RUN npm install pm2 -g
-RUN npm install
+# Use npm ci when package-lock exists; otherwise use npm install
+RUN if [ -f package-lock.json ]; then \
+      npm ci --omit=dev; \
+    else \
+      npm install --omit=dev; \
+    fi
 
-# Copy the rest of the application code to the working directory
+# Install PM2 runtime
+RUN npm install --global pm2
+
+# Copy application source
 COPY . .
 
-# Expose the port the app runs on
 EXPOSE 5300
 
-
-# Set the command to start the app with pm2
-CMD ["pm2-runtime", "start", "index.js", "--name", "app"]
+CMD ["pm2-runtime", "start", "index.js", "--name", "aquakart-backend"]
