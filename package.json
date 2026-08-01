@@ -12,7 +12,8 @@
     "update:packages": "npx npm-check-updates -u && npm install",
     "prepare": "husky",
     "lint": "eslint . --ext .js",
-    "lint:fix": "eslint . --ext .js --fix"
+    "lint:fix": "eslint . --ext .js --fix",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +27,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-fileupload": "^1.5.2",
+    "express-rate-limit": "^8.6.1",
     "express-validator": "^7.3.2",
     "firebase-admin": "^13.5.0",
     "formidable": "^3.5.4",

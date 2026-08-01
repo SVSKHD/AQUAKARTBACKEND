@@ -1,21 +1,34 @@
 import nodemailer from "nodemailer";
 
 async function sendEmail({ email, subject, message, content }) {
+  const requiredConfig = [
+    process.env.SMTP_HOST,
+    process.env.SMTP_USER,
+    process.env.SMTP_PASSWORD,
+  ];
+  if (requiredConfig.some((value) => !value)) {
+    return {
+      success: false,
+      message: "Email delivery is not configured",
+      code: "EMAIL_NOT_CONFIGURED",
+    };
+  }
+
   const transporter = nodemailer.createTransport({
-    host: "smtp.hostinger.com",
-    port: 465, // ✅ STARTTLS port
-    secure: true, // ✅ false for 587, Nodemailer will STARTTLS
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: String(process.env.SMTP_SECURE || "true") === "true",
     auth: {
-      user: "customercare@aquakart.co.in",
-      pass: "Hithesh.svsk123",
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
     },
-    logger: true, // optional: verbose logs in container
-    debug: true, // optional: verbose logs in container
   });
 
   try {
     const info = await transporter.sendMail({
-      from: '"AquaKart Support" <customercare@aquakart.co.in>',
+      from:
+        process.env.EMAIL_FROM ||
+        `"Aquakart Support" <${process.env.SMTP_USER}>`,
       to: email,
       subject,
       text: message,
