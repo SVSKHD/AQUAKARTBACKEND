@@ -6,20 +6,17 @@ ENV NODE_ENV=production
 ENV PORT=5300
 ENV NPM_CONFIG_LOGLEVEL=warn
 
-# Copy dependency files first for Docker caching
 COPY package*.json ./
 
-# Use npm ci when package-lock exists; otherwise use npm install
+# Backend does not need development lifecycle scripts such as Husky
 RUN if [ -f package-lock.json ]; then \
-      npm ci --omit=dev; \
+      npm ci --omit=dev --ignore-scripts; \
     else \
-      npm install --omit=dev; \
+      npm install --omit=dev --ignore-scripts; \
     fi
 
-# Install PM2 runtime
 RUN npm install --global pm2
 
-# Copy application source
 COPY . .
 
 EXPOSE 5300
