@@ -2,6 +2,7 @@ import express from "express";
 import { rateLimit } from "express-rate-limit";
 import publicInvoiceController from "../controllers/publicInvoice.js";
 import requireInvoiceAccess from "../middleware/invoiceAccess.js";
+import verifyFirebaseToken from "../middleware/firebaseAuth.js";
 
 const router = express.Router();
 const limiter = (windowMs, limit) =>
@@ -30,6 +31,12 @@ router.post(
   "/exchange",
   limiter(15 * 60 * 1000, 5),
   publicInvoiceController.exchange,
+);
+router.post(
+  "/login",
+  limiter(15 * 60 * 1000, 5),
+  verifyFirebaseToken,
+  publicInvoiceController.loginAccess,
 );
 router.get("/", requireInvoiceAccess, publicInvoiceController.list);
 router.get("/:id", requireInvoiceAccess, publicInvoiceController.getById);

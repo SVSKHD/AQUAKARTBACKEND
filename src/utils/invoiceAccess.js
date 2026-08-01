@@ -35,12 +35,13 @@ const accessSecret = () => {
   return secret;
 };
 
-export const signInvoiceAccessToken = ({ invoiceIds, email }) =>
+export const signInvoiceAccessToken = ({ invoiceIds, email, firebaseUid }) =>
   jwt.sign(
     {
       purpose: "invoice-access",
       invoiceIds: invoiceIds.map(String),
       email: normalizeEmail(email),
+      firebaseUid: firebaseUid || undefined,
     },
     accessSecret(),
     { expiresIn: process.env.INVOICE_ACCESS_SESSION_EXPIRY || "30m" },

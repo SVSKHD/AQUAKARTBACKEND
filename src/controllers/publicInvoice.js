@@ -232,6 +232,85 @@ const exchange = async (req, res) => {
   }
 };
 
+const loginAccess = async (req, res) => {
+  try {
+    const phone = normalizeIndianPhone(req.body?.phone);
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid 10-digit Indian mobile number",
+      });
+    }
+
+    const invoices = await findInvoicesByPhone(phone);
+    if (!invoices.length) {
+      return res.status(404).json({
+        success: false,
+        message: "You have no purchases yet.",
+      });
+    }
+
+    const firebaseUser = req.firebaseUser;
+    const linkedToAnotherGoogleAccount = invoices.some(
+      (invoice) =>
+        invoice.firebaseUid && invoice.firebaseUid !== firebaseUser.uid,
+    );
+    if (linkedToAnotherGoogleAccount) {
+      return res.status(403).json({
+        success: false,
+        message: "These invoices are linked to another Google account",
+      });
+    }
+
+    await Promise.all(
+      invoices.map((invoice) => {
+        const customerDetails = invoice.customerDetails || {};
+        const update = {
+          firebaseUid: firebaseUser.uid,
+          customerEmailNormalized: firebaseUser.email,
+        };
+        if (!customerDetails.email) {
+          update["customerDetails.email"] = firebaseUser.email;
+        }
+        if (!customerDetails.name && firebaseUser.name) {
+          update["customerDetails.name"] = firebaseUser.name;
+        }
+        return AquaInvoice.updateOne({ _id: invoice._id }, { $set: update });
+      }),
+    );
+
+    const accessToken = signInvoiceAccessToken({
+      invoiceIds: invoices.map((invoice) => invoice._id),
+      email: firebaseUser.email,
+      firebaseUid: firebaseUser.uid,
+    });
+
+    return res.status(200).json({
+      success: true,
+      authenticated: true,
+      accessToken,
+      expiresIn: 1800,
+      invoiceCount: invoices.length,
+      redirectInvoiceId:
+        invoices.length === 1 ? String(invoices[0]._id) : undefined,
+      user: {
+        firebaseUid: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: firebaseUser.name,
+        photoURL: firebaseUser.picture,
+      },
+      message: "Google account verified. Your invoices are ready.",
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode
+        ? error.message
+        : "Unable to open invoices with Google",
+    });
+  }
+};
+
 const toSummary = (invoice) => ({
   id: String(invoice._id),
   invoiceNo: invoice.invoiceNo || String(invoice._id),
@@ -308,4 +387,12 @@ const emailById = async (req, res) => {
   }
 };
 
-export default { lookup, requestAccess, exchange, list, getById, emailById };
+export default {
+  lookup,
+  requestAccess,
+  exchange,
+  loginAccess,
+  list,
+  getById,
+  emailById,
+};

@@ -37,10 +37,12 @@ test("signs invoice-scoped access tokens", () => {
   const token = signInvoiceAccessToken({
     invoiceIds: ["507f1f77bcf86cd799439011"],
     email: "customer@example.com",
+    firebaseUid: "firebase-customer-1",
   });
   const payload = verifyInvoiceAccessToken(token);
   assert.equal(payload.purpose, "invoice-access");
   assert.deepEqual(payload.invoiceIds, ["507f1f77bcf86cd799439011"]);
+  assert.equal(payload.firebaseUid, "firebase-customer-1");
 });
 
 test("calculates invoice totals from quantity and price", () => {
