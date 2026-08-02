@@ -117,7 +117,7 @@ test("classifies invoice ownership without silently changing email", () => {
   );
 });
 
-test("allows direct access only for owned or matching-email invoices", () => {
+test("allows a verified Google user to claim an unowned direct invoice link", () => {
   const identity = {
     firebaseUid: "firebase-customer-1",
     email: "customer@example.com",
@@ -142,11 +142,11 @@ test("allows direct access only for owned or matching-email invoices", () => {
       { customerDetails: { email: "other@example.com" } },
       identity,
     ),
-    false,
+    true,
   );
   assert.equal(
     isDirectInvoiceAccessAllowed({ customerDetails: {} }, identity),
-    false,
+    true,
   );
   assert.equal(
     isDirectInvoiceAccessAllowed(
@@ -163,7 +163,7 @@ test("allows direct access only for owned or matching-email invoices", () => {
       },
       identity,
     ),
-    true,
+    false,
   );
 });
 

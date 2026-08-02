@@ -321,6 +321,47 @@ const bindMatchingInvoice = async (invoice, firebaseUser) => {
   };
 };
 
+const bindDirectInvoice = async (invoice, firebaseUser, req) => {
+  if (!isDirectInvoiceAccessAllowed(invoice, firebaseUser)) return null;
+
+  const previousEmail = getInvoiceEmail(invoice);
+  const ownershipFilter = invoice.firebaseUid
+    ? { firebaseUid: firebaseUser.uid }
+    : {
+        $or: [
+          { firebaseUid: { $exists: false } },
+          { firebaseUid: null },
+          { firebaseUid: "" },
+        ],
+      };
+  const update = {
+    $set: {
+      firebaseUid: firebaseUser.uid,
+      "customerDetails.email": firebaseUser.email,
+      customerEmailNormalized: firebaseUser.email,
+      aquakartOnlineUser: true,
+    },
+  };
+
+  if (previousEmail !== firebaseUser.email) {
+    update.$push = {
+      emailUpdateAudit: buildInvoiceEmailAudit({
+        previousEmail,
+        newEmail: firebaseUser.email,
+        firebaseUid: firebaseUser.uid,
+        requestIp: req.ip,
+        userAgent: req.get("user-agent"),
+      }),
+    };
+  }
+
+  return AquaInvoice.findOneAndUpdate(
+    { _id: invoice._id, ...ownershipFilter },
+    update,
+    { new: true },
+  ).lean();
+};
+
 const loginAccess = async (req, res) => {
   try {
     const phone = normalizeIndianPhone(req.body?.phone);
@@ -422,27 +463,17 @@ const loginDirectAccess = async (req, res) => {
     }
 
     const { firebaseUser } = req;
-    if (!isDirectInvoiceAccessAllowed(invoice, firebaseUser)) {
+    const linkedInvoice = await bindDirectInvoice(invoice, firebaseUser, req);
+    if (!linkedInvoice) {
       return res.status(403).json({
         success: false,
-        verificationRequired: true,
         message:
-          "This Google account does not match the invoice. Verify the purchase phone number to continue.",
-      });
-    }
-
-    const linked = await bindMatchingInvoice(invoice, firebaseUser);
-    if (!linked.invoice || linked.state !== "owned") {
-      return res.status(403).json({
-        success: false,
-        verificationRequired: true,
-        message:
-          "This Google account does not match the invoice. Verify the purchase phone number to continue.",
+          "This invoice is already connected to another Google account.",
       });
     }
 
     const accessToken = signInvoiceAccessToken({
-      invoiceIds: [linked.invoice._id],
+      invoiceIds: [linkedInvoice._id],
       email: firebaseUser.email,
       firebaseUid: firebaseUser.uid,
     });
@@ -452,9 +483,9 @@ const loginDirectAccess = async (req, res) => {
       authenticated: true,
       accessToken,
       expiresIn: 1800,
-      redirectInvoiceId: String(linked.invoice._id),
-      invoice: toSummary(linked.invoice, firebaseUser),
-      message: "Invoice access verified with Google.",
+      redirectInvoiceId: String(linkedInvoice._id),
+      invoice: toSummary(linkedInvoice, firebaseUser),
+      message: "Invoice opened with your verified Google account.",
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
