@@ -3,8 +3,13 @@ import { rateLimit } from "express-rate-limit";
 import publicInvoiceController from "../controllers/publicInvoice.js";
 import requireInvoiceAccess from "../middleware/invoiceAccess.js";
 import verifyFirebaseToken from "../middleware/firebaseAuth.js";
+import requireGoogleBackendSession from "../middleware/googleSession.js";
 
 const router = express.Router();
+router.use((_req, res, next) => {
+  res.set("Cache-Control", "private, no-store, max-age=0");
+  next();
+});
 const limiter = (windowMs, limit) =>
   rateLimit({
     windowMs,
@@ -20,6 +25,8 @@ const limiter = (windowMs, limit) =>
 router.post(
   "/lookup",
   limiter(15 * 60 * 1000, 5),
+  verifyFirebaseToken,
+  requireGoogleBackendSession,
   publicInvoiceController.lookup,
 );
 router.post(
@@ -36,10 +43,34 @@ router.post(
   "/login",
   limiter(15 * 60 * 1000, 5),
   verifyFirebaseToken,
+  requireGoogleBackendSession,
   publicInvoiceController.loginAccess,
 );
 router.get("/", requireInvoiceAccess, publicInvoiceController.list);
 router.get("/:id", requireInvoiceAccess, publicInvoiceController.getById);
+router.post(
+  "/:id/claim",
+  limiter(15 * 60 * 1000, 5),
+  requireInvoiceAccess,
+  publicInvoiceController.claimById,
+);
+router.patch(
+  "/:id/email",
+  limiter(15 * 60 * 1000, 5),
+  requireInvoiceAccess,
+  publicInvoiceController.updateEmailById,
+);
+router.post(
+  "/:id/share/email",
+  limiter(24 * 60 * 60 * 1000, 3),
+  requireInvoiceAccess,
+  publicInvoiceController.emailById,
+);
+router.get(
+  "/:id/share/whatsapp",
+  requireInvoiceAccess,
+  publicInvoiceController.whatsappStatusById,
+);
 router.post(
   "/:id/email",
   limiter(24 * 60 * 60 * 1000, 3),

@@ -132,7 +132,12 @@ UserSchema.pre("save", async function () {
 
 UserSchema.methods.generateAuthToken = function () {
   return jwt.sign(
-    { _id: this._id, email: this.email, role: this.role },
+    {
+      _id: this._id,
+      email: this.email,
+      role: this.role,
+      firebaseUid: this.firebaseUid,
+    },
     process.env.JWT_SECRET,
     { expiresIn: "30d" },
   );

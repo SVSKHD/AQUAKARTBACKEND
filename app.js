@@ -55,8 +55,8 @@ const corsOptions = {
     "https://www.aquakart.co.in",
     "http://localhost:4000",
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Aquakart-Session"],
   credentials: true,
 };
 
