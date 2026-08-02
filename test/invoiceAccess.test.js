@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildEmailDeliveryDedupeKey,
+  buildInvoiceEmailAudit,
   calculateInvoiceTotal,
+  getInvoiceOwnershipState,
   hashToken,
   maskEmail,
   normalizeEmail,
   normalizeIndianPhone,
   signInvoiceAccessToken,
+  validateEmail,
   verifyInvoiceAccessToken,
 } from "../src/utils/invoiceAccess.js";
 
@@ -23,6 +27,12 @@ test("normalizes and masks customer email", () => {
   );
   assert.equal(maskEmail("customer@example.com"), "cu******@e***.com");
   assert.equal(maskEmail("invalid"), "");
+  assert.equal(validateEmail(" Customer@Example.COM "), "customer@example.com");
+  assert.equal(
+    validateEmail("victim@example.com\r\nBcc: attacker@example.com"),
+    "",
+  );
+  assert.equal(validateEmail("not-an-email"), "");
 });
 
 test("hashes opaque tokens without retaining the input", () => {
@@ -43,6 +53,96 @@ test("signs invoice-scoped access tokens", () => {
   assert.equal(payload.purpose, "invoice-access");
   assert.deepEqual(payload.invoiceIds, ["507f1f77bcf86cd799439011"]);
   assert.equal(payload.firebaseUid, "firebase-customer-1");
+  assert.equal(payload.grant, "owner");
+});
+
+test("supports invoice-delivery grants without changing ownership", () => {
+  process.env.INVOICE_ACCESS_SECRET =
+    "test-invoice-secret-with-sufficient-length";
+  const token = signInvoiceAccessToken({
+    invoiceIds: ["507f1f77bcf86cd799439011"],
+    email: "delivery@example.com",
+    grant: "delivery",
+  });
+  assert.equal(verifyInvoiceAccessToken(token).grant, "delivery");
+});
+
+test("classifies invoice ownership without silently changing email", () => {
+  const identity = {
+    firebaseUid: "firebase-customer-1",
+    email: "customer@example.com",
+  };
+  assert.equal(
+    getInvoiceOwnershipState(
+      { firebaseUid: "firebase-customer-1", customerDetails: {} },
+      identity,
+    ),
+    "owned",
+  );
+  assert.equal(
+    getInvoiceOwnershipState(
+      { customerDetails: { email: "customer@example.com" } },
+      identity,
+    ),
+    "email-match",
+  );
+  assert.equal(
+    getInvoiceOwnershipState({ customerDetails: {} }, identity),
+    "email-missing",
+  );
+  assert.equal(
+    getInvoiceOwnershipState(
+      { customerDetails: { email: "other@example.com" } },
+      identity,
+    ),
+    "email-different",
+  );
+  assert.equal(
+    getInvoiceOwnershipState(
+      { firebaseUid: "another-user", customerDetails: {} },
+      identity,
+    ),
+    "restricted",
+  );
+});
+
+test("deduplicates concurrent delivery attempts by minute", () => {
+  const input = {
+    invoiceId: "507f1f77bcf86cd799439011",
+    firebaseUid: "firebase-customer-1",
+    recipientEmail: "delivery@example.com",
+    now: 1760000000000,
+  };
+  const first = buildEmailDeliveryDedupeKey(input);
+  const duplicate = buildEmailDeliveryDedupeKey({
+    ...input,
+    now: input.now + 500,
+  });
+  const nextMinute = buildEmailDeliveryDedupeKey({
+    ...input,
+    now: input.now + 60000,
+  });
+  assert.equal(first, duplicate);
+  assert.notEqual(first, nextMinute);
+});
+
+test("builds email-update audit metadata without retaining request IP", () => {
+  const changedAt = new Date("2026-08-02T00:00:00.000Z");
+  const audit = buildInvoiceEmailAudit({
+    previousEmail: "old@example.com",
+    newEmail: "verified@example.com",
+    firebaseUid: "firebase-customer-1",
+    requestIp: "203.0.113.10",
+    userAgent: "Aquakart test browser",
+    changedAt,
+  });
+  assert.equal(audit.previousEmail, "old@example.com");
+  assert.equal(audit.newEmail, "verified@example.com");
+  assert.equal(audit.firebaseUid, "firebase-customer-1");
+  assert.equal(audit.changedAt, changedAt);
+  assert.equal(audit.requestIpHash.length, 64);
+  assert.notEqual(audit.requestIpHash, "203.0.113.10");
+  assert.equal(audit.userAgentHash.length, 64);
 });
 
 test("calculates invoice totals from quantity and price", () => {

@@ -26,6 +26,16 @@ const AquaInvoiceSchema = new mongoose.Schema(
       openCount: { type: Number, default: 0, min: 0 },
       lastOpenedAt: { type: Date },
     },
+    emailUpdateAudit: [
+      {
+        previousEmail: { type: String, default: "" },
+        newEmail: { type: String, required: true },
+        firebaseUid: { type: String, required: true },
+        changedAt: { type: Date, default: Date.now },
+        requestIpHash: String,
+        userAgentHash: String,
+      },
+    ],
     gst: { type: Boolean, default: false },
     po: { type: Boolean, default: false },
     quotation: { type: Boolean, default: false },
