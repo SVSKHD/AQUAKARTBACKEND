@@ -46,6 +46,13 @@ router.post(
   requireGoogleBackendSession,
   publicInvoiceController.loginAccess,
 );
+router.post(
+  "/:id/login",
+  limiter(15 * 60 * 1000, 5),
+  verifyFirebaseToken,
+  requireGoogleBackendSession,
+  publicInvoiceController.loginDirectAccess,
+);
 router.get("/", requireInvoiceAccess, publicInvoiceController.list);
 router.get("/:id", requireInvoiceAccess, publicInvoiceController.getById);
 router.post(
