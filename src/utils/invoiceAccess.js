@@ -135,6 +135,17 @@ export const isDirectInvoiceAccessAllowed = (invoice, identity) => {
   return Boolean(verifiedUid) && (!invoiceUid || invoiceUid === verifiedUid);
 };
 
+export const buildDirectInvoiceEmailFields = (invoice, googleEmail) => {
+  if (getInvoiceEmail(invoice)) return {};
+  const verifiedEmail = validateEmail(googleEmail);
+  return verifiedEmail
+    ? {
+        "customerDetails.email": verifiedEmail,
+        customerEmailNormalized: verifiedEmail,
+      }
+    : {};
+};
+
 export const buildEmailDeliveryDedupeKey = ({
   invoiceId,
   firebaseUid,

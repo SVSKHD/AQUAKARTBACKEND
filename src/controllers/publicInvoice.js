@@ -7,6 +7,7 @@ import { getWhatsAppInvoiceSharingStatus } from "../services/invoiceSharing/what
 import invoiceAccessEmail from "../utils/emailTemplates/invoiceAccessEmail.js";
 import {
   buildInvoiceEmailAudit,
+  buildDirectInvoiceEmailFields,
   buildEmailDeliveryDedupeKey,
   calculateInvoiceTotal,
   createOpaqueToken,
@@ -337,13 +338,12 @@ const bindDirectInvoice = async (invoice, firebaseUser, req) => {
   const update = {
     $set: {
       firebaseUid: firebaseUser.uid,
-      "customerDetails.email": firebaseUser.email,
-      customerEmailNormalized: firebaseUser.email,
       aquakartOnlineUser: true,
+      ...buildDirectInvoiceEmailFields(invoice, firebaseUser.email),
     },
   };
 
-  if (previousEmail !== firebaseUser.email) {
+  if (!previousEmail) {
     update.$push = {
       emailUpdateAudit: buildInvoiceEmailAudit({
         previousEmail,
