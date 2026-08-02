@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildEmailDeliveryDedupeKey,
+  buildDirectInvoiceEmailFields,
   buildInvoiceEmailAudit,
   calculateInvoiceTotal,
   getInvoiceOwnershipState,
@@ -164,6 +165,26 @@ test("allows a verified Google user to claim an unowned direct invoice link", ()
       identity,
     ),
     false,
+  );
+});
+
+test("keeps an existing invoice email and only fills a missing email", () => {
+  assert.deepEqual(
+    buildDirectInvoiceEmailFields(
+      { customerDetails: { email: "existing@example.com" } },
+      "google@example.com",
+    ),
+    {},
+  );
+  assert.deepEqual(
+    buildDirectInvoiceEmailFields(
+      { customerDetails: {} },
+      " Google@Example.COM ",
+    ),
+    {
+      "customerDetails.email": "google@example.com",
+      customerEmailNormalized: "google@example.com",
+    },
   );
 });
 
