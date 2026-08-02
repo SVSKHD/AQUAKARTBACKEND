@@ -31,6 +31,12 @@ router.get(
   userAuth.checkAdmin,
   InvoiceOperations.getInvoiceById,
 );
+// Backward-compatible route used by deployed CRM clients.
+router.get(
+  "/invoice/:id",
+  userAuth.checkAdmin,
+  InvoiceOperations.getInvoiceById,
+);
 router.get(
   "/invoice/phone/:phone",
   userAuth.checkAdmin,

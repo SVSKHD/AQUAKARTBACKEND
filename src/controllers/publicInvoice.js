@@ -23,9 +23,21 @@ import {
 
 const GENERIC_LOOKUP_MESSAGE =
   "If matching invoices are available, you can continue securely with your verified Google account.";
+const INVOICE_QUERY_TIMEOUT_MS = 3_000;
+const MAX_INVOICES_PER_LOOKUP = 50;
 
-const findInvoicesByPhone = async (phoneNormalized) =>
-  AquaInvoice.find({
+const findInvoicesByPhone = async (phoneNormalized) => {
+  const indexedMatches = await AquaInvoice.find({
+    customerPhoneNormalized: phoneNormalized,
+  })
+    .sort({ createdAt: -1 })
+    .limit(MAX_INVOICES_PER_LOOKUP)
+    .maxTimeMS(INVOICE_QUERY_TIMEOUT_MS)
+    .lean();
+
+  if (indexedMatches.length) return indexedMatches;
+
+  return AquaInvoice.find({
     $or: [
       { customerPhoneNormalized: phoneNormalized },
       { "customerDetails.phone": phoneNormalized },
@@ -33,7 +45,10 @@ const findInvoicesByPhone = async (phoneNormalized) =>
     ],
   })
     .sort({ createdAt: -1 })
+    .limit(MAX_INVOICES_PER_LOOKUP)
+    .maxTimeMS(INVOICE_QUERY_TIMEOUT_MS)
     .lean();
+};
 
 const getCustomerName = (invoices = []) =>
   invoices.find((invoice) => invoice.customerDetails?.name)?.customerDetails
@@ -397,7 +412,9 @@ const loginDirectAccess = async (req, res) => {
         .json({ success: false, message: "Invoice not found" });
     }
 
-    const invoice = await AquaInvoice.findById(id).lean();
+    const invoice = await AquaInvoice.findById(id)
+      .maxTimeMS(INVOICE_QUERY_TIMEOUT_MS)
+      .lean();
     if (!invoice) {
       return res
         .status(404)
