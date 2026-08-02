@@ -15,7 +15,6 @@ import {
   getInvoiceOwnershipState,
   hashAuditValue,
   hashToken,
-  isDirectInvoiceAccessAllowed,
   maskEmail,
   normalizeIndianPhone,
   signInvoiceAccessToken,
@@ -322,42 +321,28 @@ const bindMatchingInvoice = async (invoice, firebaseUser) => {
   };
 };
 
-const bindDirectInvoice = async (invoice, firebaseUser, req) => {
-  if (!isDirectInvoiceAccessAllowed(invoice, firebaseUser)) return null;
-
+const prepareDirectInvoice = async (invoice, firebaseUser, req) => {
   const previousEmail = getInvoiceEmail(invoice);
-  const ownershipFilter = invoice.firebaseUid
-    ? { firebaseUid: firebaseUser.uid }
-    : {
-        $or: [
-          { firebaseUid: { $exists: false } },
-          { firebaseUid: null },
-          { firebaseUid: "" },
-        ],
-      };
-  const update = {
-    $set: {
-      firebaseUid: firebaseUser.uid,
-      aquakartOnlineUser: true,
-      ...buildDirectInvoiceEmailFields(invoice, firebaseUser.email),
+  const emailFields = buildDirectInvoiceEmailFields(
+    invoice,
+    firebaseUser.email,
+  );
+  if (!Object.keys(emailFields).length) return invoice;
+
+  return AquaInvoice.findByIdAndUpdate(
+    invoice._id,
+    {
+      $set: emailFields,
+      $push: {
+        emailUpdateAudit: buildInvoiceEmailAudit({
+          previousEmail,
+          newEmail: firebaseUser.email,
+          firebaseUid: firebaseUser.uid,
+          requestIp: req.ip,
+          userAgent: req.get("user-agent"),
+        }),
+      },
     },
-  };
-
-  if (!previousEmail) {
-    update.$push = {
-      emailUpdateAudit: buildInvoiceEmailAudit({
-        previousEmail,
-        newEmail: firebaseUser.email,
-        firebaseUid: firebaseUser.uid,
-        requestIp: req.ip,
-        userAgent: req.get("user-agent"),
-      }),
-    };
-  }
-
-  return AquaInvoice.findOneAndUpdate(
-    { _id: invoice._id, ...ownershipFilter },
-    update,
     { new: true },
   ).lean();
 };
@@ -463,19 +448,17 @@ const loginDirectAccess = async (req, res) => {
     }
 
     const { firebaseUser } = req;
-    const linkedInvoice = await bindDirectInvoice(invoice, firebaseUser, req);
-    if (!linkedInvoice) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "This invoice is already connected to another Google account.",
-      });
-    }
+    const accessibleInvoice = await prepareDirectInvoice(
+      invoice,
+      firebaseUser,
+      req,
+    );
 
     const accessToken = signInvoiceAccessToken({
-      invoiceIds: [linkedInvoice._id],
+      invoiceIds: [accessibleInvoice._id],
       email: firebaseUser.email,
       firebaseUid: firebaseUser.uid,
+      grant: "direct",
     });
 
     return res.status(200).json({
@@ -483,8 +466,8 @@ const loginDirectAccess = async (req, res) => {
       authenticated: true,
       accessToken,
       expiresIn: 1800,
-      redirectInvoiceId: String(linkedInvoice._id),
-      invoice: toSummary(linkedInvoice, firebaseUser),
+      redirectInvoiceId: String(accessibleInvoice._id),
+      invoice: toSummary(accessibleInvoice, firebaseUser),
       message: "Invoice opened with your verified Google account.",
     });
   } catch (error) {
@@ -501,7 +484,7 @@ const invoiceIdIsAllowed = (id, access) =>
   mongoose.Types.ObjectId.isValid(id) && access.invoiceIds.includes(id);
 
 const canReadInvoice = (invoice, access) => {
-  if (access.grant === "delivery") return true;
+  if (["delivery", "direct"].includes(access.grant)) return true;
   if (access.firebaseUid) {
     return String(invoice.firebaseUid || "") === String(access.firebaseUid);
   }

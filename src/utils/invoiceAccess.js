@@ -128,13 +128,6 @@ export const getInvoiceOwnershipState = (
   return "email-different";
 };
 
-export const isDirectInvoiceAccessAllowed = (invoice, identity) => {
-  const invoiceUid = String(invoice?.firebaseUid || "");
-  const verifiedUid = String(identity?.firebaseUid || "");
-
-  return Boolean(verifiedUid) && (!invoiceUid || invoiceUid === verifiedUid);
-};
-
 export const buildDirectInvoiceEmailFields = (invoice, googleEmail) => {
   if (getInvoiceEmail(invoice)) return {};
   const verifiedEmail = validateEmail(googleEmail);
