@@ -6,6 +6,7 @@ import {
   calculateInvoiceTotal,
   getInvoiceOwnershipState,
   hashToken,
+  isDirectInvoiceAccessAllowed,
   maskEmail,
   normalizeEmail,
   normalizeIndianPhone,
@@ -103,6 +104,46 @@ test("classifies invoice ownership without silently changing email", () => {
       identity,
     ),
     "restricted",
+  );
+});
+
+test("allows direct access only for owned or matching-email invoices", () => {
+  const identity = {
+    firebaseUid: "firebase-customer-1",
+    email: "customer@example.com",
+  };
+
+  assert.equal(
+    isDirectInvoiceAccessAllowed(
+      { firebaseUid: "firebase-customer-1", customerDetails: {} },
+      identity,
+    ),
+    true,
+  );
+  assert.equal(
+    isDirectInvoiceAccessAllowed(
+      { customerDetails: { email: "customer@example.com" } },
+      identity,
+    ),
+    true,
+  );
+  assert.equal(
+    isDirectInvoiceAccessAllowed(
+      { customerDetails: { email: "other@example.com" } },
+      identity,
+    ),
+    false,
+  );
+  assert.equal(
+    isDirectInvoiceAccessAllowed({ customerDetails: {} }, identity),
+    false,
+  );
+  assert.equal(
+    isDirectInvoiceAccessAllowed(
+      { firebaseUid: "another-user", customerDetails: {} },
+      identity,
+    ),
+    false,
   );
 });
 

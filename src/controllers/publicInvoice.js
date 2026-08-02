@@ -14,6 +14,7 @@ import {
   getInvoiceOwnershipState,
   hashAuditValue,
   hashToken,
+  isDirectInvoiceAccessAllowed,
   maskEmail,
   normalizeIndianPhone,
   signInvoiceAccessToken,
@@ -380,6 +381,67 @@ const loginAccess = async (req, res) => {
   }
 };
 
+const loginDirectAccess = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+
+    const invoice = await AquaInvoice.findById(id).lean();
+    if (!invoice) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+
+    const { firebaseUser } = req;
+    if (!isDirectInvoiceAccessAllowed(invoice, firebaseUser)) {
+      return res.status(403).json({
+        success: false,
+        verificationRequired: true,
+        message:
+          "This Google account does not match the invoice. Verify the purchase phone number to continue.",
+      });
+    }
+
+    const linked = await bindMatchingInvoice(invoice, firebaseUser);
+    if (!linked.invoice || linked.state !== "owned") {
+      return res.status(403).json({
+        success: false,
+        verificationRequired: true,
+        message:
+          "This Google account does not match the invoice. Verify the purchase phone number to continue.",
+      });
+    }
+
+    const accessToken = signInvoiceAccessToken({
+      invoiceIds: [linked.invoice._id],
+      email: firebaseUser.email,
+      firebaseUid: firebaseUser.uid,
+    });
+
+    return res.status(200).json({
+      success: true,
+      authenticated: true,
+      accessToken,
+      expiresIn: 1800,
+      redirectInvoiceId: String(linked.invoice._id),
+      invoice: toSummary(linked.invoice, firebaseUser),
+      message: "Invoice access verified with Google.",
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode
+        ? error.message
+        : "Unable to open this invoice with Google",
+    });
+  }
+};
+
 const invoiceIdIsAllowed = (id, access) =>
   mongoose.Types.ObjectId.isValid(id) && access.invoiceIds.includes(id);
 
@@ -709,6 +771,7 @@ export default {
   requestAccess,
   exchange,
   loginAccess,
+  loginDirectAccess,
   list,
   getById,
   claimById,

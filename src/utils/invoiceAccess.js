@@ -128,6 +128,11 @@ export const getInvoiceOwnershipState = (
   return "email-different";
 };
 
+export const isDirectInvoiceAccessAllowed = (invoice, identity) =>
+  ["owned", "email-match"].includes(
+    getInvoiceOwnershipState(invoice, identity),
+  );
+
 export const buildEmailDeliveryDedupeKey = ({
   invoiceId,
   firebaseUid,
