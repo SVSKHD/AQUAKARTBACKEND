@@ -121,9 +121,9 @@ export const getInvoiceOwnershipState = (
   const invoiceEmail = getInvoiceEmail(invoice);
   const verifiedEmail = validateEmail(email);
 
-  if (invoiceUid && invoiceUid !== verifiedUid) return "restricted";
   if (invoiceUid && invoiceUid === verifiedUid) return "owned";
   if (invoiceEmail && invoiceEmail === verifiedEmail) return "email-match";
+  if (invoiceUid && invoiceUid !== verifiedUid) return "restricted";
   if (!invoiceEmail) return "email-missing";
   return "email-different";
 };
