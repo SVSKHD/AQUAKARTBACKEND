@@ -272,14 +272,21 @@ const bindMatchingInvoice = async (invoice, firebaseUser) => {
   const state = getInvoiceOwnershipState(invoice, firebaseUser);
   if (state !== "email-match") return { invoice, state };
 
+  const existingFirebaseUid = String(invoice.firebaseUid || "");
+  const ownershipFilter = existingFirebaseUid
+    ? { firebaseUid: existingFirebaseUid }
+    : {
+        $or: [
+          { firebaseUid: { $exists: false } },
+          { firebaseUid: null },
+          { firebaseUid: "" },
+        ],
+      };
+
   const linked = await AquaInvoice.findOneAndUpdate(
     {
       _id: invoice._id,
-      $or: [
-        { firebaseUid: { $exists: false } },
-        { firebaseUid: null },
-        { firebaseUid: "" },
-      ],
+      ...ownershipFilter,
     },
     {
       $set: {

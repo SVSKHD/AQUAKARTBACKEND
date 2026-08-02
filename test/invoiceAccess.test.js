@@ -105,6 +105,16 @@ test("classifies invoice ownership without silently changing email", () => {
     ),
     "restricted",
   );
+  assert.equal(
+    getInvoiceOwnershipState(
+      {
+        firebaseUid: "stale-firebase-user",
+        customerDetails: { email: "customer@example.com" },
+      },
+      identity,
+    ),
+    "email-match",
+  );
 });
 
 test("allows direct access only for owned or matching-email invoices", () => {
@@ -144,6 +154,16 @@ test("allows direct access only for owned or matching-email invoices", () => {
       identity,
     ),
     false,
+  );
+  assert.equal(
+    isDirectInvoiceAccessAllowed(
+      {
+        firebaseUid: "stale-firebase-user",
+        customerDetails: { email: "customer@example.com" },
+      },
+      identity,
+    ),
+    true,
   );
 });
 
