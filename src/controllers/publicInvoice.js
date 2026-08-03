@@ -10,6 +10,7 @@ import {
   buildDirectInvoiceEmailFields,
   buildEmailDeliveryDedupeKey,
   calculateInvoiceTotal,
+  classifyInvoiceAccessScope,
   createOpaqueToken,
   getInvoiceEmail,
   getInvoiceOwnershipState,
@@ -481,7 +482,7 @@ const loginDirectAccess = async (req, res) => {
 };
 
 const invoiceIdIsAllowed = (id, access) =>
-  mongoose.Types.ObjectId.isValid(id) && access.invoiceIds.includes(id);
+  classifyInvoiceAccessScope(id, access.invoiceIds) === "allowed";
 
 const canReadInvoice = (invoice, access) => {
   if (["delivery", "direct"].includes(access.grant)) return true;
@@ -511,10 +512,21 @@ const list = async (req, res) => {
 
 const getById = async (req, res) => {
   const { id } = req.params;
-  if (!invoiceIdIsAllowed(id, req.invoiceAccess)) {
+  const scopeState = classifyInvoiceAccessScope(
+    id,
+    req.invoiceAccess.invoiceIds,
+  );
+  if (scopeState === "invalid") {
     return res
       .status(404)
       .json({ success: false, message: "Invoice not found" });
+  }
+  if (scopeState === "mismatch") {
+    return res.status(401).json({
+      success: false,
+      code: "INVOICE_ACCESS_SCOPE_MISMATCH",
+      message: "Google verification is required for this invoice",
+    });
   }
   const invoice = await AquaInvoice.findById(id).lean();
   if (!invoice || !canReadInvoice(invoice, req.invoiceAccess)) {
