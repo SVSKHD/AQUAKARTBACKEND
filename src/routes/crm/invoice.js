@@ -31,6 +31,16 @@ router.get(
   userAuth.checkAdmin,
   InvoiceOperations.getInvoiceById,
 );
+router.get(
+  "/admin/invoices/:id/view",
+  userAuth.checkAdmin,
+  InvoiceOperations.getAdminInvoiceView,
+);
+router.get(
+  "/admin/invoices/:id/customer-view",
+  userAuth.checkAdmin,
+  InvoiceOperations.getCustomerInvoiceView,
+);
 // Backward-compatible route used by deployed CRM clients.
 router.get(
   "/invoice/:id",

@@ -4,6 +4,7 @@ import AquaInvoice from "../../models/crm/invoice.js";
 import AquaStock from "../../models/crm/stock.js";
 import NotificationLog from "../../models/crm/notificationLog.js";
 import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
+import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
 
 const INDIAN_CONTACT_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
 const normalizeIndianPhone = (phone) =>
@@ -87,7 +88,11 @@ const collectProductQuantities = (products = []) => {
     const quantity = Number(product?.productQuantity || 0);
 
     // Manual invoice rows without productId should not affect CRM stock.
-    if (!productId || !mongoose.Types.ObjectId.isValid(productId) || quantity <= 0)
+    if (
+      !productId ||
+      !mongoose.Types.ObjectId.isValid(productId) ||
+      quantity <= 0
+    )
       return;
 
     quantityByProductId.set(
@@ -102,7 +107,10 @@ const collectProductQuantities = (products = []) => {
 const buildStockChanges = (newProducts = [], oldProducts = []) => {
   const newQuantities = collectProductQuantities(newProducts);
   const oldQuantities = collectProductQuantities(oldProducts);
-  const productIds = new Set([...newQuantities.keys(), ...oldQuantities.keys()]);
+  const productIds = new Set([
+    ...newQuantities.keys(),
+    ...oldQuantities.keys(),
+  ]);
 
   return [...productIds]
     .map((productId) => {
@@ -116,7 +124,9 @@ const buildStockChanges = (newProducts = [], oldProducts = []) => {
 };
 
 const assertStockAvailable = async (stockChanges = []) => {
-  const consumingChanges = stockChanges.filter(({ stockDelta }) => stockDelta < 0);
+  const consumingChanges = stockChanges.filter(
+    ({ stockDelta }) => stockDelta < 0,
+  );
   if (!consumingChanges.length) return;
 
   const stockRecords = await AquaStock.find({
@@ -228,7 +238,11 @@ const createInvoice = async (req, res) => {
     req.body.transport.deliveryDate = formattedDate;
 
     const savedInvoice = await new AquaInvoice(req.body).save();
-    res.status(201).json(savedInvoice);
+    const invoice = savedInvoice.toObject();
+    res.status(201).json({
+      ...invoice,
+      ...buildInvoiceViewLinks(invoice._id),
+    });
   } catch (error) {
     if (stockUpdated) await rollbackStockChanges(stockChanges);
     console.error(error);
@@ -371,6 +385,47 @@ const getInvoiceById = async (req, res) => {
   }
 };
 
+const getAdminInvoiceView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid invoice id" });
+    }
+    const invoice = await AquaInvoice.findById(id).lean();
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    return res.status(200).json({
+      ...invoice,
+      views: buildInvoiceViewLinks(invoice._id),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const getCustomerInvoiceView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid invoice id" });
+    }
+    const invoice = await AquaInvoice.findById(id)
+      .select("_id invoiceNo customerDetails.name")
+      .lean();
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    const views = buildInvoiceViewLinks(invoice._id);
+    return res.status(200).json({
+      success: true,
+      invoiceId: views.invoiceId,
+      invoiceNo: invoice.invoiceNo || "",
+      customerName: invoice.customerDetails?.name || "",
+      url: views.customerUrl,
+      adminUrl: views.adminUrl,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const getInvoiceByPhone = async (req, res) => {
   try {
     res
@@ -454,7 +509,7 @@ const notifySpecificInvoiceMember = async (req, res) => {
         .json({ success: false, message: "Invoice has no customer phone" });
     const message =
       req.body?.message ||
-      `Dear ${name || "Customer"}, your invoice ${invoice.invoiceNo} dated ${invoice.date} is available at https://admin.aquakart.co.in/invoice/${invoice._id}.`;
+      `Dear ${name || "Customer"}, your invoice ${invoice.invoiceNo} dated ${invoice.date} is available at ${buildInvoiceViewLinks(invoice._id).customerUrl}.`;
     const delivery = await sendWhatsAppMessage(
       normalizeIndianPhone(phone),
       message,
@@ -496,7 +551,7 @@ const NotifyInvoiceMembers = async (req, res) => {
     for (const invoice of invoices) {
       const { name: customerName, phone } = invoice.customerDetails || {};
       if (!phone) continue;
-      const message = `Dear ${customerName}, we wish you a very happy ${data.festival} ${year}! 🎉 Your invoice ${invoice.invoiceNo} dated ${invoice.date} for Rs.${invoice.totalAmount} is available at https://admin.aquakart.co.in/invoice/${invoice._id}.`;
+      const message = `Dear ${customerName}, we wish you a very happy ${data.festival} ${year}! 🎉 Your invoice ${invoice.invoiceNo} dated ${invoice.date} for Rs.${invoice.totalAmount} is available at ${buildInvoiceViewLinks(invoice._id).customerUrl}.`;
       try {
         const delivery = await sendWhatsAppMessage(
           normalizeIndianPhone(phone),
@@ -534,6 +589,8 @@ const NotifyInvoiceMembers = async (req, res) => {
 
 export default {
   createInvoice,
+  getAdminInvoiceView,
+  getCustomerInvoiceView,
   updateInvoice,
   getInvoice,
   getInvoices,
