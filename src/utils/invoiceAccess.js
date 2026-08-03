@@ -96,6 +96,12 @@ export const verifyInvoiceAccessToken = (token) => {
   return payload;
 };
 
+export const classifyInvoiceAccessScope = (invoiceId, invoiceIds = []) => {
+  const normalizedId = String(invoiceId || "").trim();
+  if (!/^[a-f\d]{24}$/i.test(normalizedId)) return "invalid";
+  return invoiceIds.map(String).includes(normalizedId) ? "allowed" : "mismatch";
+};
+
 export const calculateInvoiceTotal = (invoice = {}) =>
   (invoice.products || []).reduce(
     (total, product) =>

@@ -5,6 +5,7 @@ import {
   buildDirectInvoiceEmailFields,
   buildInvoiceEmailAudit,
   calculateInvoiceTotal,
+  classifyInvoiceAccessScope,
   getInvoiceOwnershipState,
   hashToken,
   maskEmail,
@@ -14,6 +15,23 @@ import {
   validateEmail,
   verifyInvoiceAccessToken,
 } from "../src/utils/invoiceAccess.js";
+
+test("distinguishes a stale invoice cookie from an invalid invoice id", () => {
+  const authorizedId = "6a6ffacfaafb698d0de99a7c";
+
+  assert.equal(
+    classifyInvoiceAccessScope("6a7032be32c7bfcc925aa611", [authorizedId]),
+    "mismatch",
+  );
+  assert.equal(
+    classifyInvoiceAccessScope(authorizedId, [authorizedId]),
+    "allowed",
+  );
+  assert.equal(
+    classifyInvoiceAccessScope("not-an-invoice-id", [authorizedId]),
+    "invalid",
+  );
+});
 
 test("normalizes supported Indian phone formats", () => {
   assert.equal(normalizeIndianPhone("+91 98765-43210"), "9876543210");
