@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
 import AquaOrder from "../../models/orders.js";
+import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
 
 const normalizeIndianPhone = (phone) =>
   String(phone || "")
@@ -29,7 +30,9 @@ const mapOrderToInvoicePayload = (order) => {
 
   const customerAddress =
     [
-      shippingAddress.street || shippingAddress.address || selectedAddress.street,
+      shippingAddress.street ||
+        shippingAddress.address ||
+        selectedAddress.street,
       shippingAddress.city || selectedAddress.city,
       shippingAddress.state || selectedAddress.state,
       shippingAddress.postalCode || selectedAddress.postalCode,
@@ -63,7 +66,11 @@ const mapOrderToInvoicePayload = (order) => {
     date: formattedDate,
     customerDetails: {
       name: user.name || user.email || "Aquakart Online Customer",
-      phone: Number(normalizeIndianPhone(user.phone || shippingAddress.phone || billingAddress.phone || 0)),
+      phone: Number(
+        normalizeIndianPhone(
+          user.phone || shippingAddress.phone || billingAddress.phone || 0,
+        ),
+      ),
       email: user.email || "",
       address: customerAddress,
     },
@@ -114,7 +121,9 @@ const createInvoiceFromEcommerceOrder = async (req, res) => {
     }
 
     if (existingOrder.invoiceId) {
-      const existingInvoice = await AquaInvoice.findById(existingOrder.invoiceId).lean();
+      const existingInvoice = await AquaInvoice.findById(
+        existingOrder.invoiceId,
+      ).lean();
       if (existingInvoice) {
         return res.status(200).json({
           status: true,
@@ -123,7 +132,7 @@ const createInvoiceFromEcommerceOrder = async (req, res) => {
           message: "Invoice already created for this order",
           data: existingInvoice,
           invoiceId: existingInvoice._id,
-          invoiceUrl: `https://admin.aquakart.co.in/invoice/${existingInvoice._id}`,
+          invoiceUrl: buildInvoiceViewLinks(existingInvoice._id).customerUrl,
         });
       }
     }
@@ -147,7 +156,8 @@ const createInvoiceFromEcommerceOrder = async (req, res) => {
         message: "Invoice already created for this order",
         data: existingInvoiceBySource,
         invoiceId: existingInvoiceBySource._id,
-        invoiceUrl: `https://admin.aquakart.co.in/invoice/${existingInvoiceBySource._id}`,
+        invoiceUrl: buildInvoiceViewLinks(existingInvoiceBySource._id)
+          .customerUrl,
       });
     }
 
@@ -167,7 +177,7 @@ const createInvoiceFromEcommerceOrder = async (req, res) => {
       message: "Invoice created from order successfully",
       data: savedInvoice,
       invoiceId: savedInvoice._id,
-      invoiceUrl: `https://admin.aquakart.co.in/invoice/${savedInvoice._id}`,
+      invoiceUrl: buildInvoiceViewLinks(savedInvoice._id).customerUrl,
     });
   } catch (error) {
     console.error("Create invoice from ecommerce order error:", error);

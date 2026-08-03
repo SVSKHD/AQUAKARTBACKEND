@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import AquaOrder from "../../models/orders.js";
 import AquaEcomUser from "../../models/user.js";
+import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
 
 const ORDER_STATUS_MAP = {
   new: "Pending",
@@ -52,7 +53,7 @@ const buildProductLink = (slug) =>
   slug ? `https://aquakart.co.in/product/${slug}` : "";
 
 const buildInvoiceUrl = (invoiceId) =>
-  invoiceId ? `https://admin.aquakart.co.in/invoice/${invoiceId}` : "";
+  invoiceId ? buildInvoiceViewLinks(invoiceId).customerUrl : "";
 
 const mapEcomOrderToCRMOrder = (order = {}) => {
   const user = order.user || {};
@@ -92,10 +93,15 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
       })
     : [];
 
-  const subtotal = products.reduce((sum, product) => sum + product.totalPrice, 0);
+  const subtotal = products.reduce(
+    (sum, product) => sum + product.totalPrice,
+    0,
+  );
   const discount = Number(order.discounts || 0);
   const deliveryCharge = Number(order.shippingCost || 0);
-  const grandTotal = Number(order.totalAmount || subtotal - discount + deliveryCharge);
+  const grandTotal = Number(
+    order.totalAmount || subtotal - discount + deliveryCharge,
+  );
   const invoiceId = order.invoiceId || null;
 
   return {
@@ -106,7 +112,9 @@ const mapEcomOrderToCRMOrder = (order = {}) => {
     deliveryDate: order.deliveryDate || order.estimatedDelivery || null,
     customer: {
       name: user.name || user.email || "Guest Customer",
-      phone: String(user.phone || shippingAddress.phone || billingAddress.phone || ""),
+      phone: String(
+        user.phone || shippingAddress.phone || billingAddress.phone || "",
+      ),
       email: user.email || "",
       address: customerAddress,
       city: shippingAddress.city || selectedAddress.city || "",
@@ -165,8 +173,10 @@ const buildQuery = async (queryParams = {}) => {
   if (transactionId) query.transactionId = transactionId;
   if (orderId) query.orderId = orderId;
   if (user) query.user = user;
-  if (orderStatus || status) query.orderStatus = normalizeOrderStatus(orderStatus || status);
-  if (paymentStatus) query.paymentStatus = normalizePaymentStatus(paymentStatus);
+  if (orderStatus || status)
+    query.orderStatus = normalizeOrderStatus(orderStatus || status);
+  if (paymentStatus)
+    query.paymentStatus = normalizePaymentStatus(paymentStatus);
 
   if (date) {
     const { start, end } = getStartAndEndOfDay(date);
@@ -194,7 +204,9 @@ const buildQuery = async (queryParams = {}) => {
   }
 
   if (Object.keys(userMatch).length) {
-    const matchedUsers = await AquaEcomUser.find(userMatch).select("_id").lean();
+    const matchedUsers = await AquaEcomUser.find(userMatch)
+      .select("_id")
+      .lean();
     const matchedUserIds = matchedUsers.map((matchedUser) => matchedUser._id);
     if (matchedUserIds.length) {
       query.$or = [...(query.$or || []), { user: { $in: matchedUserIds } }];
@@ -221,8 +233,10 @@ const buildEcomOrderUpdatePayload = (payload = {}, existingOrder = {}) => {
   }
 
   if (payload.notes !== undefined) updatePayload.notes = payload.notes;
-  if (payload.deliveryCharge !== undefined) updatePayload.shippingCost = Number(payload.deliveryCharge || 0);
-  if (payload.discount !== undefined) updatePayload.discounts = Number(payload.discount || 0);
+  if (payload.deliveryCharge !== undefined)
+    updatePayload.shippingCost = Number(payload.deliveryCharge || 0);
+  if (payload.discount !== undefined)
+    updatePayload.discounts = Number(payload.discount || 0);
 
   if (payload.customer) {
     const customer = payload.customer;
@@ -231,7 +245,8 @@ const buildEcomOrderUpdatePayload = (payload = {}, existingOrder = {}) => {
       address: customer.address || existingOrder.shippingAddress?.address || "",
       street: customer.address || existingOrder.shippingAddress?.street || "",
       city: customer.city || existingOrder.shippingAddress?.city || "",
-      postalCode: customer.pincode || existingOrder.shippingAddress?.postalCode || "",
+      postalCode:
+        customer.pincode || existingOrder.shippingAddress?.postalCode || "",
       phone: customer.phone || existingOrder.shippingAddress?.phone || "",
     };
     updatePayload.billingAddress = {
@@ -239,7 +254,8 @@ const buildEcomOrderUpdatePayload = (payload = {}, existingOrder = {}) => {
       address: customer.address || existingOrder.billingAddress?.address || "",
       street: customer.address || existingOrder.billingAddress?.street || "",
       city: customer.city || existingOrder.billingAddress?.city || "",
-      postalCode: customer.pincode || existingOrder.billingAddress?.postalCode || "",
+      postalCode:
+        customer.pincode || existingOrder.billingAddress?.postalCode || "",
       phone: customer.phone || existingOrder.billingAddress?.phone || "",
     };
   }
@@ -255,11 +271,16 @@ const buildEcomOrderUpdatePayload = (payload = {}, existingOrder = {}) => {
 
   const products = updatePayload.items || existingOrder.items || [];
   const subtotal = products.reduce(
-    (sum, product) => sum + Number(product.price || 0) * Number(product.quantity || 1),
+    (sum, product) =>
+      sum + Number(product.price || 0) * Number(product.quantity || 1),
     0,
   );
-  const discount = Number(updatePayload.discounts ?? existingOrder.discounts ?? 0);
-  const deliveryCharge = Number(updatePayload.shippingCost ?? existingOrder.shippingCost ?? 0);
+  const discount = Number(
+    updatePayload.discounts ?? existingOrder.discounts ?? 0,
+  );
+  const deliveryCharge = Number(
+    updatePayload.shippingCost ?? existingOrder.shippingCost ?? 0,
+  );
   updatePayload.totalAmount = subtotal - discount + deliveryCharge;
 
   return updatePayload;
@@ -337,12 +358,18 @@ const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ status: false, message: "Invalid order id" });
+      return res
+        .status(400)
+        .json({ status: false, message: "Invalid order id" });
     }
 
-    const order = await AquaOrder.findById(id).populate("user items.productId").lean();
+    const order = await AquaOrder.findById(id)
+      .populate("user items.productId")
+      .lean();
     if (!order) {
-      return res.status(404).json({ status: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ status: false, message: "Order not found" });
     }
 
     return res.status(200).json({
@@ -365,12 +392,16 @@ const updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ status: false, message: "Invalid order id" });
+      return res
+        .status(400)
+        .json({ status: false, message: "Invalid order id" });
     }
 
     const existingOrder = await AquaOrder.findById(id).lean();
     if (!existingOrder) {
-      return res.status(404).json({ status: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ status: false, message: "Order not found" });
     }
 
     const updatePayload = buildEcomOrderUpdatePayload(req.body, existingOrder);
@@ -406,19 +437,25 @@ const updateOrderStatus = async (req, res) => {
     const { orderStatus, paymentStatus, notes, deliveryDate } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ status: false, message: "Invalid order id" });
+      return res
+        .status(400)
+        .json({ status: false, message: "Invalid order id" });
     }
 
     const updatePayload = {};
-    if (orderStatus) updatePayload.orderStatus = normalizeOrderStatus(orderStatus);
-    if (paymentStatus) updatePayload.paymentStatus = normalizePaymentStatus(paymentStatus);
+    if (orderStatus)
+      updatePayload.orderStatus = normalizeOrderStatus(orderStatus);
+    if (paymentStatus)
+      updatePayload.paymentStatus = normalizePaymentStatus(paymentStatus);
     if (notes !== undefined) updatePayload.notes = notes;
-    if (deliveryDate !== undefined) updatePayload.deliveryDate = deliveryDate || null;
+    if (deliveryDate !== undefined)
+      updatePayload.deliveryDate = deliveryDate || null;
 
     if (!Object.keys(updatePayload).length) {
       return res.status(400).json({
         status: false,
-        message: "orderStatus, paymentStatus, notes or deliveryDate is required",
+        message:
+          "orderStatus, paymentStatus, notes or deliveryDate is required",
       });
     }
 
@@ -430,7 +467,9 @@ const updateOrderStatus = async (req, res) => {
       .lean();
 
     if (!order) {
-      return res.status(404).json({ status: false, message: "Order not found" });
+      return res
+        .status(404)
+        .json({ status: false, message: "Order not found" });
     }
 
     return res.status(200).json({
