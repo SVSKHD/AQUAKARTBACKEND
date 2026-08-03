@@ -7,7 +7,6 @@ import {
   calculateInvoiceTotal,
   getInvoiceOwnershipState,
   hashToken,
-  isDirectInvoiceAccessAllowed,
   maskEmail,
   normalizeEmail,
   normalizeIndianPhone,
@@ -69,6 +68,20 @@ test("supports invoice-delivery grants without changing ownership", () => {
   assert.equal(verifyInvoiceAccessToken(token).grant, "delivery");
 });
 
+test("supports Firebase-verified direct-link access without ownership", () => {
+  process.env.INVOICE_ACCESS_SECRET =
+    "test-invoice-secret-with-sufficient-length";
+  const token = signInvoiceAccessToken({
+    invoiceIds: ["507f1f77bcf86cd799439011"],
+    email: "viewer@example.com",
+    firebaseUid: "firebase-viewer-1",
+    grant: "direct",
+  });
+  const payload = verifyInvoiceAccessToken(token);
+  assert.equal(payload.grant, "direct");
+  assert.deepEqual(payload.invoiceIds, ["507f1f77bcf86cd799439011"]);
+});
+
 test("classifies invoice ownership without silently changing email", () => {
   const identity = {
     firebaseUid: "firebase-customer-1",
@@ -115,56 +128,6 @@ test("classifies invoice ownership without silently changing email", () => {
       identity,
     ),
     "email-match",
-  );
-});
-
-test("allows a verified Google user to claim an unowned direct invoice link", () => {
-  const identity = {
-    firebaseUid: "firebase-customer-1",
-    email: "customer@example.com",
-  };
-
-  assert.equal(
-    isDirectInvoiceAccessAllowed(
-      { firebaseUid: "firebase-customer-1", customerDetails: {} },
-      identity,
-    ),
-    true,
-  );
-  assert.equal(
-    isDirectInvoiceAccessAllowed(
-      { customerDetails: { email: "customer@example.com" } },
-      identity,
-    ),
-    true,
-  );
-  assert.equal(
-    isDirectInvoiceAccessAllowed(
-      { customerDetails: { email: "other@example.com" } },
-      identity,
-    ),
-    true,
-  );
-  assert.equal(
-    isDirectInvoiceAccessAllowed({ customerDetails: {} }, identity),
-    true,
-  );
-  assert.equal(
-    isDirectInvoiceAccessAllowed(
-      { firebaseUid: "another-user", customerDetails: {} },
-      identity,
-    ),
-    false,
-  );
-  assert.equal(
-    isDirectInvoiceAccessAllowed(
-      {
-        firebaseUid: "stale-firebase-user",
-        customerDetails: { email: "customer@example.com" },
-      },
-      identity,
-    ),
-    false,
   );
 });
 
