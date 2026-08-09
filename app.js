@@ -32,6 +32,13 @@ import AdminQuotationRoutes from "./src/routes/crm/quotation.js";
 import CRMOrderRoutes from "./src/routes/crm/order.js";
 import CRMEcommerceOrderRoutes from "./src/routes/crm/ecommerceOrders.js";
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
+import AccessControlRoutes from "./src/routes/crm/accessControl.js";
+import AdminCouponRoutes from "./src/routes/crm/coupons.js";
+import ReferralRoutes from "./src/routes/referrals.js";
+import AdminReferralRoutes from "./src/routes/crm/referrals.js";
+import CheckoutRoutes from "./src/routes/checkout.js";
+import PaymentRoutes from "./src/routes/payments.js";
+import AdminPaymentRoutes from "./src/routes/crm/payments.js";
 
 const app = express();
 
@@ -56,7 +63,13 @@ const corsOptions = {
     "http://localhost:4000",
   ],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Aquakart-Session"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Aquakart-Session",
+    "Idempotency-Key",
+    "X-Admin-Bootstrap-Key",
+  ],
   credentials: true,
 };
 
@@ -88,6 +101,9 @@ app.use("/v1", blogRoutes);
 app.use("/v1", phonePeGatewayRoutes);
 app.use("/v1", orderRoutes);
 app.use("/v1", Coupons);
+app.use("/v1/referrals", ReferralRoutes);
+app.use("/v1/checkout", CheckoutRoutes);
+app.use("/v1", PaymentRoutes);
 app.use("/v1", SoftenerHydRoutes);
 app.use("/v1/notify", SendWhatsAppMessage);
 app.use("/v1/email", SendEmail);
@@ -103,6 +119,10 @@ app.use("/v1/crm/customer-profiles", CustomerProfileRoutes);
 app.use("/v1/crm/quotations", AdminQuotationRoutes);
 app.use("/v1/crm/orders", CRMOrderRoutes);
 app.use("/v1/crm/ecom-orders", CRMEcommerceOrderRoutes);
+app.use("/v1/admin", AccessControlRoutes);
+app.use("/v1/admin/coupons", AdminCouponRoutes);
+app.use("/v1/admin", AdminReferralRoutes);
+app.use("/v1/admin", AdminPaymentRoutes);
 
 app.post(
   "/v1/notify/send-whatsappp",

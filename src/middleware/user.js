@@ -48,13 +48,17 @@ const checkAdmin = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid token payload" });
     }
 
-    const user = await AquaAdminUser.findById(decoded._id);
+    const user = await AquaAdminUser.findById(decoded._id).populate("roleRef");
 
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
 
-    if (user.role !== 1) {
+    if (user.status === "disabled") {
+      return res.status(403).json({ message: "Staff account is disabled" });
+    }
+
+    if (user.role !== 1 && user.roleRef?.slug !== "super-admin") {
       return res.status(403).json({ message: "Admin access required" });
     }
 

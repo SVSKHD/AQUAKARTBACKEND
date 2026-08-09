@@ -1,35 +1,32 @@
 import express from "express";
-import controller from "../controllers/coupon.js";
-import { requirePermission } from "../middleware/permissions.js";
+import controller from "../../controllers/coupon.js";
+import { requirePermission } from "../../middleware/permissions.js";
 
 const router = express.Router();
-router.get("/coupon-status", (_req, res) =>
-  res.json({ success: true, status: "active" }),
-);
+router.get("/", ...requirePermission("coupons.read"), controller.getCoupons);
 router.post(
-  "/create-coupon",
+  "/",
   ...requirePermission("coupons.manage"),
   controller.createCoupon,
 );
 router.get(
-  "/all-coupons",
-  ...requirePermission("coupons.read"),
-  controller.getCoupons,
-);
-router.get(
-  "/coupon/:id",
+  "/:id",
   ...requirePermission("coupons.read"),
   controller.getCouponById,
 );
-router.put(
-  "/coupon-update/:id",
+router.patch(
+  "/:id",
   ...requirePermission("coupons.manage"),
   controller.updateCoupon,
 );
 router.delete(
-  "/coupon-delete/:id",
+  "/:id",
   ...requirePermission("coupons.manage"),
   controller.deleteCoupon,
 );
-
+router.get(
+  "/:id/redemptions",
+  ...requirePermission("coupons.read"),
+  controller.getRedemptions,
+);
 export default router;
