@@ -10,7 +10,13 @@ router.get("/status", (req, res) => {
 
 router.post("/signup", AquaAdminUserOperations.signup);
 router.post("/login", AquaAdminUserOperations.login);
-router.post("/create-user", userAuth.checkAdmin);
+// Kept for old CRM clients; new clients use POST /v1/admin/staff.
+router.post("/create-user", userAuth.checkAdmin, (_req, res) =>
+  res.status(410).json({
+    success: false,
+    message: "Use POST /v1/admin/staff",
+  }),
+);
 
 // get all ecom users
 router.get(

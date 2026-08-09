@@ -93,6 +93,18 @@ const AdminUserSchema = new mongoose.Schema({
     type: Number,
     default: 1, // Admin role
   },
+  roleRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "AquaRole",
+    index: true,
+  },
+  directPermissions: [{ type: String }],
+  status: {
+    type: String,
+    enum: ["active", "disabled"],
+    default: "active",
+    index: true,
+  },
   selectedAddress: addressSchema,
   addresses: [addressSchema],
 });
