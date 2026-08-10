@@ -4,6 +4,7 @@ import InvoiceAccessToken from "../models/invoiceAccessToken.js";
 import NotificationLog from "../models/crm/notificationLog.js";
 import sendEmail from "../notifications/email/send-email.js";
 import { getWhatsAppInvoiceSharingStatus } from "../services/invoiceSharing/whatsappInvoiceSharing.js";
+import { enrichUserFromInvoices } from "../services/invoiceUserEnrichment.js";
 import invoiceAccessEmail from "../utils/emailTemplates/invoiceAccessEmail.js";
 import {
   buildInvoiceEmailAudit,
@@ -379,6 +380,14 @@ const loginAccess = async (req, res) => {
       });
     }
 
+    const ownedInvoices = evaluated
+      .filter(({ state, invoice }) => invoice && state === "owned")
+      .map(({ invoice }) => invoice);
+    await enrichUserFromInvoices({
+      firebaseUser,
+      invoices: ownedInvoices,
+    });
+
     const accessToken = signInvoiceAccessToken({
       invoiceIds: accessible.map(({ invoice }) => invoice._id),
       email: firebaseUser.email,
@@ -454,6 +463,11 @@ const loginDirectAccess = async (req, res) => {
       firebaseUser,
       req,
     );
+
+    await enrichUserFromInvoices({
+      firebaseUser,
+      invoices: [accessibleInvoice],
+    });
 
     const accessToken = signInvoiceAccessToken({
       invoiceIds: [accessibleInvoice._id],

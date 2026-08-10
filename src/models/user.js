@@ -9,6 +9,19 @@ const addressSchema = new mongoose.Schema({
   postalCode: String,
 });
 
+const invoiceLinkSchema = new mongoose.Schema(
+  {
+    invoiceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AquaInvoice",
+      required: true,
+    },
+    invoiceNo: { type: String, trim: true },
+    linkedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const UserSchema = new mongoose.Schema(
   {
     id: { type: String },
@@ -110,6 +123,8 @@ const UserSchema = new mongoose.Schema(
     ],
     selectedAddress: addressSchema,
     addresses: [addressSchema],
+    invoices: [invoiceLinkSchema],
+    invoiceProfileEnrichedAt: { type: Date },
   },
   { timestamps: true },
 );
