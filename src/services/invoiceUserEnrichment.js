@@ -16,9 +16,9 @@ const invoiceDate = (invoice = {}) => {
 };
 
 export const buildInvoiceProfile = (invoices = []) => {
-  const ordered = [...invoices].filter(Boolean).sort(
-    (left, right) => invoiceDate(right) - invoiceDate(left),
-  );
+  const ordered = [...invoices]
+    .filter(Boolean)
+    .sort((left, right) => invoiceDate(right) - invoiceDate(left));
   const invoiceWithName = ordered.find((invoice) =>
     String(invoice.customerDetails?.name || "").trim(),
   );
@@ -32,9 +32,7 @@ export const buildInvoiceProfile = (invoices = []) => {
   return {
     ...splitName(invoiceWithName?.customerDetails?.name),
     phone: normalizeIndianPhone(invoiceWithPhone?.customerDetails?.phone),
-    address: String(
-      invoiceWithAddress?.customerDetails?.address || "",
-    ).trim(),
+    address: String(invoiceWithAddress?.customerDetails?.address || "").trim(),
     invoices: ordered.map((invoice) => ({
       invoiceId: invoice._id,
       invoiceNo: String(invoice.invoiceNo || "").trim(),
@@ -121,8 +119,9 @@ export const enrichUserFromInvoices = async ({
     profile.address &&
     !user.addresses.some(
       (address) =>
-        String(address.street || "").trim().toLowerCase() ===
-        profile.address.toLowerCase(),
+        String(address.street || "")
+          .trim()
+          .toLowerCase() === profile.address.toLowerCase(),
     )
   ) {
     user.addresses.push({ street: profile.address });
