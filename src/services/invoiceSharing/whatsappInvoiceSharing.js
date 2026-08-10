@@ -1,20 +1,30 @@
-const isEnabled = () =>
-  String(process.env.WHATSAPP_INVOICE_SHARING_ENABLED || "false") === "true";
+import {
+  getFast2SmsWhatsAppConfig,
+  getFast2SmsWhatsAppStatus,
+  sendFast2SmsWhatsAppTemplate,
+} from "../notifications/fast2SmsWhatsApp.js";
 
-export const getWhatsAppInvoiceSharingStatus = () => ({
-  available: false,
-  configured: isEnabled(),
-  mode: "coming-soon",
-  message: "WhatsApp invoice sharing will be available soon.",
-});
+export const getWhatsAppInvoiceSharingStatus = getFast2SmsWhatsAppStatus;
 
-export const shareInvoiceByWhatsApp = async () => {
-  const error = new Error(
-    "WhatsApp invoice sharing is not connected to a provider yet",
-  );
-  error.code = "WHATSAPP_PROVIDER_NOT_CONFIGURED";
-  error.statusCode = 503;
-  throw error;
+export const shareInvoiceByWhatsApp = async ({
+  invoice,
+  phone,
+  customerUrl,
+  pdfUrl,
+}) => {
+  const config = getFast2SmsWhatsAppConfig();
+  const invoiceNo =
+    invoice.invoiceNo || invoice.invoice_no || String(invoice._id);
+  const customerName = invoice.customerDetails?.name || "Customer";
+
+  return sendFast2SmsWhatsAppTemplate({
+    to: phone,
+    messageId: config.invoiceMessageId,
+    variables: [customerName, invoiceNo, customerUrl],
+    mediaUrl: pdfUrl,
+    documentFilename: pdfUrl ? `AquaKart-Invoice-${invoiceNo}.pdf` : undefined,
+    udf: [String(invoice._id), "invoice", invoiceNo],
+  });
 };
 
 export default {

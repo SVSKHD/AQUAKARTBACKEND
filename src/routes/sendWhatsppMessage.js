@@ -4,9 +4,12 @@ import userAuth from "../middleware/user.js";
 
 const router = express.Router();
 
-router.get("/status", (req, res) => {
-  res.json({ message: "v1 notify is active" });
-});
+router.get("/status", userAuth.checkAdmin, WhatsappOperations.getStatus);
+router.get(
+  "/whatsapp/templates",
+  userAuth.checkAdmin,
+  WhatsappOperations.getTemplates,
+);
 
 router.get(
   "/send-whatsapp/:no",
