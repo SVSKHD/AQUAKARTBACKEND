@@ -3,7 +3,8 @@ import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
 import AquaStock from "../../models/crm/stock.js";
 import NotificationLog from "../../models/crm/notificationLog.js";
-import sendWhatsAppMessage from "../../notifications/phone/sendWhatsapp.js";
+import { shareInvoiceByWhatsApp } from "../../services/invoiceSharing/whatsappInvoiceSharing.js";
+import { sendFast2SmsWhatsAppTemplate } from "../../services/notifications/fast2SmsWhatsApp.js";
 import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
 
 const INDIAN_CONTACT_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
@@ -502,23 +503,27 @@ const notifySpecificInvoiceMember = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Invoice not found" });
-    const { name, phone } = invoice.customerDetails || {};
+    const { phone } = invoice.customerDetails || {};
     if (!phone)
       return res
         .status(400)
         .json({ success: false, message: "Invoice has no customer phone" });
-    const message =
-      req.body?.message ||
-      `Dear ${name || "Customer"}, your invoice ${invoice.invoiceNo} dated ${invoice.date} is available at ${buildInvoiceViewLinks(invoice._id).customerUrl}.`;
-    const delivery = await sendWhatsAppMessage(
-      normalizeIndianPhone(phone),
-      message,
-    );
+    const links = buildInvoiceViewLinks(invoice._id);
+    const message = `Fast2SMS invoice template ${invoice.invoiceNo || invoice._id}`;
+    const delivery = await shareInvoiceByWhatsApp({
+      invoice,
+      phone,
+      customerUrl: links.customerUrl,
+      pdfUrl: req.body?.pdfUrl,
+    });
     await NotificationLog.create({
       invoiceId: invoice._id,
       phone: normalizeIndianPhone(phone),
       message,
-      status: delivery?.status ? "sent" : "failed",
+      status: delivery?.success ? "sent" : "failed",
+      template: "fast2sms-invoice",
+      providerMessageId:
+        delivery?.data?.message_id || delivery?.data?.request_id || undefined,
       response: delivery,
     });
     return res
@@ -543,20 +548,30 @@ const NotifyInvoiceMembers = async (req, res) => {
     const invoices = await AquaInvoice.find({}).lean();
     const data = req.body;
     const year = new Date().getFullYear();
-    if (data.send !== "all" || !data.festival)
-      return res
-        .status(400)
-        .json({ error: "Festival name and send=all are required." });
+    if (data.send !== "all" || !data.festival || !data.messageId)
+      return res.status(400).json({
+        error:
+          "Festival name, approved Fast2SMS messageId, and send=all are required.",
+      });
     const results = [];
     for (const invoice of invoices) {
       const { name: customerName, phone } = invoice.customerDetails || {};
       if (!phone) continue;
-      const message = `Dear ${customerName}, we wish you a very happy ${data.festival} ${year}! 🎉 Your invoice ${invoice.invoiceNo} dated ${invoice.date} for Rs.${invoice.totalAmount} is available at ${buildInvoiceViewLinks(invoice._id).customerUrl}.`;
+      const customerUrl = buildInvoiceViewLinks(invoice._id).customerUrl;
+      const message = `Fast2SMS campaign template ${data.messageId}`;
       try {
-        const delivery = await sendWhatsAppMessage(
-          normalizeIndianPhone(phone),
-          message,
-        );
+        const delivery = await sendFast2SmsWhatsAppTemplate({
+          to: phone,
+          messageId: data.messageId,
+          variables: [
+            customerName || "Customer",
+            data.festival,
+            String(year),
+            invoice.invoiceNo || "",
+            customerUrl,
+          ],
+          udf: [String(invoice._id), "festival", data.festival],
+        });
         await NotificationLog.create({
           invoiceId: invoice._id,
           phone: normalizeIndianPhone(phone),
