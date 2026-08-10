@@ -221,7 +221,6 @@ test("calculates invoice totals from quantity and price", () => {
   );
 });
 
-
 test("builds a user profile from the newest available invoice fields", () => {
   const profile = buildInvoiceProfile([
     {
