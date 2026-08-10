@@ -15,6 +15,7 @@ import {
   validateEmail,
   verifyInvoiceAccessToken,
 } from "../src/utils/invoiceAccess.js";
+import { buildInvoiceProfile } from "../src/services/invoiceUserEnrichment.js";
 
 test("distinguishes a stale invoice cookie from an invalid invoice id", () => {
   const authorizedId = "6a6ffacfaafb698d0de99a7c";
@@ -217,5 +218,40 @@ test("calculates invoice totals from quantity and price", () => {
       ],
     }),
     2500,
+  );
+});
+
+
+test("builds a user profile from the newest available invoice fields", () => {
+  const profile = buildInvoiceProfile([
+    {
+      _id: "507f1f77bcf86cd799439011",
+      invoiceNo: "AK-OLD",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      customerDetails: {
+        name: "Old Name",
+        phone: 9876543210,
+        address: "Old address",
+      },
+    },
+    {
+      _id: "507f1f77bcf86cd799439012",
+      invoiceNo: "AK-NEW",
+      createdAt: new Date("2026-08-10T00:00:00.000Z"),
+      customerDetails: {
+        name: "Madhu Sudhan Rao",
+        phone: "+91 91234 56789",
+        address: "Hyderabad, Telangana",
+      },
+    },
+  ]);
+
+  assert.equal(profile.firstName, "Madhu");
+  assert.equal(profile.lastName, "Sudhan Rao");
+  assert.equal(profile.phone, "9123456789");
+  assert.equal(profile.address, "Hyderabad, Telangana");
+  assert.deepEqual(
+    profile.invoices.map((invoice) => invoice.invoiceNo),
+    ["AK-NEW", "AK-OLD"],
   );
 });
