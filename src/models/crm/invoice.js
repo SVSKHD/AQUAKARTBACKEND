@@ -57,7 +57,6 @@ const AquaInvoiceSchema = new mongoose.Schema(
         productLink: { type: String },
       },
     ],
-    total_price: { type: Number, min: 0 },
     transport: {
       deliveredBy: { type: String },
       deliveryDate: { type: String },
