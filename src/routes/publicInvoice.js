@@ -78,6 +78,12 @@ router.get(
   publicInvoiceController.whatsappStatusById,
 );
 router.post(
+  "/:id/share/whatsapp",
+  limiter(24 * 60 * 60 * 1000, 3),
+  requireInvoiceAccess,
+  publicInvoiceController.whatsappById,
+);
+router.post(
   "/:id/email",
   limiter(24 * 60 * 60 * 1000, 3),
   requireInvoiceAccess,
