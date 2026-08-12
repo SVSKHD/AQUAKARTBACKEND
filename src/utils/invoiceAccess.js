@@ -111,6 +111,14 @@ export const calculateInvoiceTotal = (invoice = {}) =>
     0,
   );
 
+export const getStoredInvoiceTotal = (invoice = {}) => {
+  if (invoice.total_price === null || invoice.total_price === undefined) {
+    return null;
+  }
+  const total = Number(invoice.total_price);
+  return Number.isFinite(total) && total >= 0 ? total : null;
+};
+
 export const getInvoiceEmail = (invoice = {}) =>
   validateEmail(
     invoice.customerEmailNormalized ||
