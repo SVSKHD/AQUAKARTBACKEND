@@ -13,7 +13,7 @@ import {
   classifyInvoiceAccessScope,
   createOpaqueToken,
   getInvoiceEmail,
-  getStoredInvoiceTotal,
+  getInvoiceProductPriceTotal,
   getInvoiceOwnershipState,
   hashAuditValue,
   hashToken,
@@ -79,8 +79,7 @@ const formatInvoiceDate = (value) => {
 };
 
 const formatInvoiceTotal = (invoice) => {
-  const total = getStoredInvoiceTotal(invoice);
-  if (total === null) return "Amount unavailable";
+  const total = getInvoiceProductPriceTotal(invoice);
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
@@ -277,7 +276,7 @@ const toSummary = (invoice, identity = {}) => {
     date: invoice.date || invoice.createdAt,
     paidStatus: invoice.paidStatus || "Not available",
     itemCount: invoice.products?.length || 0,
-    total_price: getStoredInvoiceTotal(invoice),
+    total_price: getInvoiceProductPriceTotal(invoice),
     emailStatus: getEmailStatus(invoice, validateEmail(identity.email)),
     maskedExistingEmail: maskEmail(getInvoiceEmail(invoice)),
     claimRequired: ["email-missing", "email-different"].includes(
