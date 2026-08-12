@@ -1,5 +1,6 @@
 import express from "express";
 import InvoiceOperations from "../../controllers/crm/invoice.js";
+import InvoiceDeliveryOperations from "../../controllers/crm/invoiceDelivery.js";
 import PublicInvoiceLookupOperations from "../../controllers/crm/publicInvoiceLookup.js";
 import optionalUserAuth from "../../middleware/optionalUser.js";
 import userAuth from "../../middleware/user.js";
@@ -84,6 +85,11 @@ router.post(
   "/notify/invoice/:id",
   userAuth.checkAdmin,
   InvoiceOperations.notifySpecificInvoiceMember,
+);
+router.post(
+  "/notify/invoice/:id/email",
+  userAuth.checkAdmin,
+  InvoiceDeliveryOperations.sendInvoiceEmail,
 );
 
 export default router;
