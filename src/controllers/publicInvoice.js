@@ -3,7 +3,10 @@ import AquaInvoice from "../models/crm/invoice.js";
 import InvoiceAccessToken from "../models/invoiceAccessToken.js";
 import NotificationLog from "../models/crm/notificationLog.js";
 import sendEmail from "../notifications/email/send-email.js";
-import { getWhatsAppInvoiceSharingStatus } from "../services/invoiceSharing/whatsappInvoiceSharing.js";
+import {
+  getWhatsAppInvoiceSharingStatus,
+  shareInvoiceByWhatsApp,
+} from "../services/invoiceSharing/whatsappInvoiceSharing.js";
 import { enrichUserFromInvoices } from "../services/invoiceUserEnrichment.js";
 import invoiceAccessEmail from "../utils/emailTemplates/invoiceAccessEmail.js";
 import {
@@ -832,6 +835,90 @@ const whatsappStatusById = async (req, res) => {
   });
 };
 
+const whatsappById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!invoiceIdIsAllowed(id, req.invoiceAccess)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+    const invoice = await AquaInvoice.findById(id).lean();
+    if (!invoice || !canReadInvoice(invoice, req.invoiceAccess)) {
+      return res.status(403).json({
+        success: false,
+        message: "Confirm this invoice before sharing it",
+      });
+    }
+    if (!req.invoiceAccess.firebaseUid) {
+      return res.status(403).json({
+        success: false,
+        message: "Google authentication is required to share an invoice",
+      });
+    }
+    const phone = normalizeIndianPhone(invoice.customerDetails?.phone);
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "This invoice does not have a valid WhatsApp number",
+      });
+    }
+
+    const frontendUrl = (
+      process.env.FRONTEND_PUBLIC_URL ||
+      process.env.FRONTEND_URL ||
+      "https://aquakart.co.in"
+    ).replace(/\/$/, "");
+    const customerUrl = `${frontendUrl}/invoice/${encodeURIComponent(id)}`;
+    const log = await NotificationLog.create({
+      invoiceId: invoice._id,
+      channel: "whatsapp",
+      recipientMasked: `******${phone.slice(-4)}`,
+      template: "fast2sms-invoice",
+      message: `Invoice delivery ${invoice.invoiceNo || ""}`.trim(),
+      status: "pending",
+      firebaseUid: req.invoiceAccess.firebaseUid,
+      requestIpHash: hashAuditValue(req.ip),
+    });
+
+    try {
+      const delivery = await shareInvoiceByWhatsApp({
+        invoice,
+        phone,
+        customerUrl,
+      });
+      await NotificationLog.findByIdAndUpdate(log._id, {
+        $set: {
+          status: "sent",
+          providerMessageId:
+            delivery.data?.message_id || delivery.data?.request_id,
+        },
+      });
+      return res.status(202).json({
+        success: true,
+        message: "Invoice sent on WhatsApp successfully.",
+        maskedRecipientPhone: `******${phone.slice(-4)}`,
+      });
+    } catch (error) {
+      await NotificationLog.findByIdAndUpdate(log._id, {
+        $set: {
+          status: "failed",
+          errorCode: error.code || "WHATSAPP_DELIVERY_FAILED",
+          response: "Provider delivery failed",
+        },
+      });
+      throw error;
+    }
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message:
+        error.message ||
+        "We could not send the invoice on WhatsApp right now",
+    });
+  }
+};
+
 export default {
   lookup,
   requestAccess,
@@ -844,4 +931,5 @@ export default {
   updateEmailById,
   emailById,
   whatsappStatusById,
+  whatsappById,
 };
