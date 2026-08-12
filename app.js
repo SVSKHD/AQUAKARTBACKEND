@@ -39,6 +39,8 @@ import AdminReferralRoutes from "./src/routes/crm/referrals.js";
 import CheckoutRoutes from "./src/routes/checkout.js";
 import PaymentRoutes from "./src/routes/payments.js";
 import AdminPaymentRoutes from "./src/routes/crm/payments.js";
+import SeoRoutes from "./src/routes/seo.js";
+import AdminSeoRoutes from "./src/routes/crm/seo.js";
 
 const app = express();
 
@@ -108,6 +110,7 @@ app.use("/v1", SoftenerHydRoutes);
 app.use("/v1/notify", SendWhatsAppMessage);
 app.use("/v1/email", SendEmail);
 app.use("/v1/subscription", Subscritions);
+app.use("/v1/seo", SeoRoutes);
 
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/invoices/public", publicInvoiceRoutes);
@@ -123,6 +126,7 @@ app.use("/v1/admin", AccessControlRoutes);
 app.use("/v1/admin/coupons", AdminCouponRoutes);
 app.use("/v1/admin", AdminReferralRoutes);
 app.use("/v1/admin", AdminPaymentRoutes);
+app.use("/v1/admin/seo", AdminSeoRoutes);
 
 app.post(
   "/v1/notify/send-whatsappp",

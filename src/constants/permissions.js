@@ -19,6 +19,8 @@ export const PERMISSIONS = Object.freeze([
   "payments.refund",
   "gateways.read",
   "gateways.manage",
+  "seo.read",
+  "seo.manage",
   "audit.read",
 ]);
 
