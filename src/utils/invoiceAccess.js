@@ -111,13 +111,17 @@ export const calculateInvoiceTotal = (invoice = {}) =>
     0,
   );
 
-export const getStoredInvoiceTotal = (invoice = {}) => {
-  if (invoice.total_price === null || invoice.total_price === undefined) {
-    return null;
-  }
-  const total = Number(invoice.total_price);
-  return Number.isFinite(total) && total >= 0 ? total : null;
-};
+export const getInvoiceProductPriceTotal = (invoice = {}) =>
+  (Array.isArray(invoice.products) ? invoice.products : []).reduce(
+    (total, product) => {
+      const productPrice = Number(product?.productPrice);
+      return (
+        total +
+        (Number.isFinite(productPrice) && productPrice >= 0 ? productPrice : 0)
+      );
+    },
+    0,
+  );
 
 export const getInvoiceEmail = (invoice = {}) =>
   validateEmail(
