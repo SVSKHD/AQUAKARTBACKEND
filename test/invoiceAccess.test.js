@@ -7,6 +7,7 @@ import {
   calculateInvoiceTotal,
   classifyInvoiceAccessScope,
   getInvoiceOwnershipState,
+  getStoredInvoiceTotal,
   hashToken,
   maskEmail,
   normalizeEmail,
@@ -219,6 +220,17 @@ test("calculates invoice totals from quantity and price", () => {
     }),
     2500,
   );
+});
+
+test("reads only the persisted invoice total for public invoice discovery", () => {
+  assert.equal(getStoredInvoiceTotal({ total_price: 100500 }), 100500);
+  assert.equal(
+    getStoredInvoiceTotal({
+      products: [{ productPrice: 999, productQuantity: 99 }],
+    }),
+    null,
+  );
+  assert.equal(getStoredInvoiceTotal({ total_price: "invalid" }), null);
 });
 
 test("builds a user profile from the newest available invoice fields", () => {
