@@ -410,7 +410,7 @@ const getCustomerInvoiceView = async (req, res) => {
       return res.status(400).json({ message: "Invalid invoice id" });
     }
     const invoice = await AquaInvoice.findById(id)
-      .select("_id invoiceNo customerDetails.name")
+      .select("_id invoiceNo customerDetails.name po")
       .lean();
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     const views = buildInvoiceViewLinks(invoice._id, invoice);
