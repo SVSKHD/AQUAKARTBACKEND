@@ -186,7 +186,8 @@ const parseBoolean = (value) => {
 };
 
 const cleanObjectIdField = (value) => {
-  if (value === undefined || value === null || value === "") return undefined;
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
   return String(value).trim();
 };
 
