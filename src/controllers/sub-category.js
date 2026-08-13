@@ -1,10 +1,28 @@
+import mongoose from "mongoose";
 import cloudinary from "cloudinary";
 import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
+import AquaCategory from "../models/category.js";
+
+const resolveCategoryId = (body = {}) => body.category ?? body.category_id;
+
+const validateCategoryId = async (categoryId) => {
+  if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+    return "A valid parent category is required";
+  }
+  return (await AquaCategory.exists({ _id: categoryId }))
+    ? null
+    : "Parent category not found";
+};
 
 const addSubCategory = async (req, res) => {
   try {
-    const { title, description, photos, keywords, category } = req.body;
+    const { title, description, photos, keywords } = req.body;
+    const category = resolveCategoryId(req.body);
+    const categoryError = await validateCategoryId(category);
+    if (categoryError) {
+      return res.status(400).json({ success: false, message: categoryError });
+    }
     if (!photos || photos.length === 0) {
       throw new Error("No photos provided");
     }
@@ -80,8 +98,13 @@ const getSubCategoryByTitle = async (req, res) => {
 
 const updateSubCategory = async (req, res) => {
   const { id } = req.params;
-  const { title, description, photos, keywords, category } = req.body;
+  const { title, description, photos, keywords } = req.body;
+  const category = resolveCategoryId(req.body);
   try {
+    const categoryError = await validateCategoryId(category);
+    if (categoryError) {
+      return res.status(400).json({ success: false, message: categoryError });
+    }
     const updatedData = {
       title,
       description,
