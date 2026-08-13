@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import cloudinary from "cloudinary";
 import AquaProduct from "../models/product.js";
+import AquaCategory from "../models/category.js";
+import AquaSubCategory from "../models/sub-category.js";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -194,6 +196,15 @@ const buildProductPayload = (body, extraPayload = {}) => {
     ...extraPayload,
   };
 
+  // CRM uses snake_case IDs while the product schema uses category/subCategory.
+  // Accept both contracts during migration and persist only schema fields.
+  payload.category = payload.category ?? payload.category_id;
+  payload.subCategory =
+    payload.subCategory ?? payload.subcategory_id ?? payload.sub_category_id;
+  delete payload.category_id;
+  delete payload.subcategory_id;
+  delete payload.sub_category_id;
+
   [
     "price",
     "stock",
@@ -274,14 +285,54 @@ const validateProductPayload = (body, { partial = false } = {}) => {
     errors.notes = "Notes must not exceed 300 characters";
   }
 
-  ["category", "subCategory", "blog"].forEach((field) => {
-    if (body[field] && !isValidObjectId(String(body[field]).trim())) {
+  const referenceValues = {
+    category: body.category ?? body.category_id,
+    subCategory:
+      body.subCategory ?? body.subcategory_id ?? body.sub_category_id,
+    blog: body.blog,
+  };
+  Object.entries(referenceValues).forEach(([field, value]) => {
+    if (value && !isValidObjectId(String(value).trim())) {
       errors[field] = `Invalid ${field} id`;
     }
   });
 
   return { isValid: Object.keys(errors).length === 0, errors };
 };
+
+const validateProductTaxonomy = async (payload) => {
+  const errors = {};
+  const categoryId = cleanObjectIdField(payload.category);
+  const subCategoryId = cleanObjectIdField(payload.subCategory);
+
+  if (categoryId) {
+    const categoryExists = await AquaCategory.exists({ _id: categoryId });
+    if (!categoryExists) errors.category = "Category not found";
+  }
+
+  if (subCategoryId) {
+    const subCategory = await AquaSubCategory.findById(subCategoryId)
+      .select("category")
+      .lean();
+    if (!subCategory) {
+      errors.subCategory = "Subcategory not found";
+    } else if (
+      categoryId &&
+      String(subCategory.category) !== String(categoryId)
+    ) {
+      errors.subCategory = "Subcategory does not belong to selected category";
+    } else if (!categoryId) {
+      errors.category = "Category is required when subcategory is selected";
+    }
+  }
+
+  return errors;
+};
+
+const populateProductTaxonomy = (query) =>
+  query
+    .populate("category", "_id title")
+    .populate("subCategory", "_id title category");
 
 // ─────────────────────────────── CRUD ────────────────────────────────────
 
@@ -333,7 +384,20 @@ const CreateProduct = async (req, res) => {
       user: req.user?._id,
     });
 
+    const taxonomyErrors = await validateProductTaxonomy(payload);
+    if (Object.keys(taxonomyErrors).length) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product category mapping",
+        errors: taxonomyErrors,
+      });
+    }
+
     const product = await AquaProduct.create(payload);
+    await product.populate([
+      { path: "category", select: "_id title" },
+      { path: "subCategory", select: "_id title category" },
+    ]);
     return res.status(201).json({ success: true, data: product });
   } catch (error) {
     if (error?.statusCode) {
@@ -427,10 +491,33 @@ const updateProduct = async (req, res) => {
     delete updatePayload.ratings;
     delete updatePayload.numberOfReviews;
 
+    const taxonomyErrors = await validateProductTaxonomy({
+      category:
+        updatePayload.category === undefined
+          ? product.category
+          : updatePayload.category,
+      subCategory:
+        updatePayload.subCategory === undefined
+          ? product.subCategory
+          : updatePayload.subCategory,
+    });
+    if (Object.keys(taxonomyErrors).length) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product category mapping",
+        errors: taxonomyErrors,
+      });
+    }
+
     const updated = await AquaProduct.findByIdAndUpdate(id, updatePayload, {
       new: true,
       runValidators: true,
     });
+
+    await updated.populate([
+      { path: "category", select: "_id title" },
+      { path: "subCategory", select: "_id title category" },
+    ]);
 
     return res
       .status(200)
@@ -482,8 +569,8 @@ const getAllProducts = async (req, res) => {
   try {
     const { query } = req.query;
 
-    let products = await AquaProduct.find({}).select(
-      query === "ecom" ? "-dpPrice" : "",
+    let products = await populateProductTaxonomy(
+      AquaProduct.find({}).select(query === "ecom" ? "-dpPrice" : ""),
     );
 
     if (query === "ecom") {
