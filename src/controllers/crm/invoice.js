@@ -242,7 +242,7 @@ const createInvoice = async (req, res) => {
     const invoice = savedInvoice.toObject();
     res.status(201).json({
       ...invoice,
-      ...buildInvoiceViewLinks(invoice._id),
+      ...buildInvoiceViewLinks(invoice._id, invoice),
     });
   } catch (error) {
     if (stockUpdated) await rollbackStockChanges(stockChanges);
@@ -396,7 +396,7 @@ const getAdminInvoiceView = async (req, res) => {
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     return res.status(200).json({
       ...invoice,
-      views: buildInvoiceViewLinks(invoice._id),
+      views: buildInvoiceViewLinks(invoice._id, invoice),
     });
   } catch (error) {
     return res.status(500).json({ message: "Server Error" });
@@ -413,7 +413,7 @@ const getCustomerInvoiceView = async (req, res) => {
       .select("_id invoiceNo customerDetails.name")
       .lean();
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-    const views = buildInvoiceViewLinks(invoice._id);
+    const views = buildInvoiceViewLinks(invoice._id, invoice);
     return res.status(200).json({
       success: true,
       invoiceId: views.invoiceId,
@@ -508,7 +508,7 @@ const notifySpecificInvoiceMember = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Invoice has no customer phone" });
-    const links = buildInvoiceViewLinks(invoice._id);
+    const links = buildInvoiceViewLinks(invoice._id, invoice);
     const message = `Fast2SMS invoice template ${invoice.invoiceNo || invoice._id}`;
     const delivery = await shareInvoiceByWhatsApp({
       invoice,
@@ -557,7 +557,7 @@ const NotifyInvoiceMembers = async (req, res) => {
     for (const invoice of invoices) {
       const { name: customerName, phone } = invoice.customerDetails || {};
       if (!phone) continue;
-      const customerUrl = buildInvoiceViewLinks(invoice._id).customerUrl;
+      const customerUrl = buildInvoiceViewLinks(invoice._id, invoice).customerUrl;
       const message = `Fast2SMS campaign template ${data.messageId}`;
       try {
         const delivery = await sendFast2SmsWhatsAppTemplate({
