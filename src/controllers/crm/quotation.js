@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import AquaQuotation from "../../models/crm/quotation.js";
+import { buildQuotationViewLinks } from "../../utils/invoiceViews.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
@@ -254,7 +255,11 @@ const getQuotationById = async (req, res) => {
         .json({ success: false, message: "Quotation not found" });
     }
 
-    return res.status(200).json({ success: true, data: quotation });
+    return res.status(200).json({
+      success: true,
+      data: quotation,
+      views: buildQuotationViewLinks(quotation._id),
+    });
   } catch (error) {
     console.error("getQuotationById error:", error);
     return res.status(500).json({ success: false, message: error.message || "Server error" });
