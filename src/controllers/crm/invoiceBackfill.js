@@ -35,6 +35,11 @@ const getProcessedInvoiceIds = async () => {
       channel: "whatsapp",
       template: BACKFILL_TEMPLATE,
       invoiceId: { $ne: null },
+      $or: [
+        { status: "sent" },
+        { status: "failed", errorCode: "INVOICE_PHONE_INVALID" },
+        { status: "pending" },
+      ],
     }),
   ]);
 
@@ -97,8 +102,25 @@ const createBackfillLog = async ({ invoice, phone, status, errorCode }) => {
       response: { trigger: "historical-backfill" },
     });
   } catch (error) {
-    if (error?.code === 11000) return null;
-    throw error;
+    if (error?.code !== 11000) throw error;
+
+    const existing = await NotificationLog.findOne({
+      dedupeKey: `invoice:${invoice._id}:whatsapp:historical-backfill`,
+    });
+    if (
+      existing?.status === "failed" &&
+      existing.errorCode !== "INVOICE_PHONE_INVALID"
+    ) {
+      existing.status = "pending";
+      existing.errorCode = undefined;
+      existing.response = {
+        trigger: "historical-backfill",
+        retry: true,
+      };
+      await existing.save();
+      return existing;
+    }
+    return null;
   }
 };
 
