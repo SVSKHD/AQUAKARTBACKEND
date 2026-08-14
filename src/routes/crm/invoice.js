@@ -1,6 +1,7 @@
 import express from "express";
 import InvoiceOperations from "../../controllers/crm/invoice.js";
 import InvoiceDeliveryOperations from "../../controllers/crm/invoiceDelivery.js";
+import InvoiceBackfillOperations from "../../controllers/crm/invoiceBackfill.js";
 import PublicInvoiceLookupOperations from "../../controllers/crm/publicInvoiceLookup.js";
 import optionalUserAuth from "../../middleware/optionalUser.js";
 import userAuth from "../../middleware/user.js";
@@ -74,6 +75,17 @@ router.delete(
   "/delete/invoice/:id",
   userAuth.checkAdmin,
   InvoiceOperations.deleteInvoice,
+);
+
+router.get(
+  "/admin/invoices/backfill/preview",
+  userAuth.checkAdmin,
+  InvoiceBackfillOperations.previewHistoricalInvoiceBackfill,
+);
+router.post(
+  "/admin/invoices/backfill/run",
+  userAuth.checkAdmin,
+  InvoiceBackfillOperations.runHistoricalInvoiceBackfill,
 );
 
 router.post(
