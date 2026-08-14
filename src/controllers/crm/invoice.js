@@ -212,6 +212,79 @@ const rollbackStockChanges = async (stockChanges = []) => {
   return applyStockChanges(rollbackChanges);
 };
 
+const getProviderMessageId = (delivery = {}) =>
+  delivery?.data?.message_id ||
+  delivery?.data?.request_id ||
+  delivery?.data?.data?.message_id ||
+  undefined;
+
+const deliverInvoiceWhatsApp = async ({
+  invoice,
+  pdfUrl,
+  dedupeKey,
+  trigger = "manual",
+}) => {
+  const phone = invoice?.customerDetails?.phone;
+  if (!phone) {
+    const error = new Error("Invoice has no customer phone");
+    error.statusCode = 400;
+    error.code = "INVOICE_PHONE_REQUIRED";
+    throw error;
+  }
+
+  let notification;
+  try {
+    notification = await NotificationLog.create({
+      invoiceId: invoice._id,
+      phone: normalizeIndianPhone(phone),
+      channel: "whatsapp",
+      message: `Fast2SMS invoice template ${invoice.invoiceNo || invoice._id}`,
+      status: "pending",
+      template: "fast2sms-invoice",
+      dedupeKey,
+      response: { trigger },
+    });
+  } catch (error) {
+    if (dedupeKey && error?.code === 11000) {
+      return {
+        success: true,
+        duplicate: true,
+        provider: "fast2sms",
+        message: "Automatic invoice WhatsApp was already processed",
+      };
+    }
+    throw error;
+  }
+
+  try {
+    const links = buildInvoiceViewLinks(invoice._id, invoice);
+    const delivery = await shareInvoiceByWhatsApp({
+      invoice,
+      phone,
+      customerUrl: links.customerUrl,
+      pdfUrl,
+    });
+
+    notification.status = "sent";
+    notification.providerMessageId = getProviderMessageId(delivery);
+    notification.response = { trigger, delivery };
+    await notification.save();
+
+    return delivery;
+  } catch (error) {
+    notification.status = "failed";
+    notification.errorCode = error?.code || "WHATSAPP_DELIVERY_FAILED";
+    notification.response = {
+      trigger,
+      error: error?.details || error?.message || "WhatsApp delivery failed",
+    };
+    await notification.save().catch((logError) => {
+      console.error("Failed to update WhatsApp notification log", logError);
+    });
+    throw error;
+  }
+};
+
 const createInvoice = async (req, res) => {
   let stockChanges = [];
   let stockUpdated = false;
@@ -240,9 +313,41 @@ const createInvoice = async (req, res) => {
 
     const savedInvoice = await new AquaInvoice(req.body).save();
     const invoice = savedInvoice.toObject();
+
+    let whatsappDelivery;
+    try {
+      const delivery = await deliverInvoiceWhatsApp({
+        invoice,
+        trigger: "invoice-created",
+        dedupeKey: `invoice:${invoice._id}:whatsapp:auto-create`,
+      });
+      whatsappDelivery = {
+        attempted: true,
+        sent: delivery?.success === true,
+        duplicate: delivery?.duplicate === true,
+        provider: delivery?.provider || "fast2sms",
+      };
+    } catch (deliveryError) {
+      console.error("Automatic invoice WhatsApp failed", {
+        invoiceId: String(invoice._id),
+        code: deliveryError?.code,
+        message: deliveryError?.message,
+      });
+      whatsappDelivery = {
+        attempted: true,
+        sent: false,
+        provider: "fast2sms",
+        errorCode: deliveryError?.code || "WHATSAPP_DELIVERY_FAILED",
+        message:
+          deliveryError?.message ||
+          "Invoice was created, but WhatsApp delivery failed",
+      };
+    }
+
     res.status(201).json({
       ...invoice,
       ...buildInvoiceViewLinks(invoice._id, invoice),
+      whatsappDelivery,
     });
   } catch (error) {
     if (stockUpdated) await rollbackStockChanges(stockChanges);
@@ -503,43 +608,24 @@ const notifySpecificInvoiceMember = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Invoice not found" });
-    const { phone } = invoice.customerDetails || {};
-    if (!phone)
-      return res
-        .status(400)
-        .json({ success: false, message: "Invoice has no customer phone" });
-    const links = buildInvoiceViewLinks(invoice._id, invoice);
-    const message = `Fast2SMS invoice template ${invoice.invoiceNo || invoice._id}`;
-    const delivery = await shareInvoiceByWhatsApp({
+
+    const delivery = await deliverInvoiceWhatsApp({
       invoice,
-      phone,
-      customerUrl: links.customerUrl,
       pdfUrl: req.body?.pdfUrl,
+      trigger: "crm-manual",
     });
-    await NotificationLog.create({
-      invoiceId: invoice._id,
-      phone: normalizeIndianPhone(phone),
-      message,
-      status: delivery?.success ? "sent" : "failed",
-      template: "fast2sms-invoice",
-      providerMessageId:
-        delivery?.data?.message_id || delivery?.data?.request_id || undefined,
-      response: delivery,
+
+    return res.status(200).json({
+      success: true,
+      message: "Invoice sent on WhatsApp",
+      delivery,
     });
-    return res
-      .status(200)
-      .json({ success: true, message: "Notification sent", delivery });
   } catch (error) {
-    await NotificationLog.create({
-      invoiceId: req.params.id,
-      phone: req.body?.phone || "",
-      message: req.body?.message || "",
-      status: "failed",
-      response: error?.error || error?.message || error,
+    return res.status(error?.statusCode || 500).json({
+      success: false,
+      message: error?.message || "Failed to send invoice on WhatsApp",
+      errorCode: error?.code || "WHATSAPP_DELIVERY_FAILED",
     });
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to send notification", error });
   }
 };
 
