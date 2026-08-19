@@ -330,28 +330,36 @@ const bindMatchingInvoice = async (invoice, firebaseUser) => {
 
 const prepareDirectInvoice = async (invoice, firebaseUser, req) => {
   const previousEmail = getInvoiceEmail(invoice);
-  const emailFields = buildDirectInvoiceEmailFields(
-    invoice,
-    firebaseUser.email,
-  );
-  if (!Object.keys(emailFields).length) return invoice;
+  const verifiedEmail = validateEmail(firebaseUser.email);
+  const existingFirebaseUid = String(invoice.firebaseUid || "");
+  if (existingFirebaseUid && existingFirebaseUid !== firebaseUser.uid) {
+    return invoice;
+  }
+  if (previousEmail && previousEmail !== verifiedEmail) return invoice;
 
-  return AquaInvoice.findByIdAndUpdate(
-    invoice._id,
-    {
-      $set: emailFields,
-      $push: {
-        emailUpdateAudit: buildInvoiceEmailAudit({
-          previousEmail,
-          newEmail: firebaseUser.email,
-          firebaseUid: firebaseUser.uid,
-          requestIp: req.ip,
-          userAgent: req.get("user-agent"),
-        }),
-      },
-    },
-    { new: true },
-  ).lean();
+  const emailFields = buildDirectInvoiceEmailFields(invoice, verifiedEmail);
+  const ownershipFields = {
+    firebaseUid: firebaseUser.uid,
+    aquakartOnlineUser: true,
+    ...emailFields,
+  };
+  const update = { $set: ownershipFields };
+
+  if (Object.keys(emailFields).length) {
+    update.$push = {
+      emailUpdateAudit: buildInvoiceEmailAudit({
+        previousEmail,
+        newEmail: verifiedEmail,
+        firebaseUid: firebaseUser.uid,
+        requestIp: req.ip,
+        userAgent: req.get("user-agent"),
+      }),
+    };
+  }
+
+  return AquaInvoice.findByIdAndUpdate(invoice._id, update, {
+    new: true,
+  }).lean();
 };
 
 const loginAccess = async (req, res) => {
@@ -913,8 +921,7 @@ const whatsappById = async (req, res) => {
     return res.status(error.statusCode || 500).json({
       success: false,
       message:
-        error.message ||
-        "We could not send the invoice on WhatsApp right now",
+        error.message || "We could not send the invoice on WhatsApp right now",
     });
   }
 };

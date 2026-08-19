@@ -28,5 +28,12 @@ required.
 - `POST /v1/crm/notify/invoice/:id` sends the configured invoice template.
 - `POST /v1/notify/send-whatsapp` sends another approved template by `messageId`.
 
-SMS is deliberately represented only by a disabled provider contract. It does
-not send until the SMS templates, DLT registration, and product flow are agreed.
+If WhatsApp delivery fails, invoice delivery falls back to the configured
+Fast2SMS DLT SMS template. Configure `FAST2SMS_SMS_ENABLED=true`,
+`FAST2SMS_SMS_SENDER_ID`, and `FAST2SMS_SMS_INVOICE_MESSAGE_ID` after the DLT
+template is approved. Variables use the same order as the WhatsApp template.
+
+At 08:00 Asia/Kolkata, the backend retries invoices that are not yet linked to a
+verified customer (`firebaseUid` is empty). A per-invoice, per-day dedupe key
+prevents duplicate sends after restarts. Set `INVOICE_REMINDER_ENABLED=false`
+to pause the job.
