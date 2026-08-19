@@ -4,7 +4,11 @@ const NotificationLogSchema = new mongoose.Schema(
   {
     invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "AquaInvoice" },
     phone: { type: String },
-    channel: { type: String, enum: ["whatsapp", "email"], default: "whatsapp" },
+    channel: {
+      type: String,
+      enum: ["whatsapp", "sms", "email"],
+      default: "whatsapp",
+    },
     recipientMasked: String,
     template: String,
     providerMessageId: String,

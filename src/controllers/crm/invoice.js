@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
 import AquaStock from "../../models/crm/stock.js";
 import NotificationLog from "../../models/crm/notificationLog.js";
-import { shareInvoiceByWhatsApp } from "../../services/invoiceSharing/whatsappInvoiceSharing.js";
+import { deliverInvoiceWithSmsFallback } from "../../services/invoiceSharing/invoiceDelivery.js";
 import { sendFast2SmsWhatsAppTemplate } from "../../services/notifications/fast2SmsWhatsApp.js";
 import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
 
@@ -212,77 +212,18 @@ const rollbackStockChanges = async (stockChanges = []) => {
   return applyStockChanges(rollbackChanges);
 };
 
-const getProviderMessageId = (delivery = {}) =>
-  delivery?.data?.message_id ||
-  delivery?.data?.request_id ||
-  delivery?.data?.data?.message_id ||
-  undefined;
-
 const deliverInvoiceWhatsApp = async ({
   invoice,
   pdfUrl,
   dedupeKey,
   trigger = "manual",
 }) => {
-  const phone = invoice?.customerDetails?.phone;
-  if (!phone) {
-    const error = new Error("Invoice has no customer phone");
-    error.statusCode = 400;
-    error.code = "INVOICE_PHONE_REQUIRED";
-    throw error;
-  }
-
-  let notification;
-  try {
-    notification = await NotificationLog.create({
-      invoiceId: invoice._id,
-      phone: normalizeIndianPhone(phone),
-      channel: "whatsapp",
-      message: `Fast2SMS invoice template ${invoice.invoiceNo || invoice._id}`,
-      status: "pending",
-      template: "fast2sms-invoice",
-      dedupeKey,
-      response: { trigger },
-    });
-  } catch (error) {
-    if (dedupeKey && error?.code === 11000) {
-      return {
-        success: true,
-        duplicate: true,
-        provider: "fast2sms",
-        message: "Automatic invoice WhatsApp was already processed",
-      };
-    }
-    throw error;
-  }
-
-  try {
-    const links = buildInvoiceViewLinks(invoice._id, invoice);
-    const delivery = await shareInvoiceByWhatsApp({
-      invoice,
-      phone,
-      customerUrl: links.customerUrl,
-      pdfUrl,
-    });
-
-    notification.status = "sent";
-    notification.providerMessageId = getProviderMessageId(delivery);
-    notification.response = { trigger, delivery };
-    await notification.save();
-
-    return delivery;
-  } catch (error) {
-    notification.status = "failed";
-    notification.errorCode = error?.code || "WHATSAPP_DELIVERY_FAILED";
-    notification.response = {
-      trigger,
-      error: error?.details || error?.message || "WhatsApp delivery failed",
-    };
-    await notification.save().catch((logError) => {
-      console.error("Failed to update WhatsApp notification log", logError);
-    });
-    throw error;
-  }
+  return deliverInvoiceWithSmsFallback({
+    invoice,
+    trigger,
+    dedupePrefix: dedupeKey,
+    pdfUrl,
+  });
 };
 
 const createInvoice = async (req, res) => {
@@ -325,7 +266,9 @@ const createInvoice = async (req, res) => {
         attempted: true,
         sent: delivery?.success === true,
         duplicate: delivery?.duplicate === true,
-        provider: delivery?.provider || "fast2sms",
+        provider: "fast2sms",
+        channel: delivery?.channel || "whatsapp",
+        fallback: delivery?.fallback === true,
       };
     } catch (deliveryError) {
       console.error("Automatic invoice WhatsApp failed", {
@@ -617,7 +560,10 @@ const notifySpecificInvoiceMember = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Invoice sent on WhatsApp",
+      message:
+        delivery.channel === "sms"
+          ? "WhatsApp failed; invoice sent by SMS"
+          : "Invoice sent on WhatsApp",
       delivery,
     });
   } catch (error) {
@@ -643,7 +589,10 @@ const NotifyInvoiceMembers = async (req, res) => {
     for (const invoice of invoices) {
       const { name: customerName, phone } = invoice.customerDetails || {};
       if (!phone) continue;
-      const customerUrl = buildInvoiceViewLinks(invoice._id, invoice).customerUrl;
+      const customerUrl = buildInvoiceViewLinks(
+        invoice._id,
+        invoice,
+      ).customerUrl;
       const message = `Fast2SMS campaign template ${data.messageId}`;
       try {
         const delivery = await sendFast2SmsWhatsAppTemplate({
