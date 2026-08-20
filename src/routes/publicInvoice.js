@@ -89,5 +89,11 @@ router.post(
   requireInvoiceAccess,
   publicInvoiceController.emailById,
 );
+router.post(
+  "/:id/reviews",
+  limiter(60 * 60 * 1000, 20),
+  requireInvoiceAccess,
+  publicInvoiceController.reviewProductByInvoice,
+);
 
 export default router;

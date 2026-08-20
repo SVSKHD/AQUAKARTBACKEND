@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 import AquaInvoice from "../models/crm/invoice.js";
+import AquaProduct from "../models/product.js";
+import AquaEcomUser from "../models/user.js";
 import InvoiceAccessToken from "../models/invoiceAccessToken.js";
 import NotificationLog from "../models/crm/notificationLog.js";
 import sendEmail from "../notifications/email/send-email.js";
@@ -9,6 +11,7 @@ import {
 } from "../services/invoiceSharing/whatsappInvoiceSharing.js";
 import { enrichUserFromInvoices } from "../services/invoiceUserEnrichment.js";
 import invoiceAccessEmail from "../utils/emailTemplates/invoiceAccessEmail.js";
+import { invoiceContainsProduct } from "../utils/invoiceProductReview.js";
 import {
   buildInvoiceEmailAudit,
   buildDirectInvoiceEmailFields,
@@ -575,6 +578,24 @@ const getById = async (req, res) => {
   delete safeInvoice.customerPhoneNormalized;
   delete safeInvoice.customerEmailNormalized;
   delete safeInvoice.accessMetrics;
+  safeInvoice.reviewedProductIds = [];
+  if (req.invoiceAccess.firebaseUid) {
+    const customer = await AquaEcomUser.findOne({
+      firebaseUid: req.invoiceAccess.firebaseUid,
+    })
+      .select("_id")
+      .lean();
+    if (customer) {
+      const reviewedProducts = await AquaProduct.find({
+        "reviews.user": customer._id,
+      })
+        .select("_id")
+        .lean();
+      safeInvoice.reviewedProductIds = reviewedProducts.map(({ _id }) =>
+        String(_id),
+      );
+    }
+  }
   return res.status(200).json(safeInvoice);
 };
 
@@ -926,6 +947,118 @@ const whatsappById = async (req, res) => {
   }
 };
 
+const reviewProductByInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const firebaseUid = String(req.invoiceAccess.firebaseUid || "");
+    if (!invoiceIdIsAllowed(id, req.invoiceAccess)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+    if (!firebaseUid) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Verified Google invoice access is required to review products",
+      });
+    }
+
+    const rating = Number(req.body?.rating);
+    const comment = String(req.body?.comment || "").trim();
+    const productId = String(req.body?.productId || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Select a valid product" });
+    }
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Rating must be between 1 and 5" });
+    }
+    if (comment.length < 3 || comment.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: "Review must contain between 3 and 1000 characters",
+      });
+    }
+
+    const [invoice, product, user] = await Promise.all([
+      AquaInvoice.findById(id).lean(),
+      AquaProduct.findById(productId),
+      AquaEcomUser.findOne({ firebaseUid }),
+    ]);
+    if (!invoice || !canReadInvoice(invoice, req.invoiceAccess)) {
+      return res.status(403).json({
+        success: false,
+        message: "Confirm this invoice before reviewing",
+      });
+    }
+    if (!product || !invoiceContainsProduct({ invoice, product })) {
+      return res.status(403).json({
+        success: false,
+        message: "This product is not linked to the verified invoice",
+      });
+    }
+    if (!user) {
+      return res.status(409).json({
+        success: false,
+        message: "Complete customer profile enrichment before reviewing",
+      });
+    }
+
+    const existingIndex = product.reviews.findIndex(
+      (review) => String(review.user) === String(user._id),
+    );
+    const reviewData = {
+      user: user._id,
+      name:
+        `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+        user.email ||
+        "Aquakart customer",
+      rating,
+      comment,
+      createdAt: new Date(),
+      verifiedPurchase: true,
+      invoiceId: invoice._id,
+    };
+    if (existingIndex >= 0)
+      Object.assign(product.reviews[existingIndex], reviewData);
+    else product.reviews.push(reviewData);
+
+    product.numberOfReviews = product.reviews.length;
+    product.ratings =
+      product.reviews.reduce(
+        (total, review) => total + Number(review.rating || 0),
+        0,
+      ) / product.reviews.length;
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        existingIndex >= 0
+          ? "Product review updated"
+          : "Product review submitted",
+      data: {
+        productId: product._id,
+        ratings: product.ratings,
+        numberOfReviews: product.numberOfReviews,
+        review:
+          product.reviews[
+            existingIndex >= 0 ? existingIndex : product.reviews.length - 1
+          ],
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "We could not save the product review right now",
+    });
+  }
+};
+
 export default {
   lookup,
   requestAccess,
@@ -939,4 +1072,5 @@ export default {
   emailById,
   whatsappStatusById,
   whatsappById,
+  reviewProductByInvoice,
 };

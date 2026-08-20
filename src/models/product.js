@@ -132,6 +132,15 @@ const AquaProductSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
       },
+      verifiedPurchase: {
+        type: Boolean,
+        default: false,
+      },
+      invoiceId: {
+        type: mongoose.Schema.ObjectId,
+        ref: "AquaInvoice",
+        default: null,
+      },
     },
   ],
   user: {
