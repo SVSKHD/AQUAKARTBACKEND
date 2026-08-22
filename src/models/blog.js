@@ -19,6 +19,7 @@ const BlogSchema = new mongoose.Schema({
     trim: true,
     maxlength: [120, "Product name should not be more than 120 characters"],
   },
+  slug: { type: String, trim: true },
   description: {
     type: String,
     required: [true, "please provide product description"],

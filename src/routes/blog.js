@@ -26,7 +26,39 @@ router.post(
   ]),
   BlogOperations.BlogAdd,
 );
-router.post("/blog-update/:id", userAuth.checkAdmin);
-router.get("/delete/blog/:id", userAuth.checkAdmin);
+const blogMedia = upload.fields([
+  { name: "photos", maxCount: 10 },
+  { name: "titleImages", maxCount: 1 },
+]);
+router.put(
+  "/blog-update/:id",
+  userAuth.checkAdmin,
+  blogMedia,
+  BlogOperations.updateBlog,
+);
+router.delete(
+  "/delete/blog/:id",
+  userAuth.checkAdmin,
+  BlogOperations.deleteBlog,
+);
+
+// CRM aliases retained so both deployed clients use the same CRUD contract.
+router.post(
+  "/add-blog",
+  userAuth.checkAdmin,
+  blogMedia,
+  BlogOperations.BlogAdd,
+);
+router.put(
+  "/update-blog/:id",
+  userAuth.checkAdmin,
+  blogMedia,
+  BlogOperations.updateBlog,
+);
+router.delete(
+  "/delete-blog/:id",
+  userAuth.checkAdmin,
+  BlogOperations.deleteBlog,
+);
 
 export default router;
