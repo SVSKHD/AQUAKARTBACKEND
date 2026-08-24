@@ -28,7 +28,7 @@ export const runUnenrichedInvoiceReminder = async (now = new Date()) => {
     try {
       const delivery = await deliverInvoiceWithSmsFallback({
         invoice,
-        trigger: "daily-unenriched-reminder",
+        trigger: "weekly-unenriched-reminder",
         dedupePrefix: `invoice:${invoice._id}:unenriched:${day}`,
       });
       results.push({
@@ -54,6 +54,10 @@ export const startUnenrichedInvoiceReminder = () => {
     23,
     Math.max(0, Number(process.env.INVOICE_REMINDER_HOUR_IST || 8)),
   );
+  const weekday = Math.min(
+    6,
+    Math.max(0, Number(process.env.INVOICE_REMINDER_DAY_OF_WEEK_IST || 1)),
+  );
   let timer;
   const scheduleNext = () => {
     const now = new Date();
@@ -61,7 +65,11 @@ export const startUnenrichedInvoiceReminder = () => {
     const istNow = new Date(now.getTime() + istOffsetMs);
     const nextIst = new Date(istNow);
     nextIst.setUTCHours(hour, 0, 0, 0);
-    if (nextIst <= istNow) nextIst.setUTCDate(nextIst.getUTCDate() + 1);
+
+    let daysUntilRun = (weekday - istNow.getUTCDay() + 7) % 7;
+    if (daysUntilRun === 0 && nextIst <= istNow) daysUntilRun = 7;
+    nextIst.setUTCDate(nextIst.getUTCDate() + daysUntilRun);
+
     const delay = nextIst.getTime() - istNow.getTime();
     timer = setTimeout(async () => {
       try {
