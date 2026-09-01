@@ -6,11 +6,13 @@ import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
 import generateSwaggerDocs from "./swagger-autogen.js";
 import { startUnenrichedInvoiceReminder } from "./src/jobs/unenrichedInvoiceReminder.js";
+import { startProductServiceReminders } from "./src/jobs/productServiceReminders.js";
 
 const PORT = process.env.PORT || 5300; // Default to port 3000 if PORT is not set
 
 mongooseConnect(process.env.DB_URL);
 startUnenrichedInvoiceReminder();
+startProductServiceReminders();
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,

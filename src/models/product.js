@@ -45,6 +45,17 @@ const AquaProductSchema = new mongoose.Schema({
     type: String,
     maxlength: [300, "Product Notes must not exceed 300"],
   },
+  reminderPolicy: {
+    regeneration: {
+      enabled: { type: Boolean, default: false },
+      intervalUnit: {
+        type: String,
+        enum: ["week", "month"],
+      },
+      intervalValue: { type: Number, min: 1, default: 1 },
+    },
+    annualService: { type: Boolean, default: true },
+  },
   photos: [
     {
       id: {
