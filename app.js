@@ -41,6 +41,7 @@ import PaymentRoutes from "./src/routes/payments.js";
 import AdminPaymentRoutes from "./src/routes/crm/payments.js";
 import SeoRoutes from "./src/routes/seo.js";
 import AdminSeoRoutes from "./src/routes/crm/seo.js";
+import ServiceReminderRoutes from "./src/routes/serviceReminders.js";
 
 const app = express();
 
@@ -111,6 +112,7 @@ app.use("/v1/notify", SendWhatsAppMessage);
 app.use("/v1/email", SendEmail);
 app.use("/v1/subscription", Subscritions);
 app.use("/v1/seo", SeoRoutes);
+app.use("/v1/service-reminders", ServiceReminderRoutes);
 
 app.use("/v1/crm", invoiceRoutes);
 app.use("/v1/invoices/public", publicInvoiceRoutes);
