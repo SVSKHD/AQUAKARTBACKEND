@@ -10,6 +10,17 @@ kept on the server and must not be sent to the CRM or browser.
 - `FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID`: approved invoice template message ID.
 - `FAST2SMS_BASE_URL`: optional; defaults to `https://www.fast2sms.com`.
 
+The backend also accepts these migration aliases, but new Jenkins deployments
+should use the canonical names above:
+
+- `FAST2SMS_AUTHORIZATION_KEY` for `FAST2SMS_API_KEY`
+- `FAST2SMS_PHONE_NUMBER_ID` for `FAST2SMS_WHATSAPP_PHONE_NUMBER_ID`
+- `FAST2SMS_WHATSAPP_MESSAGE_ID` for `FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID`
+
+If configuration is incomplete, CRM invoice delivery returns the exact missing
+variable names. SMS fallback is attempted only when the SMS provider is fully
+configured, so a disabled SMS fallback cannot hide the original WhatsApp error.
+
 The invoice template variables are sent in this order:
 
 1. customer name

@@ -13,6 +13,17 @@ export const shareInvoiceByWhatsApp = async ({
   pdfUrl,
 }) => {
   const config = getFast2SmsWhatsAppConfig();
+  if (!config.invoiceMessageId) {
+    const error = new Error(
+      "Fast2SMS WhatsApp is missing: FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID",
+    );
+    error.code = "FAST2SMS_NOT_CONFIGURED";
+    error.statusCode = 503;
+    error.details = {
+      missing: ["FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID"],
+    };
+    throw error;
+  }
   const invoiceNo =
     invoice.invoiceNo || invoice.invoice_no || String(invoice._id);
   const customerName = invoice.customerDetails?.name || "Customer";
