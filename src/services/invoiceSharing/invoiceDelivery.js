@@ -3,6 +3,7 @@ import { normalizeIndianPhone } from "../../utils/invoiceAccess.js";
 import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
 import { shareInvoiceBySms } from "./smsInvoiceSharing.js";
 import { shareInvoiceByWhatsApp } from "./whatsappInvoiceSharing.js";
+import { getFast2SmsSmsStatus } from "../notifications/fast2SmsSms.js";
 
 const providerMessageId = (delivery = {}) =>
   delivery?.data?.message_id ||
@@ -80,6 +81,10 @@ export const deliverInvoiceWithSmsFallback = async ({
     });
     return { success: true, channel: "whatsapp", whatsapp };
   } catch (whatsappError) {
+    // Preserve the real WhatsApp error when SMS fallback is not configured.
+    // Previously this attempted disabled SMS and replaced a useful error with
+    // the generic "Fast2SMS SMS is not configured" response.
+    if (!getFast2SmsSmsStatus().available) throw whatsappError;
     const sms = await attempt({
       invoice,
       channel: "sms",

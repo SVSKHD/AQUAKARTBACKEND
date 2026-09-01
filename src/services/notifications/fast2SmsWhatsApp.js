@@ -10,19 +10,34 @@ export const normalizeWhatsAppNumber = (value = "") => {
 };
 
 export const getFast2SmsWhatsAppConfig = () => ({
-  apiKey: process.env.FAST2SMS_API_KEY || "",
+  apiKey:
+    process.env.FAST2SMS_API_KEY ||
+    process.env.FAST2SMS_AUTHORIZATION_KEY ||
+    "",
   baseUrl: process.env.FAST2SMS_BASE_URL || DEFAULT_BASE_URL,
-  phoneNumberId: process.env.FAST2SMS_WHATSAPP_PHONE_NUMBER_ID || "",
-  invoiceMessageId: process.env.FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID || "",
+  phoneNumberId:
+    process.env.FAST2SMS_WHATSAPP_PHONE_NUMBER_ID ||
+    process.env.FAST2SMS_PHONE_NUMBER_ID ||
+    "",
+  invoiceMessageId:
+    process.env.FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID ||
+    process.env.FAST2SMS_WHATSAPP_MESSAGE_ID ||
+    "",
 });
+
+const getMissingWhatsAppConfiguration = (config, { invoice = true } = {}) => {
+  const missing = [];
+  if (!config.apiKey) missing.push("FAST2SMS_API_KEY");
+  if (!config.phoneNumberId)
+    missing.push("FAST2SMS_WHATSAPP_PHONE_NUMBER_ID");
+  if (invoice && !config.invoiceMessageId)
+    missing.push("FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID");
+  return missing;
+};
 
 export const getFast2SmsWhatsAppStatus = () => {
   const config = getFast2SmsWhatsAppConfig();
-  const missing = [];
-  if (!config.apiKey) missing.push("FAST2SMS_API_KEY");
-  if (!config.phoneNumberId) missing.push("FAST2SMS_WHATSAPP_PHONE_NUMBER_ID");
-  if (!config.invoiceMessageId)
-    missing.push("FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID");
+  const missing = getMissingWhatsAppConfiguration(config);
 
   return {
     provider: "fast2sms",
@@ -44,11 +59,13 @@ const providerError = (message, code, statusCode = 502, details) => {
 
 export const listFast2SmsWhatsAppTemplates = async () => {
   const config = getFast2SmsWhatsAppConfig();
-  if (!config.apiKey) {
+  const missing = getMissingWhatsAppConfiguration(config, { invoice: false });
+  if (missing.length) {
     throw providerError(
-      "Fast2SMS API key is not configured",
+      `Fast2SMS WhatsApp is missing: ${missing.join(", ")}`,
       "FAST2SMS_NOT_CONFIGURED",
       503,
+      { missing },
     );
   }
   const response = await axios.get(
@@ -83,11 +100,13 @@ export const sendFast2SmsWhatsAppTemplate = async ({
       "INVALID_PHONE",
       400,
     );
-  if (!config.apiKey || !config.phoneNumberId) {
+  const missing = getMissingWhatsAppConfiguration(config, { invoice: false });
+  if (missing.length) {
     throw providerError(
-      "Fast2SMS WhatsApp is not configured",
+      `Fast2SMS WhatsApp is missing: ${missing.join(", ")}`,
       "FAST2SMS_NOT_CONFIGURED",
       503,
+      { missing },
     );
   }
   if (!messageId) {

@@ -25,6 +25,7 @@ const getTemplates = async (req, res) => {
       success: false,
       code: error.code || "FAST2SMS_REQUEST_FAILED",
       message: error.message,
+      missingConfiguration: error.details?.missing || [],
     });
   }
 };
@@ -46,6 +47,7 @@ const sendWhatsAppPostMethod = async (req, res) => {
       stage: error.code || "FAST2SMS_REQUEST_FAILED",
       message: error.message,
       details: error.details,
+      missingConfiguration: error.details?.missing || [],
     });
   }
 };

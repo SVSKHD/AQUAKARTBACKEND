@@ -571,6 +571,7 @@ const notifySpecificInvoiceMember = async (req, res) => {
       success: false,
       message: error?.message || "Failed to send invoice on WhatsApp",
       errorCode: error?.code || "WHATSAPP_DELIVERY_FAILED",
+      missingConfiguration: error?.details?.missing || [],
     });
   }
 };
