@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import AquaInvoice from "../models/crm/invoice.js";
 import AquaProduct from "../models/product.js";
 import ServiceReminderDelivery from "../models/serviceReminderDelivery.js";
@@ -26,13 +27,11 @@ const formatDate = (value) =>
     year: "numeric",
   }).format(value);
 
-const getInvoiceLink = (invoiceId) => {
+const getConfirmationLink = (token) => {
   const frontendUrl = (
-    process.env.FRONTEND_PUBLIC_URL ||
-    process.env.FRONTEND_URL ||
-    "https://aquakart.co.in"
+    process.env.FRONTEND_PUBLIC_URL || process.env.FRONTEND_URL || "https://aquakart.co.in"
   ).replace(/\/$/, "");
-  return `${frontendUrl}/invoice/${invoiceId}`;
+  return `${frontendUrl}/service-reminder/confirm/${token}`;
 };
 
 const getTemplateId = (type) => {
@@ -53,7 +52,7 @@ const sendReminder = async ({ to, type, variables }) => {
   return "whatsapp";
 };
 
-const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDate, warrantyExpiresAt }) => {
+export const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDate, warrantyExpiresAt }) => {
   const productKey = String(item.productId || item.productSlug || item.productName);
   const dedupeKey = buildReminderDedupeKey({
     invoiceId: invoice._id,
@@ -70,6 +69,12 @@ const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDate, war
       productName: item.productName || "Aquakart product",
       reminderType: type,
       dueDate,
+      purchaseDate,
+      warrantyExpiresAt,
+      customerName: invoice.customerDetails?.name || "Customer",
+      customerPhone: String(invoice.customerDetails?.phone || ""),
+      invoiceNo: invoice.invoiceNo,
+      confirmationToken: crypto.randomBytes(24).toString("hex"),
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -79,8 +84,10 @@ const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDate, war
       }
       await ServiceReminderDelivery.findByIdAndUpdate(delivery._id, {
         status: "pending",
+        ...(!delivery.confirmationToken ? { confirmationToken: crypto.randomBytes(24).toString("hex") } : {}),
         $unset: { errorCode: 1 },
       });
+      delivery = await ServiceReminderDelivery.findById(delivery._id);
     } else {
       throw error;
     }
@@ -89,7 +96,7 @@ const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDate, war
   try {
     const customerName = invoice.customerDetails?.name || "Customer";
     const productName = item.productName || "Aquakart product";
-    const invoiceLink = getInvoiceLink(invoice._id);
+    const invoiceLink = getConfirmationLink(delivery.confirmationToken);
     const variables = type === "warranty-expiry"
       ? [
           customerName,
@@ -107,12 +114,17 @@ const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDate, war
     await ServiceReminderDelivery.findByIdAndUpdate(delivery._id, {
       status: "sent",
       channel,
+      lastSentAt: new Date(),
+      $inc: { attemptCount: 1 },
+      $push: { attempts: { status: "sent", channel } },
     });
     return { status: "sent", channel, dedupeKey };
   } catch (error) {
     await ServiceReminderDelivery.findByIdAndUpdate(delivery._id, {
       status: "failed",
       errorCode: error.code || "REMINDER_DELIVERY_FAILED",
+      $inc: { attemptCount: 1 },
+      $push: { attempts: { status: "failed", errorCode: error.code || "REMINDER_DELIVERY_FAILED" } },
     });
     return { status: "failed", errorCode: error.code, dedupeKey };
   }
