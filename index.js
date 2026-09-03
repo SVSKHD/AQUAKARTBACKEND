@@ -10,6 +10,15 @@ import { startProductServiceReminders } from "./src/jobs/productServiceReminders
 
 const PORT = process.env.PORT || 5300; // Default to port 3000 if PORT is not set
 
+process.on("unhandledRejection", (error) => {
+  console.error("Unhandled promise rejection:", error);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  process.exit(1);
+});
+
 mongooseConnect(process.env.DB_URL);
 startUnenrichedInvoiceReminder();
 startProductServiceReminders();
@@ -19,17 +28,10 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Start server
-generateSwaggerDocs()
-  .then(() => {
-    // Start server after Swagger docs are generated
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error(
-      "Error generating Swagger documentation, server not started:",
-      error,
-    );
-  });
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+generateSwaggerDocs().catch((error) => {
+  console.error("Error generating Swagger documentation:", error);
+});
