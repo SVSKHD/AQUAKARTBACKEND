@@ -48,7 +48,7 @@ export const getLiveAnalytics = async (_req, res) => {
     const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const [activeVisits, todayViews, todaySessions, avgDuration, topPages] = await Promise.all([
-      AnalyticsVisit.find({ lastSeenAt: { $gte: activeSince } })
+      AnalyticsVisit.find({ endedAt: null, lastSeenAt: { $gte: activeSince } })
         .sort({ lastSeenAt: -1 })
         .limit(50)
         .lean(),
