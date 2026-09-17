@@ -21,6 +21,7 @@ export const PERMISSIONS = Object.freeze([
   "gateways.manage",
   "seo.read",
   "seo.manage",
+  "analytics.read",
   "audit.read",
 ]);
 
