@@ -5,6 +5,8 @@ import InvoiceBackfillOperations from "../../controllers/crm/invoiceBackfill.js"
 import PublicInvoiceLookupOperations from "../../controllers/crm/publicInvoiceLookup.js";
 import optionalUserAuth from "../../middleware/optionalUser.js";
 import userAuth from "../../middleware/user.js";
+import servicePortalAuth from "../../middleware/servicePortal.js";
+import ServiceInvoicePortalOperations from "../../controllers/crm/serviceInvoicePortal.js";
 
 const router = express.Router();
 
@@ -16,6 +18,18 @@ router.get(
   "/public/invoices/phone",
   optionalUserAuth,
   PublicInvoiceLookupOperations.getInvoicesByPhone,
+);
+
+router.post("/service/verify", servicePortalAuth.verifyServicePin);
+router.get(
+  "/service/invoice",
+  servicePortalAuth.requireServicePortal,
+  ServiceInvoicePortalOperations.findInvoice,
+);
+router.get(
+  "/service/invoice/:id",
+  servicePortalAuth.requireServicePortal,
+  ServiceInvoicePortalOperations.getInvoice,
 );
 router.get(
   "/admin/all-invoices",
