@@ -221,6 +221,12 @@ const buildProductPayload = (body, extraPayload = {}) => {
   if (payload.discountPriceStatus !== undefined) {
     payload.discountPriceStatus = parseBoolean(payload.discountPriceStatus);
   }
+  if (payload.identifierExists !== undefined) {
+    payload.identifierExists = parseBoolean(payload.identifierExists);
+  }
+  if (payload.merchantEnabled !== undefined) {
+    payload.merchantEnabled = parseBoolean(payload.merchantEnabled);
+  }
 
   payload.category = cleanObjectIdField(payload.category);
   payload.subCategory = cleanObjectIdField(payload.subCategory);

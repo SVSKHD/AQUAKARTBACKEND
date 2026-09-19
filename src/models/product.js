@@ -105,6 +105,43 @@ const AquaProductSchema = new mongoose.Schema({
     type: String,
     required: [true, "please add a brand for clothing"],
   },
+  sku: {
+    type: String,
+    trim: true,
+  },
+  gtin: {
+    type: String,
+    trim: true,
+  },
+  mpn: {
+    type: String,
+    trim: true,
+  },
+  googleProductCategory: {
+    type: String,
+    trim: true,
+  },
+  productType: {
+    type: String,
+    trim: true,
+  },
+  condition: {
+    type: String,
+    enum: ["new", "refurbished", "used"],
+    default: "new",
+  },
+  shippingWeight: {
+    type: String,
+    trim: true,
+  },
+  identifierExists: {
+    type: Boolean,
+    default: true,
+  },
+  merchantEnabled: {
+    type: Boolean,
+    default: true,
+  },
   ratings: {
     type: Number,
     default: 0,

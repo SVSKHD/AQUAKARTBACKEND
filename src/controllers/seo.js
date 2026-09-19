@@ -139,7 +139,7 @@ export const getPublicSeo = async (req, res) => {
 
 export const listSeo = async (req, res) => {
   const page = Math.max(Number(req.query.page || 1), 1);
-  const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 100);
+  const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 500);
   const filter = {};
   if (req.query.active === "true") filter.active = true;
   if (req.query.active === "false") filter.active = false;

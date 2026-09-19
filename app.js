@@ -44,6 +44,7 @@ import AdminSeoRoutes from "./src/routes/crm/seo.js";
 import ServiceReminderRoutes from "./src/routes/serviceReminders.js";
 import invoiceReportRoutes from "./src/routes/invoiceReports.js";
 import AnalyticsRoutes from "./src/routes/analytics.js";
+import MerchantFeedRoutes from "./src/routes/merchantFeed.js";
 
 const app = express();
 
@@ -116,6 +117,7 @@ app.use("/v1/subscription", Subscritions);
 app.use("/v1/seo", SeoRoutes);
 app.use("/v1/service-reminders", ServiceReminderRoutes);
 app.use("/v1/analytics", AnalyticsRoutes);
+app.use("/v1/merchant", MerchantFeedRoutes);
 
 app.use("/v1/invoices/report", invoiceReportRoutes);
 app.use("/v1/crm", invoiceRoutes);
