@@ -79,6 +79,9 @@ const AquaInvoiceSchema = new mongoose.Schema(
     },
     productId: { type: ObjectId, ref: "AquaProduct" },
     paymentType: { type: String },
+    migrated: { type: Boolean, default: false, index: true },
+    migrationReviewed: { type: Boolean, default: false, index: true },
+    migrationReviewedAt: { type: Date },
   },
   { timestamps: true },
 );

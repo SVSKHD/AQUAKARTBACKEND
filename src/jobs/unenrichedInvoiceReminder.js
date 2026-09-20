@@ -1,5 +1,6 @@
 import AquaInvoice from "../models/crm/invoice.js";
 import { deliverInvoiceWithSmsFallback } from "../services/invoiceSharing/invoiceDelivery.js";
+import { buildInvoiceAutomationEligibilityFilter } from "../utils/invoiceAutomation.js";
 
 const DEFAULT_BATCH_SIZE = 100;
 
@@ -12,10 +13,15 @@ export const runUnenrichedInvoiceReminder = async (now = new Date()) => {
     timeZone: "Asia/Kolkata",
   }).format(now);
   const invoices = await AquaInvoice.find({
-    $or: [
-      { firebaseUid: { $exists: false } },
-      { firebaseUid: null },
-      { firebaseUid: "" },
+    $and: [
+      buildInvoiceAutomationEligibilityFilter(),
+      {
+        $or: [
+          { firebaseUid: { $exists: false } },
+          { firebaseUid: null },
+          { firebaseUid: "" },
+        ],
+      },
     ],
     "customerDetails.phone": { $exists: true, $nin: [null, ""] },
   })

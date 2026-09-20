@@ -12,6 +12,7 @@ import {
   parseInvoicePurchaseDate,
   resolveRegenerationPolicy,
 } from "../services/serviceReminders.js";
+import { buildInvoiceAutomationEligibilityFilter } from "../utils/invoiceAutomation.js";
 
 const TEMPLATE_IDS = {
   regeneration: "31043",
@@ -132,6 +133,7 @@ export const attemptDelivery = async ({ invoice, item, type, dueDate, purchaseDa
 
 export const runProductServiceReminders = async (now = new Date()) => {
   const invoices = await AquaInvoice.find({
+    ...buildInvoiceAutomationEligibilityFilter(),
     quotation: { $ne: true },
     "customerDetails.phone": { $exists: true, $nin: [null, ""] },
     "products.0": { $exists: true },

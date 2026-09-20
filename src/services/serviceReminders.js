@@ -15,10 +15,14 @@ export const parseInvoicePurchaseDate = (invoice) => {
   const value = invoice?.date || invoice?.createdAt;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   const text = String(value || "").trim();
-  const indianDate = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  const indianDate = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})$/);
   if (indianDate) {
     const [, day, month, year] = indianDate;
-    const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    const numericYear = Number(year);
+    const fullYear = year.length === 2 ? 2000 + numericYear : numericYear;
+    const parsed = new Date(
+      Date.UTC(fullYear, Number(month) - 1, Number(day)),
+    );
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
   const parsed = new Date(text);
