@@ -14,7 +14,7 @@ const normalizeIndianPhone = (phone) =>
     .replace(/^\+91/, "")
     .replace(/^91/, "");
 
-const validateInvoicePayload = (payload = {}) => {
+const validateInvoicePayload = (payload = {}, { allowLegacyGst = false } = {}) => {
   const errors = {};
   const customerName = payload?.customerDetails?.name;
   const customerPhone = payload?.customerDetails?.phone;
@@ -67,7 +67,7 @@ const validateInvoicePayload = (payload = {}) => {
     });
   }
 
-  if (gstEnabled) {
+  if (gstEnabled && !allowLegacyGst) {
     const gstNo = payload?.gstDetails?.gstNo;
     const gstName = payload?.gstDetails?.gstName;
     if (!gstNo || typeof gstNo !== "string" || !gstNo.trim())
@@ -313,16 +313,23 @@ const updateInvoice = async (req, res) => {
     const invoice = await AquaInvoice.findById(id);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
 
-    const { isValid, errors } = validateInvoicePayload(req.body);
+    const isMigratedInvoice = invoice.migrated === true;
+    const { isValid, errors } = validateInvoicePayload(req.body, {
+      allowLegacyGst: isMigratedInvoice,
+    });
     if (!isValid)
       return res
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
 
-    stockChanges = buildStockChanges(req.body.products, invoice.products);
-    await assertStockAvailable(stockChanges);
-    await applyStockChanges(stockChanges);
-    stockUpdated = true;
+    // Historical migrated invoices must never mutate today's stock when staff
+    // links them to current products. Their stock movement happened in the past.
+    if (!isMigratedInvoice) {
+      stockChanges = buildStockChanges(req.body.products, invoice.products);
+      await assertStockAvailable(stockChanges);
+      await applyStockChanges(stockChanges);
+      stockUpdated = true;
+    }
 
     req.body.invoiceNo = invoice.invoiceNo;
     req.body.createdAt = invoice.createdAt;
@@ -330,6 +337,28 @@ const updateInvoice = async (req, res) => {
     req.body.date = invoice.date;
     req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = invoice.transport?.deliveryDate;
+
+    if (isMigratedInvoice) {
+      const products = Array.isArray(req.body.products) ? req.body.products : [];
+      const productsLinked =
+        products.length > 0 &&
+        products.every((product) =>
+          mongoose.Types.ObjectId.isValid(String(product?.productId || "")),
+        );
+      const customerPhoneReady = INDIAN_CONTACT_REGEX.test(
+        String(req.body?.customerDetails?.phone || "").replace(/\s|-/g, ""),
+      );
+
+      req.body.migrated = true;
+      req.body.migrationReviewed = productsLinked && customerPhoneReady;
+      req.body.migrationReviewedAt = req.body.migrationReviewed
+        ? new Date()
+        : null;
+    } else {
+      delete req.body.migrated;
+      delete req.body.migrationReviewed;
+      delete req.body.migrationReviewedAt;
+    }
 
     const updatedInvoice = await AquaInvoice.findByIdAndUpdate(id, req.body, {
       new: true,
@@ -382,11 +411,16 @@ const deleteInvoice = async (req, res) => {
 
 const getInvoices = async (req, res) => {
   try {
-    const { gst, po, search, user } = req.query;
+    const { gst, po, search, user, migrated, migrationReviewed } = req.query;
     const filter = {};
     if (gst === "true") filter.gst = true;
     if (po === "true") filter.po = true;
     if (user === "true") filter.gst = false;
+    if (migrated === "true") filter.migrated = true;
+    if (migrated === "false") filter.migrated = { $ne: true };
+    if (migrationReviewed === "true") filter.migrationReviewed = true;
+    if (migrationReviewed === "false")
+      filter.migrationReviewed = { $ne: true };
     if (search) {
       filter.$or = [
         { invoiceNo: { $regex: search, $options: "i" } },
