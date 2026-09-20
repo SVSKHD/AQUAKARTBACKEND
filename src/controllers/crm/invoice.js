@@ -390,9 +390,13 @@ const deleteInvoice = async (req, res) => {
     const invoice = await AquaInvoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
 
-    stockChanges = buildStockChanges([], invoice.products);
-    await applyStockChanges(stockChanges);
-    stockUpdated = true;
+    // Deleting a historical migrated invoice must not return its old
+    // quantities into today's CRM stock.
+    if (invoice.migrated !== true) {
+      stockChanges = buildStockChanges([], invoice.products);
+      await applyStockChanges(stockChanges);
+      stockUpdated = true;
+    }
 
     const deletedInvoice = await AquaInvoice.findByIdAndDelete(req.params.id);
     if (!deletedInvoice) {
