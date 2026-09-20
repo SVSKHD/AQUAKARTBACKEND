@@ -7,6 +7,7 @@ import {
   normalizeIndianPhone,
 } from "../../utils/invoiceAccess.js";
 import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
+import { buildInvoiceAutomationEligibilityFilter } from "../../utils/invoiceAutomation.js";
 
 const BACKFILL_TEMPLATE = "fast2sms-invoice-backfill";
 const DELIVERY_TEMPLATE = "fast2sms-invoice";
@@ -47,6 +48,7 @@ const getProcessedInvoiceIds = async () => {
 };
 
 const getEligibleQuery = (processedIds = []) => ({
+  ...buildInvoiceAutomationEligibilityFilter(),
   ...(processedIds.length ? { _id: { $nin: processedIds } } : {}),
   "customerDetails.phone": { $exists: true, $nin: [null, ""] },
 });
