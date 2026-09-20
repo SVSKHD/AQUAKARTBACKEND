@@ -6,6 +6,7 @@ import NotificationLog from "../../models/crm/notificationLog.js";
 import { deliverInvoiceWithSmsFallback } from "../../services/invoiceSharing/invoiceDelivery.js";
 import { sendFast2SmsWhatsAppTemplate } from "../../services/notifications/fast2SmsWhatsApp.js";
 import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
+import { buildInvoiceAutomationEligibilityFilter } from "../../utils/invoiceAutomation.js";
 
 const INDIAN_CONTACT_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
 const normalizeIndianPhone = (phone) =>
@@ -620,7 +621,9 @@ const notifySpecificInvoiceMember = async (req, res) => {
 
 const NotifyInvoiceMembers = async (req, res) => {
   try {
-    const invoices = await AquaInvoice.find({}).lean();
+    const invoices = await AquaInvoice.find(
+      buildInvoiceAutomationEligibilityFilter(),
+    ).lean();
     const data = req.body;
     const year = new Date().getFullYear();
     if (data.send !== "all" || !data.festival || !data.messageId)
