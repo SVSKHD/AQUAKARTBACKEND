@@ -251,6 +251,10 @@ const createInvoice = async (req, res) => {
     req.body.date = formattedDate;
     req.body.transport = req.body.transport || {};
     req.body.transport.deliveryDate = formattedDate;
+    // Only the controlled database migration may create migrated invoices.
+    req.body.migrated = false;
+    req.body.migrationReviewed = false;
+    req.body.migrationReviewedAt = null;
 
     const savedInvoice = await new AquaInvoice(req.body).save();
     const invoice = savedInvoice.toObject();
