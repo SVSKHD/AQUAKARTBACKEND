@@ -33,6 +33,11 @@ test("product configuration takes precedence over the legacy name mapping", () =
   assert.deepEqual(policy, { intervalUnit: "week", intervalValue: 2 });
 });
 
+test("parses two-digit legacy invoice years", () => {
+  const purchase = parseInvoicePurchaseDate({ date: "25/04/22" });
+  assert.equal(purchase?.toISOString(), "2022-04-25T00:00:00.000Z");
+});
+
 test("uses invoice date as the schedule anchor", () => {
   const purchase = parseInvoicePurchaseDate({ date: "15/08/2025" });
   const now = new Date("2026-09-01T00:00:00.000Z");
