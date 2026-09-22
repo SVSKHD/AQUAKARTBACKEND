@@ -4,6 +4,10 @@ import AquaCRMOrder, {
   CRM_PAYMENT_STATUSES,
   CRM_ORDER_SOURCES,
 } from "../../models/crm/order.js";
+import {
+  buildOrderCreatedNotification,
+  publishCrmNotificationSafely,
+} from "../../services/crmNotifications.js";
 
 const INDIAN_CONTACT_REGEX = /^(?:\+91|91)?[6-9]\d{9}$/;
 
@@ -199,6 +203,13 @@ const createOrder = async (req, res) => {
       notes: req.body.notes || "",
       createdBy: req.user?._id || req.user?.id || null,
     });
+
+    void publishCrmNotificationSafely(
+      buildOrderCreatedNotification({
+        order,
+        source: "crm",
+      }),
+    );
 
     return res.status(201).json({
       status: true,
