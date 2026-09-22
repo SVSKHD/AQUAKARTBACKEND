@@ -5,6 +5,10 @@ import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
+import {
+  buildOrderCreatedNotification,
+  publishCrmNotificationSafely,
+} from "../services/crmNotifications.js";
 
 const ADMIN_PHONE = process.env.ADMIN_PHONE || "9014774667";
 
@@ -79,6 +83,14 @@ const createOrder = async (req, res) => {
   try {
     const newOrder = new AquaOrder(req.body);
     const savedOrder = await newOrder.save();
+
+    void publishCrmNotificationSafely(
+      buildOrderCreatedNotification({
+        order: savedOrder,
+        source: "ecommerce",
+      }),
+    );
+
     return res.status(201).json({ success: true, data: savedOrder });
   } catch (error) {
     return res
@@ -140,6 +152,14 @@ const createCodOrder = async (req, res) => {
     }
 
     const orderCreated = await new AquaOrder(req.body).save();
+
+    void publishCrmNotificationSafely(
+      buildOrderCreatedNotification({
+        order: orderCreated,
+        source: "cod",
+        customerName: user.name || user.email || "",
+      }),
+    );
 
     const message = `Welcome to Aquakart Family, We have successfully received the order "${orderCreated.orderId}"`;
     const adminMessage = `New COD Order Received: Order ID "${orderCreated.orderId}" has been placed. Please process it accordingly.`;
