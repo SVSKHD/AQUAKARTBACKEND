@@ -48,6 +48,8 @@ import ServiceReminderRoutes from "./src/routes/serviceReminders.js";
 import invoiceReportRoutes from "./src/routes/invoiceReports.js";
 import AnalyticsRoutes from "./src/routes/analytics.js";
 import MerchantFeedRoutes from "./src/routes/merchantFeed.js";
+import PublicLeadRoutes from "./src/routes/publicLeads.js";
+import CRMWhatsAppRoutes from "./src/routes/crm/whatsapp.js";
 
 const app = express();
 
@@ -122,6 +124,7 @@ app.use("/v1/seo", SeoRoutes);
 app.use("/v1/service-reminders", ServiceReminderRoutes);
 app.use("/v1/analytics", AnalyticsRoutes);
 app.use("/v1/merchant", MerchantFeedRoutes);
+app.use("/v1/leads", PublicLeadRoutes);
 
 app.use("/v1/invoices/report", invoiceReportRoutes);
 app.use("/v1/crm", invoiceRoutes);
@@ -137,6 +140,7 @@ app.use("/v1/crm/ecom-orders", CRMEcommerceOrderRoutes);
 app.use("/v1/crm/leads", CRMLeadRoutes);
 app.use("/v1/crm/activities", CRMActivityRoutes);
 app.use("/v1/crm/deals", CRMDealRoutes);
+app.use("/v1/crm/whatsapp", CRMWhatsAppRoutes);
 app.use("/v1/admin", AccessControlRoutes);
 app.use("/v1/admin/coupons", AdminCouponRoutes);
 app.use("/v1/admin", AdminReferralRoutes);
