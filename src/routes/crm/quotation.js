@@ -22,6 +22,17 @@ router.get(
   QuotationOperations.getQuotationsByCustomer,
 );
 
+router.post(
+  "/:id/send-whatsapp",
+  userAuth.checkAdmin,
+  QuotationOperations.sendQuotationWhatsAppMessage,
+);
+router.post(
+  "/:id/follow-up-now",
+  userAuth.checkAdmin,
+  QuotationOperations.sendQuotationFollowUpNow,
+);
+
 router.get("/public/:id", QuotationOperations.getQuotationById);
 router.get("/:id", userAuth.checkAdmin, QuotationOperations.getQuotationById);
 router.put("/:id", userAuth.checkAdmin, QuotationOperations.updateQuotation);
