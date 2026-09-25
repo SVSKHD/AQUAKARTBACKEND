@@ -62,8 +62,7 @@ const getLeads = async (req, res) => {
 
     const leads = await AquaLead.find(filter)
       .sort({ created_at: -1 })
-      .populate("assigned_to", "firstName lastName email")
-      .populate("customer_id", "firstName lastName email phone");
+      .populate("assigned_to", "firstName lastName email");
 
     return res.status(200).json({
       success: true,
@@ -88,8 +87,7 @@ const getLeadById = async (req, res) => {
     }
 
     const lead = await AquaLead.findById(req.params.id)
-      .populate("assigned_to", "firstName lastName email")
-      .populate("customer_id", "firstName lastName email phone");
+      .populate("assigned_to", "firstName lastName email");
 
     if (!lead) {
       return res
@@ -165,8 +163,7 @@ const updateLead = async (req, res) => {
       new: true,
       runValidators: true,
     })
-      .populate("assigned_to", "firstName lastName email")
-      .populate("customer_id", "firstName lastName email phone");
+      .populate("assigned_to", "firstName lastName email");
 
     return res.status(200).json({ success: true, data: lead });
   } catch (error) {
