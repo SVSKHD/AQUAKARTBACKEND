@@ -44,7 +44,6 @@ const whatsappMessageSchema = new mongoose.Schema(
     provider_message_id: {
       type: String,
       trim: true,
-      default: "",
       index: true,
       unique: true,
       sparse: true,
