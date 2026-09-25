@@ -52,10 +52,15 @@ const dealSchema = new mongoose.Schema(
       index: true,
     },
     customer_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AquaEcomUser",
-      default: null,
+      type: String,
+      trim: true,
+      default: "",
       index: true,
+    },
+    customer_type: {
+      type: String,
+      enum: ["online", "offline", ""],
+      default: "",
     },
     quotation_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -63,9 +68,15 @@ const dealSchema = new mongoose.Schema(
       default: null,
     },
     order_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AquaCRMOrder",
-      default: null,
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+    order_type: {
+      type: String,
+      enum: ["crm", "ecommerce", ""],
+      default: "",
     },
     assigned_to: {
       type: mongoose.Schema.Types.ObjectId,
