@@ -122,7 +122,9 @@ export const recordIncomingWhatsAppEvent = async (event = {}) => {
     lead_id: intake.lead._id,
     direction: "inbound",
     provider: "meta",
-    provider_message_id: event.messageId || "",
+    ...(event.messageId
+      ? { provider_message_id: String(event.messageId) }
+      : {}),
     provider_status: "received",
     status_history: [
       {
@@ -197,7 +199,9 @@ export const recordWhatsAppStatusEvent = async (event = {}) => {
       lead_id: lead?._id || null,
       direction: "outbound",
       provider: "meta",
-      provider_message_id: event.messageId || "",
+      ...(event.messageId
+        ? { provider_message_id: String(event.messageId) }
+        : {}),
       provider_status: providerStatus,
       status_history: [
         {
@@ -291,7 +295,9 @@ export const recordOutboundWhatsAppMessage = async ({
       quotation_id: quotationId,
       direction: "outbound",
       provider: "fast2sms",
-      provider_message_id: providerMessageId,
+      ...(providerMessageId
+        ? { provider_message_id: providerMessageId }
+        : {}),
       provider_status: "sent",
       status_history: [{ status: "sent", at: occurredAt }],
       phone_normalized: phoneNormalized,
