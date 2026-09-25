@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import express from "express";
 import {
   recordIncomingWhatsAppEvent,
@@ -10,6 +11,33 @@ const getVerifyToken = () =>
   process.env.META_WA_VERIFY_TOKEN ||
   process.env.WHATSAPP_META_VERIFY_TOKEN ||
   "aquakart_meta_verify_2026";
+
+const getAppSecret = () =>
+  process.env.META_WA_APP_SECRET ||
+  process.env.WHATSAPP_META_APP_SECRET ||
+  "";
+
+const verifyMetaSignature = (req) => {
+  const secret = getAppSecret();
+  if (!secret) return { configured: false, valid: true };
+
+  const signature = String(req.get("x-hub-signature-256") || "");
+  if (!signature.startsWith("sha256=") || !req.rawBody) {
+    return { configured: true, valid: false };
+  }
+
+  const expected = `sha256=${crypto
+    .createHmac("sha256", secret)
+    .update(req.rawBody)
+    .digest("hex")}`;
+
+  const left = Buffer.from(signature);
+  const right = Buffer.from(expected);
+  const valid =
+    left.length === right.length && crypto.timingSafeEqual(left, right);
+
+  return { configured: true, valid };
+};
 
 export const normalizeWebhookPayload = (body = {}) => {
   const events = [];
@@ -85,6 +113,12 @@ router.get("/", (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
+    const signature = verifyMetaSignature(req);
+    if (!signature.valid) {
+      console.warn("Rejected Meta WhatsApp webhook with invalid signature");
+      return res.sendStatus(401);
+    }
+
     const events = normalizeWebhookPayload(req.body);
 
     const results = [];
@@ -131,6 +165,7 @@ router.get("/health", (_req, res) => {
     status: "active",
     provider: "meta_whatsapp",
     webhook: "persistent",
+    signatureVerificationConfigured: Boolean(getAppSecret()),
   });
 });
 
