@@ -44,9 +44,7 @@ const getDeals = async (req, res) => {
     const deals = await AquaDeal.find(filter)
       .sort({ created_at: -1 })
       .populate("lead_id", "company_name contact_name email phone status source")
-      .populate("customer_id", "firstName lastName email phone")
       .populate("quotation_id", "quotationNo status totalAmount")
-      .populate("order_id", "orderNumber orderStatus paymentStatus grandTotal")
       .populate("assigned_to", "firstName lastName email");
 
     return res.status(200).json({
@@ -73,9 +71,7 @@ const getDealById = async (req, res) => {
 
     const deal = await AquaDeal.findById(req.params.id)
       .populate("lead_id", "company_name contact_name email phone status source")
-      .populate("customer_id", "firstName lastName email phone")
       .populate("quotation_id", "quotationNo status totalAmount")
-      .populate("order_id", "orderNumber orderStatus paymentStatus grandTotal")
       .populate("assigned_to", "firstName lastName email");
 
     if (!deal) {
@@ -130,9 +126,7 @@ const updateDeal = async (req, res) => {
       runValidators: true,
     })
       .populate("lead_id", "company_name contact_name email phone status source")
-      .populate("customer_id", "firstName lastName email phone")
       .populate("quotation_id", "quotationNo status totalAmount")
-      .populate("order_id", "orderNumber orderStatus paymentStatus grandTotal")
       .populate("assigned_to", "firstName lastName email");
 
     if (!deal) {
