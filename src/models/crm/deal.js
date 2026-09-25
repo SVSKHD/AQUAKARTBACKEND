@@ -9,6 +9,18 @@ const DEAL_STAGES = [
   "closed_lost",
 ];
 
+const DEAL_LOST_REASONS = [
+  "price",
+  "competitor",
+  "no_response",
+  "postponed",
+  "unsuitable",
+  "location",
+  "budget",
+  "duplicate",
+  "other",
+];
+
 const dealSchema = new mongoose.Schema(
   {
     title: {
@@ -44,6 +56,21 @@ const dealSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    lost_reason: {
+      category: {
+        type: String,
+        enum: [...DEAL_LOST_REASONS, ""],
+        default: "",
+      },
+      details: { type: String, trim: true, default: "" },
+      competitor: { type: String, trim: true, default: "" },
+      lost_at: { type: Date, default: null },
+      lost_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "AquaAdminUser",
+        default: null,
+      },
     },
     lead_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -103,5 +130,5 @@ dealSchema.index({ title: "text", notes: "text" });
 const AquaDeal =
   mongoose.models.AquaDeal || mongoose.model("AquaDeal", dealSchema);
 
-export { DEAL_STAGES };
+export { DEAL_STAGES, DEAL_LOST_REASONS };
 export default AquaDeal;
