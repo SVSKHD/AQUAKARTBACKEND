@@ -4,6 +4,12 @@ import {
   recordOutboundWhatsAppMessage,
 } from "../crm/whatsappCrm.js";
 import { buildQuotationViewLinks } from "../../utils/invoiceViews.js";
+import AquaLead from "../../models/crm/lead.js";
+import { calculateLeadScore } from "../../utils/crmLeadScore.js";
+import {
+  findLeadByIdentity,
+  upsertLeadFromIntake,
+} from "../crm/leadIntake.js";
 
 const TERMINAL_QUOTATION_STATUSES = new Set([
   "Accepted",
@@ -22,6 +28,78 @@ export const getQuotationWhatsAppTemplateId = (followUp = false) =>
   followUp
     ? process.env.FAST2SMS_WHATSAPP_QUOTATION_FOLLOWUP_MESSAGE_ID || ""
     : process.env.FAST2SMS_WHATSAPP_QUOTATION_MESSAGE_ID || "";
+
+const PIPELINE_ORDER = [
+  "new",
+  "contacted",
+  "qualified",
+  "water_details",
+  "site_visit",
+  "recommended",
+  "quote_sent",
+  "follow_up",
+  "won",
+  "lost",
+];
+
+const ensureQuotationLead = async (quotation) => {
+  let lead = quotation.lead
+    ? await AquaLead.findById(quotation.lead)
+    : null;
+
+  if (!lead) {
+    const matched = await findLeadByIdentity({
+      phone: quotation.customerDetails?.phone,
+      email: quotation.customerDetails?.email,
+    });
+    lead = matched.lead;
+  }
+
+  if (!lead) {
+    const intake = await upsertLeadFromIntake({
+      channel: "whatsapp",
+      contact: {
+        name: quotation.customerDetails?.name || "Quotation Customer",
+        phone: quotation.customerDetails?.phone,
+        email: quotation.customerDetails?.email,
+      },
+      source: "quotation_whatsapp",
+      message: `Quotation ${quotation.quotationNo || ""} prepared`,
+      rawContext: {
+        quotation_id: String(quotation._id),
+      },
+    });
+    lead = intake.lead;
+  }
+
+  quotation.lead = lead._id;
+  return lead;
+};
+
+const advanceLeadToQuoteSent = async (lead, quotation) => {
+  if (!lead || ["won", "lost"].includes(lead.status)) return lead;
+
+  const currentIndex = PIPELINE_ORDER.indexOf(lead.status);
+  const quoteIndex = PIPELINE_ORDER.indexOf("quote_sent");
+  if (currentIndex >= quoteIndex) return lead;
+
+  const previous = lead.status;
+  lead.status = "quote_sent";
+  lead.stage_history.push({
+    from: previous,
+    to: "quote_sent",
+    changed_by: null,
+    note: `Quotation ${quotation.quotationNo || ""} sent on WhatsApp`,
+  });
+
+  const score = calculateLeadScore(lead.toObject());
+  lead.score = score.score;
+  lead.score_band = score.band;
+  lead.score_breakdown = score.breakdown;
+  lead.score_updated_at = new Date();
+  await lead.save();
+  return lead;
+};
 
 const quotationVariables = (quotation) => {
   const links = buildQuotationViewLinks(quotation._id);
@@ -74,6 +152,8 @@ export const sendQuotationWhatsApp = async ({
     throw error;
   }
 
+  const lead = await ensureQuotationLead(quotation);
+
   const resolvedMessageId =
     String(messageId || getQuotationWhatsAppTemplateId(followUp)).trim();
   if (!resolvedMessageId) {
@@ -111,7 +191,7 @@ export const sendQuotationWhatsApp = async ({
     variables: resolvedVariables,
     providerResult,
     quotationId: quotation._id,
-    leadId: quotation.lead || null,
+    leadId: lead?._id || quotation.lead || null,
   });
 
   const providerMessageId =
@@ -167,6 +247,7 @@ export const sendQuotationWhatsApp = async ({
     );
 
     if (quotation.status === "Draft") quotation.status = "Sent";
+    await advanceLeadToQuoteSent(lead, quotation);
   }
 
   await quotation.save();
