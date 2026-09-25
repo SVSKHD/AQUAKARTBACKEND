@@ -31,6 +31,9 @@ import CustomerProfileRoutes from "./src/routes/crm/customerProfile.js";
 import AdminQuotationRoutes from "./src/routes/crm/quotation.js";
 import CRMOrderRoutes from "./src/routes/crm/order.js";
 import CRMEcommerceOrderRoutes from "./src/routes/crm/ecommerceOrders.js";
+import CRMLeadRoutes from "./src/routes/crm/lead.js";
+import CRMActivityRoutes from "./src/routes/crm/activity.js";
+import CRMDealRoutes from "./src/routes/crm/deal.js";
 import WhatsappOperations from "./src/controllers/sendWhatsapp.js";
 import AccessControlRoutes from "./src/routes/crm/accessControl.js";
 import AdminCouponRoutes from "./src/routes/crm/coupons.js";
@@ -67,6 +70,7 @@ const corsOptions = {
     "https://aquakart.co.in",
     "https://www.aquakart.co.in",
     "http://localhost:4000",
+    "http://localhost:5173",
   ],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
@@ -130,6 +134,9 @@ app.use("/v1/crm/customer-profiles", CustomerProfileRoutes);
 app.use("/v1/crm/quotations", AdminQuotationRoutes);
 app.use("/v1/crm/orders", CRMOrderRoutes);
 app.use("/v1/crm/ecom-orders", CRMEcommerceOrderRoutes);
+app.use("/v1/crm/leads", CRMLeadRoutes);
+app.use("/v1/crm/activities", CRMActivityRoutes);
+app.use("/v1/crm/deals", CRMDealRoutes);
 app.use("/v1/admin", AccessControlRoutes);
 app.use("/v1/admin/coupons", AdminCouponRoutes);
 app.use("/v1/admin", AdminReferralRoutes);
