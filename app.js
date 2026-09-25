@@ -62,7 +62,16 @@ const upload = multer({
 const BASE = process.env.WHATSAPPAPI;
 const KEY = process.env.WHATSAPPAPIKEY;
 
-app.use(express.json({ limit: "50mb" }));
+app.use(
+  express.json({
+    limit: "50mb",
+    verify: (req, _res, buffer) => {
+      if (req.originalUrl?.startsWith("/v1/whatsapp/webhook/meta")) {
+        req.rawBody = Buffer.from(buffer);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 const corsOptions = {
