@@ -53,10 +53,15 @@ const leadSchema = new mongoose.Schema(
       index: true,
     },
     customer_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AquaEcomUser",
-      default: null,
+      type: String,
+      trim: true,
+      default: "",
       index: true,
+    },
+    customer_type: {
+      type: String,
+      enum: ["online", "offline", ""],
+      default: "",
     },
     assigned_to: {
       type: mongoose.Schema.Types.ObjectId,
