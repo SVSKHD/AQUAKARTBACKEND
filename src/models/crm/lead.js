@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {
+  normalizeEmail,
+  normalizeIndianPhone,
+} from "../../utils/invoiceAccess.js";
 
 const LEAD_STATUSES = [
   "new",
@@ -358,6 +362,11 @@ leadSchema.index({
   source: "text",
   "qualification.locality": "text",
   "qualification.pincode": "text",
+});
+
+leadSchema.pre("save", function normalizeLeadIdentity() {
+  this.phone_normalized = normalizeIndianPhone(this.phone);
+  this.email_normalized = normalizeEmail(this.email);
 });
 
 leadSchema.index({ status: 1, score: -1, next_follow_up: 1 });
