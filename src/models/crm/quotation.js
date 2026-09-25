@@ -29,6 +29,12 @@ const AquaQuotationSchema = new mongoose.Schema(
       type: ObjectId,
       ref: "AquaEcomUser",
     },
+    lead: {
+      type: ObjectId,
+      ref: "AquaLead",
+      default: null,
+      index: true,
+    },
     customerDetails: {
       name: { type: String },
       phone: { type: Number },
@@ -90,6 +96,21 @@ const AquaQuotationSchema = new mongoose.Schema(
     },
     notes: { type: String },
     terms: { type: String },
+    whatsapp: {
+      initialSentAt: { type: Date, default: null },
+      lastSentAt: { type: Date, default: null },
+      sendCount: { type: Number, default: 0, min: 0 },
+      lastMessageId: { type: String, default: "" },
+      followUpEnabled: { type: Boolean, default: false, index: true },
+      nextFollowUpAt: { type: Date, default: null, index: true },
+      followUpCount: { type: Number, default: 0, min: 0 },
+      maxFollowUps: { type: Number, default: 3, min: 0, max: 10 },
+      followUpIntervalHours: { type: Number, default: 24, min: 1, max: 720 },
+      lastFollowUpAt: { type: Date, default: null },
+      lastFollowUpError: { type: String, default: "" },
+      followUpLockUntil: { type: Date, default: null },
+      stoppedAt: { type: Date, default: null },
+    },
     createdBy: {
       type: ObjectId,
       ref: "AquaAdminUser",
@@ -97,6 +118,12 @@ const AquaQuotationSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+AquaQuotationSchema.index({
+  status: 1,
+  "whatsapp.followUpEnabled": 1,
+  "whatsapp.nextFollowUpAt": 1,
+});
 
 const AquaQuotation =
   mongoose.models.AquaQuotation ||
