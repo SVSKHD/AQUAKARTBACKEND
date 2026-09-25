@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import AquaQuotation from "../../models/crm/quotation.js";
 import { buildQuotationViewLinks } from "../../utils/invoiceViews.js";
+import { sendQuotationWhatsApp } from "../../services/quotation/quotationWhatsApp.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
@@ -14,6 +15,28 @@ const allowedStatus = [
   "Paid",
   "Converted",
 ];
+
+const terminalWhatsAppStatuses = new Set([
+  "Accepted",
+  "Rejected",
+  "Expired",
+  "Paid",
+  "Converted",
+]);
+
+const stoppedWhatsAppState = (current = {}) => {
+  const existing =
+    current && typeof current.toObject === "function"
+      ? current.toObject()
+      : current || {};
+  return {
+    ...existing,
+    followUpEnabled: false,
+    nextFollowUpAt: null,
+    followUpLockUntil: null,
+    stoppedAt: new Date(),
+  };
+};
 
 const formatDateKey = (date = new Date()) => {
   const year = date.getFullYear();
@@ -147,11 +170,16 @@ const buildQuotationPayload = async (body = {}, existingQuotation = null) => {
 };
 
 const updateStatusById = async (id, status) => {
-  return AquaQuotation.findByIdAndUpdate(
-    id,
-    { status },
-    { new: true, runValidators: true },
-  ).populate("convertedToInvoice", "invoiceNo date");
+  const existing = await AquaQuotation.findById(id);
+  if (!existing) return null;
+
+  existing.status = status;
+  if (terminalWhatsAppStatuses.has(status)) {
+    existing.whatsapp = stoppedWhatsAppState(existing.whatsapp);
+  }
+  await existing.save();
+  await existing.populate("convertedToInvoice", "invoiceNo date");
+  return existing;
 };
 
 const isStatusOnlyPayload = (body = {}) => {
@@ -360,6 +388,10 @@ const updateQuotation = async (req, res) => {
     delete payload.convertedToInvoice;
     delete payload.convertedToOrder;
 
+    if (terminalWhatsAppStatuses.has(payload.status)) {
+      payload.whatsapp = stoppedWhatsAppState(existingQuotation.whatsapp);
+    }
+
     const quotation = await AquaQuotation.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
@@ -400,6 +432,118 @@ const updateQuotationStatus = async (req, res) => {
   } catch (error) {
     console.error("updateQuotationStatus error:", error);
     return res.status(500).json({ success: false, message: error.message || "Server error" });
+  }
+};
+
+const sendQuotationWhatsAppMessage = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid quotation id" });
+    }
+
+    const quotation = await AquaQuotation.findById(req.params.id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    if (req.body?.maxFollowUps !== undefined) {
+      quotation.whatsapp.maxFollowUps = Math.min(
+        10,
+        Math.max(0, Number(req.body.maxFollowUps) || 0),
+      );
+    }
+    if (req.body?.followUpIntervalHours !== undefined) {
+      quotation.whatsapp.followUpIntervalHours = Math.min(
+        720,
+        Math.max(1, Number(req.body.followUpIntervalHours) || 24),
+      );
+    }
+
+    const result = await sendQuotationWhatsApp({
+      quotation,
+      followUp: false,
+      messageId: req.body?.messageId,
+      variables: Array.isArray(req.body?.variables)
+        ? req.body.variables
+        : undefined,
+    });
+
+    if (result.skipped) {
+      return res.status(409).json({
+        success: false,
+        message: "Quotation follow-up is disabled for its current status",
+        reason: result.reason,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: result.quotation,
+      message: result.message,
+      conversation: result.conversation,
+      views: result.links,
+    });
+  } catch (error) {
+    console.error("sendQuotationWhatsAppMessage error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      code: error.code,
+      message: error.message || "Unable to send quotation on WhatsApp",
+      details: error.details,
+    });
+  }
+};
+
+const sendQuotationFollowUpNow = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid quotation id" });
+    }
+
+    const quotation = await AquaQuotation.findById(req.params.id);
+    if (!quotation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Quotation not found" });
+    }
+
+    const result = await sendQuotationWhatsApp({
+      quotation,
+      followUp: true,
+      messageId: req.body?.messageId,
+      variables: Array.isArray(req.body?.variables)
+        ? req.body.variables
+        : undefined,
+    });
+
+    if (result.skipped) {
+      return res.status(409).json({
+        success: false,
+        message: "Quotation follow-up is disabled for its current status",
+        reason: result.reason,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: result.quotation,
+      message: result.message,
+      conversation: result.conversation,
+    });
+  } catch (error) {
+    console.error("sendQuotationFollowUpNow error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      code: error.code,
+      message: error.message || "Unable to send quotation follow-up",
+      details: error.details,
+    });
   }
 };
 
@@ -457,6 +601,8 @@ export default {
   getQuotationsByCustomer,
   updateQuotation,
   updateQuotationStatus,
+  sendQuotationWhatsAppMessage,
+  sendQuotationFollowUpNow,
   deleteQuotation,
   updateQuotationPayment,
   convertQuotationToInvoice,
