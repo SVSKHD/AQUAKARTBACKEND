@@ -55,12 +55,8 @@ const pageFromBody = (body = {}) => ({
 const publicLeadResponse = ({ result, extra = {} }) => ({
   success: true,
   data: {
-    lead_id: String(result.lead._id),
-    created: result.created,
-    matched_by: result.matchedBy || null,
-    status: result.lead.status,
-    score: result.lead.score,
-    score_band: result.lead.score_band,
+    received: true,
+    submission_id: String(result.intakeEvent?._id || ""),
     ...extra,
   },
 });
