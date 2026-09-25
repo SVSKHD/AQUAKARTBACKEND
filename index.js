@@ -7,6 +7,7 @@ import mongooseConnect from "./src/utils/db.js";
 import generateSwaggerDocs from "./swagger-autogen.js";
 import { startUnenrichedInvoiceReminder } from "./src/jobs/unenrichedInvoiceReminder.js";
 import { startProductServiceReminders } from "./src/jobs/productServiceReminders.js";
+import { startQuotationFollowUps } from "./src/jobs/quotationFollowups.js";
 
 const PORT = process.env.PORT || 5300; // Default to port 3000 if PORT is not set
 
@@ -22,6 +23,7 @@ process.on("uncaughtException", (error) => {
 mongooseConnect(process.env.DB_URL);
 startUnenrichedInvoiceReminder();
 startProductServiceReminders();
+startQuotationFollowUps();
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,

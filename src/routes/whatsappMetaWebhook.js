@@ -1,4 +1,9 @@
+import crypto from "crypto";
 import express from "express";
+import {
+  recordIncomingWhatsAppEvent,
+  recordWhatsAppStatusEvent,
+} from "../services/crm/whatsappCrm.js";
 
 const router = express.Router();
 
@@ -7,12 +12,45 @@ const getVerifyToken = () =>
   process.env.WHATSAPP_META_VERIFY_TOKEN ||
   "aquakart_meta_verify_2026";
 
-const normalizeWebhookPayload = (body = {}) => {
+const getAppSecret = () =>
+  process.env.META_WA_APP_SECRET ||
+  process.env.WHATSAPP_META_APP_SECRET ||
+  "";
+
+const verifyMetaSignature = (req) => {
+  const secret = getAppSecret();
+  if (!secret) return { configured: false, valid: true };
+
+  const signature = String(req.get("x-hub-signature-256") || "");
+  if (!signature.startsWith("sha256=") || !req.rawBody) {
+    return { configured: true, valid: false };
+  }
+
+  const expected = `sha256=${crypto
+    .createHmac("sha256", secret)
+    .update(req.rawBody)
+    .digest("hex")}`;
+
+  const left = Buffer.from(signature);
+  const right = Buffer.from(expected);
+  const valid =
+    left.length === right.length && crypto.timingSafeEqual(left, right);
+
+  return { configured: true, valid };
+};
+
+export const normalizeWebhookPayload = (body = {}) => {
   const events = [];
 
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
       const value = change.value || {};
+      const contactNames = new Map(
+        (value.contacts || []).map((contact) => [
+          String(contact.wa_id || ""),
+          contact.profile?.name || "",
+        ]),
+      );
 
       for (const message of value.messages || []) {
         events.push({
@@ -21,9 +59,15 @@ const normalizeWebhookPayload = (body = {}) => {
           phoneNumberId: value.metadata?.phone_number_id,
           displayPhoneNumber: value.metadata?.display_phone_number,
           waId: message.from,
+          contactName: contactNames.get(String(message.from || "")) || "",
           messageId: message.id,
           messageType: message.type,
-          text: message.text?.body,
+          text:
+            message.text?.body ||
+            message.button?.text ||
+            message.interactive?.button_reply?.title ||
+            message.interactive?.list_reply?.title ||
+            "",
           timestamp: message.timestamp,
           raw: message,
         });
@@ -67,18 +111,48 @@ router.get("/", (req, res) => {
   return res.sendStatus(403);
 });
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
+    const signature = verifyMetaSignature(req);
+    if (!signature.valid) {
+      console.warn("Rejected Meta WhatsApp webhook with invalid signature");
+      return res.sendStatus(401);
+    }
+
     const events = normalizeWebhookPayload(req.body);
 
-    console.log("Meta WhatsApp webhook received", {
+    const results = [];
+    for (const event of events) {
+      try {
+        if (event.type === "incoming_message") {
+          results.push(await recordIncomingWhatsAppEvent(event));
+        } else if (event.type === "message_status") {
+          results.push(await recordWhatsAppStatusEvent(event));
+        }
+      } catch (eventError) {
+        console.error("Meta WhatsApp event persistence failed", {
+          type: event.type,
+          messageId: event.messageId,
+          error: eventError.message,
+        });
+        results.push({
+          status: "failed",
+          type: event.type,
+          messageId: event.messageId,
+          error: eventError.message,
+        });
+      }
+    }
+
+    console.log("Meta WhatsApp webhook processed", {
       eventCount: events.length,
-      events,
+      stored: results.filter((item) =>
+        ["stored", "updated", "stored_orphan_status"].includes(item?.status),
+      ).length,
+      duplicates: results.filter((item) => item?.status === "duplicate").length,
+      failed: results.filter((item) => item?.status === "failed").length,
     });
 
-    // TODO: Persist events to DB and connect to CRM conversation/message logs.
-    // Incoming messages should create/update CRM leads.
-    // Status events should update sent/delivered/read/failed message status.
     return res.sendStatus(200);
   } catch (error) {
     console.error("Error handling Meta WhatsApp webhook", error);
@@ -90,7 +164,8 @@ router.get("/health", (_req, res) => {
   res.json({
     status: "active",
     provider: "meta_whatsapp",
-    webhook: "ready",
+    webhook: "persistent",
+    signatureVerificationConfigured: Boolean(getAppSecret()),
   });
 });
 

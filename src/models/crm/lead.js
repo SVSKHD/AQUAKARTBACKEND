@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {
+  normalizeEmail,
+  normalizeIndianPhone,
+} from "../../utils/invoiceAccess.js";
 
 const LEAD_STATUSES = [
   "new",
@@ -36,6 +40,7 @@ const PRODUCT_INTERESTS = [
   "",
 ];
 const LEAD_URGENCY = ["immediate", "7_days", "30_days", "researching", "unknown", ""];
+const LEAD_INTAKE_CHANNELS = ["planner", "website", "product", "whatsapp", "manual"];
 
 const stageHistorySchema = new mongoose.Schema(
   {
@@ -85,6 +90,43 @@ const followUpSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const intakeEventSchema = new mongoose.Schema(
+  {
+    channel: {
+      type: String,
+      enum: LEAD_INTAKE_CHANNELS,
+      required: true,
+      index: true,
+    },
+    source: { type: String, trim: true, default: "" },
+    page_url: { type: String, trim: true, default: "" },
+    page_path: { type: String, trim: true, default: "" },
+    referrer: { type: String, trim: true, default: "" },
+    message: { type: String, trim: true, default: "" },
+    product: {
+      product_id: { type: String, trim: true, default: "" },
+      title: { type: String, trim: true, default: "" },
+      slug: { type: String, trim: true, default: "" },
+      url: { type: String, trim: true, default: "" },
+      price: { type: Number, default: null },
+    },
+    planner: {
+      residents: { type: String, trim: true, default: "" },
+      coverage: { type: String, trim: true, default: "" },
+      hardness: { type: String, trim: true, default: "" },
+      required_capacity_liters: { type: Number, default: null },
+      recommendation_product_ids: [{ type: String }],
+      recommendation_product_names: [{ type: String }],
+    },
+    raw_context: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    submitted_at: { type: Date, default: Date.now, index: true },
+  },
+  { _id: true },
+);
+
 const leadSchema = new mongoose.Schema(
   {
     company_name: {
@@ -111,6 +153,19 @@ const leadSchema = new mongoose.Schema(
       default: "",
       index: true,
     },
+    phone_normalized: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+    email_normalized: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: "",
+      index: true,
+    },
     status: {
       type: String,
       enum: LEAD_STATUSES,
@@ -126,6 +181,21 @@ const leadSchema = new mongoose.Schema(
       trim: true,
       default: "",
       index: true,
+    },
+    last_intake_channel: {
+      type: String,
+      enum: [...LEAD_INTAKE_CHANNELS, ""],
+      default: "",
+      index: true,
+    },
+    last_intake_at: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    intake_events: {
+      type: [intakeEventSchema],
+      default: [],
     },
     notes: {
       type: String,
@@ -191,6 +261,12 @@ const leadSchema = new mongoose.Schema(
         type: Number,
         min: [0, "Residents cannot be negative"],
         default: null,
+      },
+      residents_range: { type: String, trim: true, default: "" },
+      coverage: {
+        type: String,
+        enum: ["bathroom", "multiple", "whole-home", ""],
+        default: "",
       },
       budget_min: {
         type: Number,
@@ -288,7 +364,14 @@ leadSchema.index({
   "qualification.pincode": "text",
 });
 
+leadSchema.pre("save", function normalizeLeadIdentity() {
+  this.phone_normalized = normalizeIndianPhone(this.phone);
+  this.email_normalized = normalizeEmail(this.email);
+});
+
 leadSchema.index({ status: 1, score: -1, next_follow_up: 1 });
+leadSchema.index({ phone_normalized: 1, email_normalized: 1 });
+leadSchema.index({ last_intake_channel: 1, last_intake_at: -1 });
 
 const AquaLead =
   mongoose.models.AquaLead || mongoose.model("AquaLead", leadSchema);
@@ -302,5 +385,6 @@ export {
   HARDNESS_LEVELS,
   PRODUCT_INTERESTS,
   LEAD_URGENCY,
+  LEAD_INTAKE_CHANNELS,
 };
 export default AquaLead;
