@@ -76,20 +76,20 @@ const ensureQuotationLead = async (quotation) => {
   return lead;
 };
 
-const advanceLeadToQuoteSent = async (lead, quotation) => {
+const advanceLeadToStage = async (lead, targetStatus, note) => {
   if (!lead || ["won", "lost"].includes(lead.status)) return lead;
 
   const currentIndex = PIPELINE_ORDER.indexOf(lead.status);
-  const quoteIndex = PIPELINE_ORDER.indexOf("quote_sent");
-  if (currentIndex >= quoteIndex) return lead;
+  const targetIndex = PIPELINE_ORDER.indexOf(targetStatus);
+  if (targetIndex < 0 || currentIndex >= targetIndex) return lead;
 
   const previous = lead.status;
-  lead.status = "quote_sent";
+  lead.status = targetStatus;
   lead.stage_history.push({
     from: previous,
-    to: "quote_sent",
+    to: targetStatus,
     changed_by: null,
-    note: `Quotation ${quotation.quotationNo || ""} sent on WhatsApp`,
+    note,
   });
 
   const score = calculateLeadScore(lead.toObject());
@@ -152,8 +152,6 @@ export const sendQuotationWhatsApp = async ({
     throw error;
   }
 
-  const lead = await ensureQuotationLead(quotation);
-
   const resolvedMessageId =
     String(messageId || getQuotationWhatsAppTemplateId(followUp)).trim();
   if (!resolvedMessageId) {
@@ -166,6 +164,8 @@ export const sendQuotationWhatsApp = async ({
     error.statusCode = 503;
     throw error;
   }
+
+  const lead = await ensureQuotationLead(quotation);
 
   const resolvedVariables = Array.isArray(variables)
     ? variables.map(String)
@@ -203,6 +203,11 @@ export const sendQuotationWhatsApp = async ({
   quotation.whatsapp.followUpLockUntil = null;
 
   if (followUp) {
+    await advanceLeadToStage(
+      lead,
+      "follow_up",
+      `Quotation ${quotation.quotationNo || ""} follow-up sent on WhatsApp`,
+    );
     quotation.whatsapp.followUpCount =
       Number(quotation.whatsapp.followUpCount || 0) + 1;
     quotation.whatsapp.lastFollowUpAt = now;
@@ -247,7 +252,11 @@ export const sendQuotationWhatsApp = async ({
     );
 
     if (quotation.status === "Draft") quotation.status = "Sent";
-    await advanceLeadToQuoteSent(lead, quotation);
+    await advanceLeadToStage(
+      lead,
+      "quote_sent",
+      `Quotation ${quotation.quotationNo || ""} sent on WhatsApp`,
+    );
   }
 
   await quotation.save();
