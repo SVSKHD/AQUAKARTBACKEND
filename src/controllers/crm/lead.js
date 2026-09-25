@@ -150,6 +150,16 @@ const getLeads = async (req, res) => {
       filter.next_follow_up = null;
     }
 
+    if (req.query.reminder_due === "true") {
+      filter.follow_ups = {
+        $elemMatch: {
+          status: "scheduled",
+          reminder_status: "pending",
+          reminder_at: { $ne: null, $lte: now },
+        },
+      };
+    }
+
     if (req.query.search) {
       const search = new RegExp(escapeRegex(req.query.search), "i");
       filter.$or = [
@@ -194,13 +204,18 @@ const getLeads = async (req, res) => {
 
 const getPipelineSummary = async (_req, res) => {
   try {
-    const [byStatus, byScoreBand, followUps] = await Promise.all([
+    const [byStatus, byScoreBand, byLostReason, followUps] = await Promise.all([
       AquaLead.aggregate([
         { $group: { _id: "$status", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
       AquaLead.aggregate([
         { $group: { _id: "$score_band", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      AquaLead.aggregate([
+        { $match: { status: "lost" } },
+        { $group: { _id: "$lost_reason.category", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
       AquaLead.aggregate([
@@ -237,6 +252,7 @@ const getPipelineSummary = async (_req, res) => {
       data: {
         by_status: mapCounts(byStatus),
         by_score_band: mapCounts(byScoreBand),
+        lost_reasons: mapCounts(byLostReason),
         follow_ups: {
           overdue: followUps[0]?.overdue?.[0]?.count || 0,
           upcoming: followUps[0]?.upcoming?.[0]?.count || 0,
@@ -447,10 +463,23 @@ const scheduleFollowUp = async (req, res) => {
         .json({ success: false, message: "Lead not found" });
     }
 
+    let reminderAt = null;
+    if (req.body.reminder_at) {
+      reminderAt = new Date(req.body.reminder_at);
+      if (Number.isNaN(reminderAt.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "reminder_at must be a valid date",
+        });
+      }
+    }
+
     lead.follow_ups.push({
       scheduled_for: scheduledFor,
       status: "scheduled",
       note: String(req.body.note || "").trim(),
+      reminder_at: reminderAt,
+      reminder_status: reminderAt ? "pending" : "skipped",
       created_by: req.user?._id || null,
     });
 
@@ -509,11 +538,39 @@ const updateFollowUp = async (req, res) => {
       followUp.note = String(req.body.note || "").trim();
     }
 
+    if (req.body.reminder_at !== undefined) {
+      if (!req.body.reminder_at) {
+        followUp.reminder_at = null;
+        followUp.reminder_status = "skipped";
+      } else {
+        const reminderAt = new Date(req.body.reminder_at);
+        if (Number.isNaN(reminderAt.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "reminder_at must be a valid date",
+          });
+        }
+        followUp.reminder_at = reminderAt;
+        followUp.reminder_status = "pending";
+        followUp.reminder_sent_at = null;
+      }
+    }
+
+    if (req.body.reminder_status !== undefined) {
+      followUp.reminder_status = req.body.reminder_status;
+      if (req.body.reminder_status === "sent") {
+        followUp.reminder_sent_at = new Date();
+      }
+    }
+
     if (req.body.status !== undefined) {
       followUp.status = req.body.status;
       if (req.body.status === "completed") {
         followUp.completed_at = new Date();
         followUp.completed_by = req.user?._id || null;
+        if (followUp.reminder_status === "pending") {
+          followUp.reminder_status = "skipped";
+        }
       } else if (req.body.status === "scheduled") {
         followUp.completed_at = null;
         followUp.completed_by = null;
