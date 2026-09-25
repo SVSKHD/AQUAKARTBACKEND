@@ -62,6 +62,13 @@ const followUpSchema = new mongoose.Schema(
       index: true,
     },
     note: { type: String, trim: true, default: "" },
+    reminder_at: { type: Date, default: null, index: true },
+    reminder_sent_at: { type: Date, default: null },
+    reminder_status: {
+      type: String,
+      enum: ["pending", "sent", "skipped"],
+      default: "pending",
+    },
     created_at: { type: Date, default: Date.now },
     created_by: {
       type: mongoose.Schema.Types.ObjectId,
