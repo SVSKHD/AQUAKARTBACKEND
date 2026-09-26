@@ -50,6 +50,7 @@ import invoiceReportRoutes from "./src/routes/invoiceReports.js";
 import AnalyticsRoutes from "./src/routes/analytics.js";
 import MerchantFeedRoutes from "./src/routes/merchantFeed.js";
 import PublicLeadRoutes from "./src/routes/publicLeads.js";
+import StorefrontRoutes from "./src/routes/storefront.js";
 import CRMWhatsAppRoutes from "./src/routes/crm/whatsapp.js";
 
 const app = express();
@@ -135,6 +136,7 @@ app.use("/v1/service-reminders", ServiceReminderRoutes);
 app.use("/v1/analytics", AnalyticsRoutes);
 app.use("/v1/merchant", MerchantFeedRoutes);
 app.use("/v1/leads", PublicLeadRoutes);
+app.use("/v1/storefront", StorefrontRoutes);
 
 app.use("/v1/invoices/report", invoiceReportRoutes);
 app.use("/v1/crm", invoiceRoutes);
