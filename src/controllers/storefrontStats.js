@@ -10,25 +10,64 @@ const getStorefrontStats = async (_req, res) => {
         { $match: invoiceFilter },
         {
           $project: {
+            rawPhone: {
+              $convert: {
+                input: "$customerDetails.phone",
+                to: "string",
+                onError: null,
+                onNull: null,
+              },
+            },
+            normalizedPhone: "$customerPhoneNormalized",
+            rawEmail: {
+              $toLower: {
+                $trim: {
+                  input: { $ifNull: ["$customerDetails.email", ""] },
+                },
+              },
+            },
+            normalizedEmail: "$customerEmailNormalized",
+          },
+        },
+        {
+          $project: {
             customerKey: {
               $cond: [
                 {
                   $and: [
-                    { $ne: ["$customerPhoneNormalized", null] },
-                    { $ne: ["$customerPhoneNormalized", ""] },
+                    { $ne: ["$rawPhone", null] },
+                    { $ne: ["$rawPhone", ""] },
+                    { $ne: ["$rawPhone", "0"] },
                   ],
                 },
-                { $concat: ["phone:", "$customerPhoneNormalized"] },
+                { $concat: ["phone:", "$rawPhone"] },
                 {
                   $cond: [
                     {
                       $and: [
-                        { $ne: ["$customerEmailNormalized", null] },
-                        { $ne: ["$customerEmailNormalized", ""] },
+                        { $ne: ["$normalizedPhone", null] },
+                        { $ne: ["$normalizedPhone", ""] },
                       ],
                     },
-                    { $concat: ["email:", "$customerEmailNormalized"] },
-                    null,
+                    { $concat: ["phone:", "$normalizedPhone"] },
+                    {
+                      $cond: [
+                        { $ne: ["$rawEmail", ""] },
+                        { $concat: ["email:", "$rawEmail"] },
+                        {
+                          $cond: [
+                            {
+                              $and: [
+                                { $ne: ["$normalizedEmail", null] },
+                                { $ne: ["$normalizedEmail", ""] },
+                              ],
+                            },
+                            { $concat: ["email:", "$normalizedEmail"] },
+                            null,
+                          ],
+                        },
+                      ],
+                    },
                   ],
                 },
               ],
