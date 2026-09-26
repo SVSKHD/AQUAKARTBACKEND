@@ -27,8 +27,10 @@ export const authenticateStaff = async (req, res, next) => {
 
 export const staffHasPermission = (user, permission) => {
   if (user?.roleRef?.slug === SUPER_ADMIN_ROLE) return true;
-  // Backward compatibility for existing numeric administrators until migrated.
-  if (!user?.roleRef && user?.role === 1) return true;
+  // Keep legacy numeric administrators consistent with userAuth.checkAdmin.
+  // role === 1 is the historical full-admin marker, even if a stale/non-super
+  // roleRef was attached during the RBAC migration.
+  if (user?.role === 1) return true;
   return Boolean(
     user?.directPermissions?.includes(permission) ||
     (user?.roleRef?.isActive && user.roleRef.permissions?.includes(permission)),

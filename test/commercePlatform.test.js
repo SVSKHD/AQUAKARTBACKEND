@@ -23,6 +23,19 @@ test("supports legacy numeric administrators during role migration", () => {
   assert.equal(staffHasPermission({ role: 1 }, "payments.reconcile"), true);
 });
 
+test("legacy role-1 admins keep full permissions even with a stale roleRef", () => {
+  const staff = {
+    role: 1,
+    roleRef: {
+      slug: "legacy-admin",
+      isActive: true,
+      permissions: ["seo.read"],
+    },
+  };
+
+  assert.equal(staffHasPermission(staff, "seo.manage"), true);
+});
+
 test("checks named role permissions", () => {
   const staff = {
     role: 3,
