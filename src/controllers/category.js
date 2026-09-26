@@ -103,18 +103,17 @@ const getCategory = async (req, res) => {
 };
 
 const getCategoryByTitle = async (req, res) => {
-  const { title } = req.params;
+  const title = decodeURIComponent(req.params.title || "");
 
   try {
     const category = await AquaCategory.findOne({ title });
-    const products = await AquaProduct.find({ category: category._id });
     if (!category) {
       return res
         .status(404)
         .json({ success: false, message: "Category not found" });
     }
-    // Uncomment the next line if you want to fetch related products
-    // const products = await AquaProduct.find({ category: category._id });
+
+    const products = await AquaProduct.find({ category: category._id });
     return res
       .status(200)
       .json({ success: true, data: category, relatedProducts: products });
