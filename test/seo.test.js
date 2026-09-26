@@ -15,6 +15,20 @@ test("normalizes SEO keys and comma-separated keywords", () => {
   assert.deepEqual(payload.schemaJson, { "@type": "CollectionPage" });
 });
 
+test("normalizes newline-separated keywords even when submitted as one array item", () => {
+  const payload = buildSeoPayload({
+    pageKey: "shop",
+    route: "/shop",
+    title: "Shop",
+    keywords: ["water softeners\nRO purifiers\nwater filters"],
+  });
+  assert.deepEqual(payload.keywords, [
+    "water softeners",
+    "RO purifiers",
+    "water filters",
+  ]);
+});
+
 test("rejects routes that are not application paths", () => {
   assert.throws(
     () => buildSeoPayload({ pageKey: "shop", route: "shop", title: "Shop" }),

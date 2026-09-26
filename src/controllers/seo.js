@@ -27,10 +27,22 @@ const normalizePageKey = (value) =>
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalizeKeywords = (value) => {
-  const values = Array.isArray(value) ? value : String(value || "").split(",");
+  const values = Array.isArray(value) ? value : [value];
   return [
-    ...new Set(values.map((keyword) => String(keyword).trim()).filter(Boolean)),
+    ...new Set(
+      values
+        .flatMap((item) => String(item || "").split(/[\n\r,]+/))
+        .map((keyword) => keyword.trim())
+        .filter(Boolean),
+    ),
   ];
+};
+
+const validationError = (field, message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.field = field;
+  return error;
 };
 
 const normalizeSchemaJson = (value) => {
@@ -40,24 +52,24 @@ const normalizeSchemaJson = (value) => {
     try {
       return JSON.parse(value);
     } catch {
-      const error = new Error("schemaJson must contain valid JSON");
-      error.statusCode = 400;
-      throw error;
+      throw validationError(
+        "schemaJson",
+        "schemaJson must contain valid JSON",
+      );
     }
   }
   if (typeof value !== "object" || Array.isArray(value)) {
-    const error = new Error("schemaJson must be a JSON object");
-    error.statusCode = 400;
-    throw error;
+    throw validationError(
+      "schemaJson",
+      "schemaJson must be a JSON object",
+    );
   }
   return value;
 };
 
 const validateRoute = (route) => {
   if (!String(route || "").startsWith("/")) {
-    const error = new Error("route must start with /");
-    error.statusCode = 400;
-    throw error;
+    throw validationError("route", "route must start with /");
   }
 };
 
@@ -67,14 +79,10 @@ const validateOptionalUrl = (value, field) => {
   try {
     parsed = new URL(value);
   } catch {
-    const error = new Error(`${field} must be a valid absolute URL`);
-    error.statusCode = 400;
-    throw error;
+    throw validationError(field, `${field} must be a valid absolute URL`);
   }
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    const error = new Error(`${field} must use http or https`);
-    error.statusCode = 400;
-    throw error;
+    throw validationError(field, `${field} must use http or https`);
   }
 };
 
@@ -99,9 +107,7 @@ export const buildSeoPayload = (body = {}, { partial = false } = {}) => {
   if (!partial) {
     for (const field of ["pageKey", "route", "title"]) {
       if (!String(payload[field] || "").trim()) {
-        const error = new Error(`${field} is required`);
-        error.statusCode = 400;
-        throw error;
+        throw validationError(field, `${field} is required`);
       }
     }
   }
@@ -110,16 +116,42 @@ export const buildSeoPayload = (body = {}, { partial = false } = {}) => {
 
 const sendError = (error, res, fallback) => {
   if (error?.code === 11000) {
-    return res
-      .status(409)
-      .json({ success: false, message: "pageKey already exists" });
+    return res.status(409).json({
+      success: false,
+      message: "SEO validation failed",
+      errors: [{ field: "pageKey", message: "pageKey already exists" }],
+    });
   }
+
   if (error?.name === "ValidationError") {
-    return res.status(400).json({ success: false, message: error.message });
+    const errors = Object.values(error.errors || {}).map((item) => ({
+      field: item?.path || "seo",
+      message: item?.message || "Invalid value",
+    }));
+    return res.status(400).json({
+      success: false,
+      message: "SEO validation failed",
+      errors,
+    });
   }
-  return res.status(error.statusCode || 500).json({
+
+  if (error?.statusCode) {
+    return res.status(error.statusCode).json({
+      success: false,
+      message: "SEO validation failed",
+      errors: [
+        {
+          field: error.field || "seo",
+          message: error.message,
+        },
+      ],
+    });
+  }
+
+  return res.status(500).json({
     success: false,
-    message: error.statusCode ? error.message : fallback,
+    message: fallback,
+    errors: [{ field: "server", message: fallback }],
   });
 };
 
