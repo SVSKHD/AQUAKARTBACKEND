@@ -78,18 +78,24 @@ const getSubCategory = async (req, res) => {
 };
 
 const getSubCategoryByTitle = async (req, res) => {
-  const { title } = req.params;
+  const title = decodeURIComponent(req.params.title || "");
+
   try {
     const subcategory = await AquaSubCategory.findOne({ title }).populate(
       "category",
     );
-    const products = await AquaProduct.findOne({});
     if (!subcategory) {
       return res
         .status(404)
         .json({ success: false, message: "Subcategory not found" });
     }
-    return res.status(200).json({ success: true, data: subcategory });
+
+    const products = await AquaProduct.find({ subCategory: subcategory._id });
+    return res.status(200).json({
+      success: true,
+      data: subcategory,
+      relatedProducts: products,
+    });
   } catch (error) {
     console.error("Error getting subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
