@@ -1,3 +1,4 @@
+import { getInvoicePdfFileName } from "../../utils/invoiceFileName.js";
 import {
   getFast2SmsWhatsAppConfig,
   getFast2SmsWhatsAppStatus,
@@ -33,7 +34,7 @@ export const shareInvoiceByWhatsApp = async ({
     messageId: config.invoiceMessageId,
     variables: [customerName, invoiceNo, customerUrl],
     mediaUrl: pdfUrl,
-    documentFilename: pdfUrl ? `AquaKart-Invoice-${invoiceNo}.pdf` : undefined,
+    documentFilename: pdfUrl ? getInvoicePdfFileName(invoiceNo) : undefined,
     udf: [String(invoice._id), "invoice", invoiceNo],
   });
 };
