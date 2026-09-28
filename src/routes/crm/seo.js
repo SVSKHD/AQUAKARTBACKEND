@@ -3,6 +3,8 @@ import {
   createSeo,
   getSeoById,
   listSeo,
+  listSeoReadiness,
+  getSeoReadinessByPageKey,
   patchSeo,
   replaceSeo,
 } from "../../controllers/seo.js";
@@ -10,6 +12,8 @@ import { requirePermission } from "../../middleware/permissions.js";
 
 const router = express.Router();
 
+router.get("/readiness", ...requirePermission("seo.read"), listSeoReadiness);
+router.get("/readiness/:pageKey", ...requirePermission("seo.read"), getSeoReadinessByPageKey);
 router.get("/", ...requirePermission("seo.read"), listSeo);
 router.get("/:id", ...requirePermission("seo.read"), getSeoById);
 router.post("/", ...requirePermission("seo.manage"), createSeo);
