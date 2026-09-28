@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Seo from "../models/seo.js";
 import { writeAudit } from "../services/audit.js";
+import { buildSeoReadiness } from "../services/seoReadiness.js";
 
 const EDITABLE_FIELDS = Object.freeze([
   "pageKey",
@@ -269,3 +270,49 @@ const updateSeo = async (req, res, { partial }) => {
 
 export const replaceSeo = (req, res) => updateSeo(req, res, { partial: false });
 export const patchSeo = (req, res) => updateSeo(req, res, { partial: true });
+
+
+export const listSeoReadiness = async (req, res) => {
+  try {
+    const data = await buildSeoReadiness({
+      pageKey: req.query.pageKey,
+      entityType: req.query.entityType,
+      status: req.query.status,
+      limit: req.query.limit,
+    });
+    return res.json({ success: true, ...data });
+  } catch (error) {
+    console.error("SEO readiness error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to build SEO readiness report",
+    });
+  }
+};
+
+export const getSeoReadinessByPageKey = async (req, res) => {
+  try {
+    const pageKey = String(req.params.pageKey || "").trim().toLowerCase();
+    const data = await buildSeoReadiness({ pageKey });
+    const item = data.items[0];
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "SEO readiness key not found",
+        pageKey,
+      });
+    }
+    return res.json({
+      success: true,
+      generatedAt: data.generatedAt,
+      site: data.site,
+      item,
+    });
+  } catch (error) {
+    console.error("SEO readiness key error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to build SEO readiness report",
+    });
+  }
+};
