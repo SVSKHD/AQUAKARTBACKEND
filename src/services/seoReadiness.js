@@ -5,6 +5,7 @@ import AquaBlog from "../models/blog.js";
 import Seo from "../models/seo.js";
 
 const STOREFRONT_URL = "https://aquakart.co.in";
+const ADMIN_URL = "https://admin.aquakart.co.in";
 
 const STATIC_PAGES = [
   ["home", "Home", "/"],
@@ -437,6 +438,27 @@ const buildItem = (entity, seo) => {
   ];
 
   const priority = priorityFor(dedupedIssues, score);
+  const productView =
+    entity.entityType === "product"
+      ? "products"
+      : entity.entityType === "category"
+        ? "categories"
+        : entity.entityType === "subcategory"
+          ? "subcategories"
+          : entity.entityType === "blog"
+            ? "blogs"
+            : null;
+  const adminLinks = {
+    readiness: `${ADMIN_URL}/needs-seo/${encodeURIComponent(entity.pageKey)}`,
+    seo: `${ADMIN_URL}/dashboard?tab=seo&pageKey=${encodeURIComponent(entity.pageKey)}`,
+    ...(productView
+      ? {
+          entity: `${ADMIN_URL}/dashboard?tab=products&view=${productView}&entityId=${encodeURIComponent(entity.entityId || "")}`,
+        }
+      : {}),
+    storefront: canonicalFor(entity.route),
+  };
+
   return {
     pageKey: entity.pageKey,
     entityType: entity.entityType,
@@ -451,6 +473,7 @@ const buildItem = (entity, seo) => {
     missing,
     issues: dedupedIssues,
     recommendedActions,
+    adminLinks,
     edit: {
       seo: `/dashboard?tab=seo&pageKey=${encodeURIComponent(entity.pageKey)}`,
       ...(entity.entityType === "product" && entity.entityId
@@ -521,6 +544,7 @@ export const buildSeoReadiness = async ({
           priority: items[0].priority,
           score: items[0].score,
           reason: items[0].issues[0]?.message || "Highest-priority SEO readiness item",
+          adminLinks: items[0].adminLinks,
         }
       : null,
     items,
