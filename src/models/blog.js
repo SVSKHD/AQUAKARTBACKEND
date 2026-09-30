@@ -27,6 +27,28 @@ const BlogSchema = new mongoose.Schema({
   keywords: {
     type: String,
   },
+  keyphrases: {
+    type: String,
+  },
+  shortDescription: {
+    type: String,
+    maxlength: [320, "Short description must not exceed 320 characters"],
+  },
+  summary: {
+    type: String,
+  },
+  keyHighlights: [
+    {
+      type: String,
+      trim: true,
+    },
+  ],
+  tags: [
+    {
+      type: String,
+      trim: true,
+    },
+  ],
   notes: {
     type: String,
     maxlength: [300, "Product Notes must not exceed 300"],
