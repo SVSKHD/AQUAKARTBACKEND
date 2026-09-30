@@ -13,7 +13,8 @@
     "prepare": "husky",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
-    "test": "node --test"
+    "test": "node --test",
+    "seed:blog:dog-hard-water": "node src/scripts/seed-dog-hard-water-blog.js"
   },
   "keywords": [],
   "author": "",
