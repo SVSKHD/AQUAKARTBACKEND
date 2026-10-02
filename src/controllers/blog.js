@@ -109,11 +109,8 @@ const buildBlogPayload = async (req, current = null) => {
 const BlogAdd = async (req, res, next) => {
   try {
     const payload = await buildBlogPayload(req);
-    if (!payload.titleImages.length) {
-      return res
-        .status(400)
-        .json({ success: false, message: "A title image is required" });
-    }
+    // Title image is optional. Store an empty array when no image is supplied;
+    // CRM and storefront render the AquaKart fallback visual.
     const taxonomyError = await validateTaxonomy(payload);
     if (taxonomyError)
       return res.status(400).json({ success: false, message: taxonomyError });
