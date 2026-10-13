@@ -5,7 +5,6 @@ import userAuth from "../middleware/user.js";
 
 const router = express.Router();
 
-const storage = multer.memoryStorage(); // Use memory storage or disk storage based on your requirement
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
@@ -18,7 +17,7 @@ router.get("/category-status", (req, res) => {
 router.get("/allcategories", CategoryOperations.getAllCategories);
 router.get("/category/:id", CategoryOperations.getCategory);
 router.get("/category-title/:title", CategoryOperations.getCategoryByTitle);
-router.get("/category-remove/:id", CategoryOperations.deleteCategory);
+
 
 router.post(
   "/category-add",
@@ -33,7 +32,7 @@ router.put(
   userAuth.checkAdmin,
   CategoryOperations.updateCategory,
 );
-router.get(
+router.delete(
   "/category/delete/:id",
   userAuth.checkAdmin,
   CategoryOperations.deleteCategory,

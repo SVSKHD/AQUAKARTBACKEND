@@ -1,6 +1,8 @@
 import cloudinary from "cloudinary";
 import AquaCategory from "../models/category.js";
 import AquaProduct from "../models/product.js";
+import AquaSubCategory from "../models/sub-category.js";
+import mongoose from "mongoose";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
 const streamUpload = (buffer) =>
@@ -32,6 +34,7 @@ const deletePhoto = async (publicId) => {
 const addCategory = async (req, res) => {
   try {
     const { title, description, keywords } = req.body;
+    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
     const photos = req.files;
 
     if (!photos || photos.length === 0) {
@@ -86,16 +89,15 @@ const getAllCategories = async (req, res) => {
 const getCategory = async (req, res) => {
   const { id } = req.params;
   try {
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
     const category = await AquaCategory.findById(id);
-    const products = await AquaProduct.find({ category: id });
     if (!category) {
       return res
         .status(404)
         .json({ success: false, message: "Category not found" });
     }
-    return res
-      .status(200)
-      .json({ success: true, data: category, relatedProducts: products });
+    const products = await AquaProduct.find({ category: id });
+    return res.status(200).json({ success: true, data: category, relatedProducts: products });
   } catch (error) {
     console.error("Error getting category:", error);
     return res.status(500).json({ success: false, message: error.message });
@@ -125,95 +127,56 @@ const getCategoryByTitle = async (req, res) => {
 
 const updateCategory = async (req, res) => {
   const { id } = req.params;
-  const { title, description, keywords } = req.body; // Extract text fields
-  const photos = req?.files; // Handle new file uploads
-
+  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
   try {
-    // Step 1: Find the existing category
     const category = await AquaCategory.findById(id);
-    if (!category) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Category not found" });
+    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    const changes = {};
+    for (const field of ["title", "description", "keywords"]) {
+      if (req.body[field] !== undefined) changes[field] = req.body[field];
     }
-
-    // Initialize updated data with existing or provided text fields
-    const updatedData = {
-      title: title || category.title,
-      description: description || category.description,
-      keywords: keywords || category.keywords,
-      photos: [...category.photos], // Start with existing photos
-    };
-
-    // Step 2: Handle new photos if provided
-    if (photos && photos.length > 0) {
-      try {
-        // Delete existing photos from Cloudinary
-        if (category.photos && category.photos.length > 0) {
-          for (const existingPhoto of category.photos) {
-            try {
-              await deletePhoto(existingPhoto.id);
-            } catch (deleteError) {
-              console.error(
-                "Error deleting photo from Cloudinary:",
-                deleteError,
-              );
-            }
-          }
-        }
-
-        // Upload new photos
-        const uploadedPhotos = [];
-        for (const photo of photos) {
-          try {
-            const result = await streamUpload(photo.buffer);
-            uploadedPhotos.push({
-              id: result.public_id,
-              secure_url: result.secure_url,
-            });
-          } catch (uploadError) {
-            console.error("Error uploading photo to Cloudinary:", uploadError);
-          }
-        }
-
-        // Replace photos in updated data if any uploads succeeded
-        if (uploadedPhotos.length > 0) {
-          updatedData.photos = uploadedPhotos;
-        }
-      } catch (photoHandlingError) {
-        console.error("Error handling photos:", photoHandlingError);
+    if (changes.title !== undefined && !String(changes.title).trim()) {
+      return res.status(400).json({ success: false, message: "Title is required" });
+    }
+    const uploaded = [];
+    try {
+      for (const photo of req.files || []) {
+        const result = await streamUpload(photo.buffer);
+        uploaded.push({ id: result.public_id, secure_url: result.secure_url });
       }
+      if (uploaded.length) changes.photos = uploaded;
+      const updated = await AquaCategory.findByIdAndUpdate(id, changes, { new: true, runValidators: true });
+      if (uploaded.length) {
+        for (const photo of category.photos || []) {
+          if (photo.id) await deletePhoto(photo.id).catch(console.error);
+        }
+      }
+      return res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+      for (const photo of uploaded) await deletePhoto(photo.id).catch(console.error);
+      throw error;
     }
-
-    // Step 3: Update the category in the database
-    const updatedCategory = await AquaCategory.findByIdAndUpdate(
-      id,
-      updatedData,
-      {
-        new: true, // Ensure the updated document is returned
-      },
-    );
-
-    // Respond with the updated category
-    return res.status(200).json({ success: true, data: updatedCategory });
   } catch (error) {
-    console.error("Unexpected error updating category:", error);
-    return res.status(200).json({
-      success: false,
-      message: "An issue occurred during the update. Please check logs.",
-    });
+    console.error("Error updating category:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const deleteCategory = async (req, res) => {
   const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
   try {
-    const category = await AquaCategory.findByIdAndDelete(id);
-    if (!category) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Category not found" });
-    }
+    const category = await AquaCategory.findById(id);
+    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    const [subcategories, products] = await Promise.all([
+      AquaSubCategory.countDocuments({ category: id }),
+      AquaProduct.countDocuments({ category: id }),
+    ]);
+    if (subcategories || products) return res.status(409).json({
+      success: false,
+      message: "Cannot delete category while subcategories or products reference it",
+    });
+    await AquaCategory.findByIdAndDelete(id);
     return res.status(200).json({ success: true, data: category });
   } catch (error) {
     console.error("Error deleting category:", error);
