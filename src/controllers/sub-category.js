@@ -23,11 +23,9 @@ const addSubCategory = async (req, res) => {
     if (categoryError) {
       return res.status(400).json({ success: false, message: categoryError });
     }
-    if (!photos || photos.length === 0) {
-      throw new Error("No photos provided");
-    }
+    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
     const uploadedPhotos = [];
-    for (const photo of photos) {
+    for (const photo of photos || []) {
       const result = await cloudinary.v2.uploader.upload(photo, {
         folder: "subcategories", // You can specify the folder in Cloudinary
       });
@@ -107,16 +105,21 @@ const updateSubCategory = async (req, res) => {
   const { title, description, photos, keywords } = req.body;
   const category = resolveCategoryId(req.body);
   try {
-    const categoryError = await validateCategoryId(category);
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
+    const existing = await AquaSubCategory.findById(id);
+    if (!existing) return res.status(404).json({ success: false, message: "Subcategory not found" });
+    const categoryError = await validateCategoryId(category ?? existing.category);
     if (categoryError) {
       return res.status(400).json({ success: false, message: categoryError });
     }
-    const updatedData = {
-      title,
-      description,
-      keywords,
-      category,
-    };
+    const updatedData = {};
+    if (title !== undefined) {
+      if (!String(title).trim()) return res.status(400).json({ success: false, message: "Title is required" });
+      updatedData.title = title;
+    }
+    if (description !== undefined) updatedData.description = description;
+    if (keywords !== undefined) updatedData.keywords = keywords;
+    if (category !== undefined) updatedData.category = category;
     if (photos && photos.length > 0) {
       const uploadedPhotos = [];
       for (const photo of photos) {
@@ -133,7 +136,7 @@ const updateSubCategory = async (req, res) => {
     const subcategory = await AquaSubCategory.findByIdAndUpdate(
       id,
       updatedData,
-      { new: true },
+      { new: true, runValidators: true },
     ).populate("category");
     if (!subcategory) {
       return res
