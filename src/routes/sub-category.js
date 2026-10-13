@@ -15,7 +15,6 @@ router.get(
 );
 router.post(
   "/subcategory-add",
-  userAuth.isLoggedIn,
   userAuth.checkAdmin,
   SubCategoryOperations.addSubCategory,
 );
@@ -24,7 +23,7 @@ router.post(
   userAuth.checkAdmin,
   SubCategoryOperations.updateSubCategory,
 );
-router.get(
+router.delete(
   "/subcategory/delete/:id",
   userAuth.checkAdmin,
   SubCategoryOperations.deleteSubCategory,
