@@ -1,6 +1,8 @@
 import cloudinary from "cloudinary";
 import AquaCategory from "../models/category.js";
 import AquaProduct from "../models/product.js";
+import AquaSubCategory from "../models/sub-category.js";
+import mongoose from "mongoose";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 
 const streamUpload = (buffer) =>
@@ -32,6 +34,7 @@ const deletePhoto = async (publicId) => {
 const addCategory = async (req, res) => {
   try {
     const { title, description, keywords } = req.body;
+    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
     const photos = req.files;
 
     if (!photos || photos.length === 0) {
@@ -86,16 +89,15 @@ const getAllCategories = async (req, res) => {
 const getCategory = async (req, res) => {
   const { id } = req.params;
   try {
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
     const category = await AquaCategory.findById(id);
-    const products = await AquaProduct.find({ category: id });
     if (!category) {
       return res
         .status(404)
         .json({ success: false, message: "Category not found" });
     }
-    return res
-      .status(200)
-      .json({ success: true, data: category, relatedProducts: products });
+    const products = await AquaProduct.find({ category: id });
+    return res.status(200).json({ success: true, data: category, relatedProducts: products });
   } catch (error) {
     console.error("Error getting category:", error);
     return res.status(500).json({ success: false, message: error.message });
