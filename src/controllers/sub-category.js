@@ -15,37 +15,49 @@ const validateCategoryId = async (categoryId) => {
     : "Parent category not found";
 };
 
-const addSubCategory = async (req, res) => {
+
+const isDataImage = (value) => typeof value === "string" && /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value);
+const normalizePhotos = async (photos, existing = []) => {
+  if (!Array.isArray(photos)) throw Object.assign(new Error("photos must be an array"), { status: 400 });
+  const retained = [];
+  const uploaded = [];
+  const allowed = new Map(existing.map((photo) => [String(photo.id), photo]));
   try {
-    const { title, description, photos, keywords } = req.body;
-    const category = resolveCategoryId(req.body);
-    const categoryError = await validateCategoryId(category);
-    if (categoryError) {
-      return res.status(400).json({ success: false, message: categoryError });
+    for (const photo of photos) {
+      const input = typeof photo === "string" ? photo : photo?.secure_url;
+      if (isDataImage(input)) {
+        const result = await cloudinary.v2.uploader.upload(input, { folder: "subcategories" });
+        uploaded.push({ id: result.public_id, secure_url: result.secure_url });
+      } else if (photo && typeof photo === "object" && allowed.has(String(photo.id)) &&
+        allowed.get(String(photo.id)).secure_url === photo.secure_url) {
+        const saved = allowed.get(String(photo.id));
+        retained.push({ id: saved.id, secure_url: saved.secure_url });
+      } else {
+        throw Object.assign(new Error("Invalid photo: provide a base64 data image or an existing image"), { status: 400 });
+      }
     }
-    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
-    const uploadedPhotos = [];
-    for (const photo of photos || []) {
-      const result = await cloudinary.v2.uploader.upload(photo, {
-        folder: "subcategories", // You can specify the folder in Cloudinary
-      });
-      uploadedPhotos.push({
-        id: result.public_id,
-        secure_url: result.secure_url,
-      });
-    }
-    const newSubCategory = new AquaSubCategory({
-      title,
-      description,
-      photos: uploadedPhotos,
-      keywords,
-      category,
-    });
-    await newSubCategory.save();
-    return res.status(201).json({ success: true, data: newSubCategory });
+    return { photos: [...retained, ...uploaded], uploaded };
   } catch (error) {
-    console.error("Error adding subcategory:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    await Promise.allSettled(uploaded.map((photo) => cloudinary.v2.uploader.destroy(photo.id)));
+    throw error;
+  }
+};
+
+const addSubCategory = async (req, res) => {
+  let uploaded = [];
+  try {
+    const { title, description, keywords } = req.body;
+    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
+    const category = resolveCategoryId(req.body);
+    const error = await validateCategoryId(category);
+    if (error) return res.status(400).json({ success: false, message: error });
+    const result = await normalizePhotos(req.body.photos ?? []);
+    uploaded = result.uploaded;
+    const data = await AquaSubCategory.create({ title, description, keywords, category, photos: result.photos });
+    return res.status(201).json({ success: true, data });
+  } catch (error) {
+    await Promise.allSettled(uploaded.map((photo) => cloudinary.v2.uploader.destroy(photo.id)));
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 };
 
@@ -103,51 +115,37 @@ const getSubCategoryByTitle = async (req, res) => {
 
 const updateSubCategory = async (req, res) => {
   const id = req.params.id ?? req.body.id ?? req.body._id;
-  const { title, description, photos, keywords } = req.body;
-  const category = resolveCategoryId(req.body);
+  let uploaded = [];
   try {
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
     const existing = await AquaSubCategory.findById(id);
     if (!existing) return res.status(404).json({ success: false, message: "Subcategory not found" });
-    const categoryError = await validateCategoryId(category ?? existing.category);
-    if (categoryError) {
-      return res.status(400).json({ success: false, message: categoryError });
+    const category = resolveCategoryId(req.body);
+    if (category !== undefined) {
+      const error = await validateCategoryId(category);
+      if (error) return res.status(400).json({ success: false, message: error });
     }
-    const updatedData = {};
-    if (title !== undefined) {
-      if (!String(title).trim()) return res.status(400).json({ success: false, message: "Title is required" });
-      updatedData.title = title;
+    const changes = {};
+    for (const field of ["title", "description", "keywords"]) {
+      if (req.body[field] !== undefined) changes[field] = req.body[field];
     }
-    if (description !== undefined) updatedData.description = description;
-    if (keywords !== undefined) updatedData.keywords = keywords;
-    if (category !== undefined) updatedData.category = category;
-    if (photos && photos.length > 0) {
-      const uploadedPhotos = [];
-      for (const photo of photos) {
-        const result = await cloudinary.v2.uploader.upload(photo, {
-          folder: "subcategories",
-        });
-        uploadedPhotos.push({
-          id: result.public_id,
-          secure_url: result.secure_url,
-        });
-      }
-      updatedData.photos = uploadedPhotos;
+    if (changes.title !== undefined && !String(changes.title).trim()) return res.status(400).json({ success: false, message: "Title is required" });
+    if (category !== undefined) changes.category = category;
+    if (req.body.photos !== undefined) {
+      const normalized = await normalizePhotos(req.body.photos, existing.photos);
+      changes.photos = normalized.photos;
+      uploaded = normalized.uploaded;
     }
-    const subcategory = await AquaSubCategory.findByIdAndUpdate(
-      id,
-      updatedData,
-      { new: true, runValidators: true },
-    ).populate("category");
-    if (!subcategory) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Subcategory not found" });
+    const updated = await AquaSubCategory.findByIdAndUpdate(id, changes, { new: true, runValidators: true }).populate("category");
+    if (changes.photos) {
+      const kept = new Set(changes.photos.map((photo) => String(photo.id)));
+      await Promise.allSettled(existing.photos.filter((photo) => !kept.has(String(photo.id))).map((photo) => cloudinary.v2.uploader.destroy(photo.id)));
     }
-    return res.status(200).json({ success: true, data: subcategory });
+    return res.status(200).json({ success: true, data: updated });
   } catch (error) {
+    await Promise.allSettled(uploaded.map((photo) => cloudinary.v2.uploader.destroy(photo.id)));
     console.error("Error updating subcategory:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 };
 
