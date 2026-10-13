@@ -102,7 +102,7 @@ const getSubCategoryByTitle = async (req, res) => {
 };
 
 const updateSubCategory = async (req, res) => {
-  const { id } = req.params;
+  const id = req.params.id ?? req.body.id ?? req.body._id;
   const { title, description, photos, keywords } = req.body;
   const category = resolveCategoryId(req.body);
   try {
