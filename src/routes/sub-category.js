@@ -18,6 +18,11 @@ router.post(
   userAuth.checkAdmin,
   SubCategoryOperations.addSubCategory,
 );
+router.put(
+  "/subcategory-update/:id",
+  userAuth.checkAdmin,
+  SubCategoryOperations.updateSubCategory,
+);
 router.post(
   "/subcategory-update",
   userAuth.checkAdmin,
