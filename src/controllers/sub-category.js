@@ -62,6 +62,7 @@ const getAllSubCategories = async (req, res) => {
 const getSubCategory = async (req, res) => {
   const { id } = req.params;
   try {
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
     const subcategory = await AquaSubCategory.findById(id).populate("category");
     if (!subcategory) {
       return res
@@ -153,6 +154,9 @@ const updateSubCategory = async (req, res) => {
 const deleteSubCategory = async (req, res) => {
   const { id } = req.params;
   try {
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
+    const referencedProducts = await AquaProduct.countDocuments({ subCategory: id });
+    if (referencedProducts) return res.status(409).json({ success: false, message: "Cannot delete subcategory while products reference it" });
     const subcategory = await AquaSubCategory.findByIdAndDelete(id);
     if (!subcategory) {
       return res
