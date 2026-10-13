@@ -31,39 +31,50 @@ const deletePhoto = async (publicId) => {
   }
 };
 
+
+const isDataImage = (value) => typeof value === "string" && /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value);
+const resolveImages = async (req, existing = []) => {
+  const incoming = req.body.photos;
+  if (incoming === undefined && (!req.files || !req.files.length)) return null;
+  if (incoming !== undefined && !Array.isArray(incoming)) throw Object.assign(new Error("photos must be an array"), { status: 400 });
+  const existingMap = new Map(existing.map((photo) => [String(photo.id), photo]));
+  const retained = [], uploaded = [];
+  try {
+    for (const photo of incoming || []) {
+      const source = typeof photo === "string" ? photo : photo?.secure_url;
+      if (isDataImage(source)) {
+        const result = await cloudinary.v2.uploader.upload(source, { folder: "categories" });
+        uploaded.push({ id: result.public_id, secure_url: result.secure_url });
+      } else if (photo && existingMap.has(String(photo.id)) && existingMap.get(String(photo.id)).secure_url === photo.secure_url) {
+        const saved = existingMap.get(String(photo.id));
+        retained.push({ id: saved.id, secure_url: saved.secure_url });
+      } else {
+        throw Object.assign(new Error("Invalid photo: provide a base64 image or a retained image"), { status: 400 });
+      }
+    }
+    for (const file of req.files || []) {
+      const result = await streamUpload(file.buffer);
+      uploaded.push({ id: result.public_id, secure_url: result.secure_url });
+    }
+    return { photos: [...retained, ...uploaded], uploaded };
+  } catch (error) {
+    await Promise.allSettled(uploaded.map((photo) => deletePhoto(photo.id)));
+    throw error;
+  }
+};
+
 const addCategory = async (req, res) => {
+  let uploaded = [];
   try {
     const { title, description, keywords } = req.body;
     if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
-    const photos = req.files;
-
-    if (!photos || photos.length === 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No photos provided" });
-    }
-
-    const uploadedPhotos = [];
-    for (const photo of photos) {
-      const result = await streamUpload(photo.buffer);
-      uploadedPhotos.push({
-        id: result.public_id,
-        secure_url: result.secure_url,
-      });
-    }
-
-    const newCategory = new AquaCategory({
-      title,
-      description,
-      photos: uploadedPhotos,
-      keywords,
-    });
-
-    await newCategory.save();
-    return res.status(201).json({ success: true, data: newCategory });
+    const images = await resolveImages(req);
+    uploaded = images?.uploaded || [];
+    const data = await AquaCategory.create({ title, description, keywords, photos: images?.photos || [] });
+    return res.status(201).json({ success: true, data });
   } catch (error) {
-    console.error("Error adding category:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    await Promise.allSettled(uploaded.map((photo) => deletePhoto(photo.id)));
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 };
 
@@ -128,37 +139,27 @@ const getCategoryByTitle = async (req, res) => {
 const updateCategory = async (req, res) => {
   const { id } = req.params;
   if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
+  let uploaded = [];
   try {
-    const category = await AquaCategory.findById(id);
-    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    const existing = await AquaCategory.findById(id);
+    if (!existing) return res.status(404).json({ success: false, message: "Category not found" });
     const changes = {};
-    for (const field of ["title", "description", "keywords"]) {
-      if (req.body[field] !== undefined) changes[field] = req.body[field];
+    for (const field of ["title", "description", "keywords"]) if (req.body[field] !== undefined) changes[field] = req.body[field];
+    if (changes.title !== undefined && !String(changes.title).trim()) return res.status(400).json({ success: false, message: "Title is required" });
+    const images = await resolveImages(req, existing.photos);
+    if (images) {
+      changes.photos = images.photos;
+      uploaded = images.uploaded;
     }
-    if (changes.title !== undefined && !String(changes.title).trim()) {
-      return res.status(400).json({ success: false, message: "Title is required" });
+    const updated = await AquaCategory.findByIdAndUpdate(id, changes, { new: true, runValidators: true });
+    if (images) {
+      const kept = new Set(images.photos.map((photo) => String(photo.id)));
+      await Promise.allSettled(existing.photos.filter((photo) => !kept.has(String(photo.id))).map((photo) => deletePhoto(photo.id)));
     }
-    const uploaded = [];
-    try {
-      for (const photo of req.files || []) {
-        const result = await streamUpload(photo.buffer);
-        uploaded.push({ id: result.public_id, secure_url: result.secure_url });
-      }
-      if (uploaded.length) changes.photos = uploaded;
-      const updated = await AquaCategory.findByIdAndUpdate(id, changes, { new: true, runValidators: true });
-      if (uploaded.length) {
-        for (const photo of category.photos || []) {
-          if (photo.id) await deletePhoto(photo.id).catch(console.error);
-        }
-      }
-      return res.status(200).json({ success: true, data: updated });
-    } catch (error) {
-      for (const photo of uploaded) await deletePhoto(photo.id).catch(console.error);
-      throw error;
-    }
+    return res.status(200).json({ success: true, data: updated });
   } catch (error) {
-    console.error("Error updating category:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    await Promise.allSettled(uploaded.map((photo) => deletePhoto(photo.id)));
+    return res.status(error.status || 500).json({ success: false, message: error.message });
   }
 };
 
