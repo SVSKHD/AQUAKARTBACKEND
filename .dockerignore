@@ -1,0 +1,9 @@
+node_modules
+.git
+.npm-cache
+.env
+.env.*
+!.env.example
+aquakart.json
+aq.json
+*.log
