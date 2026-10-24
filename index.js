@@ -5,9 +5,8 @@ import cloudinary from "cloudinary";
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
 import generateSwaggerDocs from "./swagger-autogen.js";
-import { startUnenrichedInvoiceReminder } from "./src/jobs/unenrichedInvoiceReminder.js";
-import { startProductServiceReminders } from "./src/jobs/productServiceReminders.js";
-import { startQuotationFollowUps } from "./src/jobs/quotationFollowups.js";
+import { startScheduler } from "./src/services/scheduler/index.js";
+import { isTestingMode } from "./src/services/aiQuota.js";
 
 const PORT = process.env.PORT || 5300; // Default to port 3000 if PORT is not set
 
@@ -21,9 +20,13 @@ process.on("uncaughtException", (error) => {
 });
 
 mongooseConnect(process.env.DB_URL);
-startUnenrichedInvoiceReminder();
-startProductServiceReminders();
-startQuotationFollowUps();
+// Runs the built-in reminder jobs and any jobs created from the CRM.
+startScheduler();
+if (isTestingMode()) {
+  console.warn(
+    "TESTING_MODE is on: storefront AI daily question limits are disabled.",
+  );
+}
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,

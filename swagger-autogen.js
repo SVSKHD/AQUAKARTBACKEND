@@ -1,4 +1,8 @@
 import swaggerAutogen from "swagger-autogen";
+import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { applyCategoryDocs } from "./src/docs/categories.js";
+import { applyRouteGroups } from "./src/docs/routeGroups.js";
 
 // Swagger configuration
 // const doc = {
@@ -19,14 +23,29 @@ import swaggerAutogen from "swagger-autogen";
 //   ],
 // };
 
-const outputFile = "./swagger-output.json"; // Output file for generated documentation
-const endpointsFiles = ["./app.js"]; // File where your endpoints are defined
+const outputFile = fileURLToPath(
+  new URL("./swagger-output.json", import.meta.url),
+).replaceAll("\\", "/");
+const endpointsFiles = [
+  fileURLToPath(new URL("./app.js", import.meta.url)).replaceAll("\\", "/"),
+];
 
 // Function to generate Swagger documentation
 const generateSwaggerDocs = async () => {
   try {
-    await swaggerAutogen()(outputFile, endpointsFiles);
-    console.log("Swagger documentation generated.");
+    const result = await swaggerAutogen()(outputFile, endpointsFiles);
+    const document = JSON.parse(await fs.readFile(outputFile, "utf8"));
+    await applyRouteGroups(applyCategoryDocs(document));
+    await fs.writeFile(outputFile, JSON.stringify(document, null, 2) + "\n");
+    if (result?.success) {
+      console.log(
+        "Swagger documentation generated and grouped by route module.",
+      );
+    } else {
+      console.warn(
+        "Swagger inference failed; preserved existing endpoint contracts and refreshed route groups.",
+      );
+    }
   } catch (error) {
     console.error("Error generating Swagger documentation:", error);
   }

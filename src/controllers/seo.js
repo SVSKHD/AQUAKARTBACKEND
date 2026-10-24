@@ -19,6 +19,7 @@ const EDITABLE_FIELDS = Object.freeze([
   "twitterImage",
   "schemaJson",
   "active",
+  "aiLocked",
 ]);
 
 const normalizePageKey = (value) =>
@@ -53,17 +54,11 @@ const normalizeSchemaJson = (value) => {
     try {
       return JSON.parse(value);
     } catch {
-      throw validationError(
-        "schemaJson",
-        "schemaJson must contain valid JSON",
-      );
+      throw validationError("schemaJson", "schemaJson must contain valid JSON");
     }
   }
   if (typeof value !== "object" || Array.isArray(value)) {
-    throw validationError(
-      "schemaJson",
-      "schemaJson must be a JSON object",
-    );
+    throw validationError("schemaJson", "schemaJson must be a JSON object");
   }
   return value;
 };
@@ -248,7 +243,10 @@ const updateSeo = async (req, res, { partial }) => {
     const payload = buildSeoPayload(req.body, { partial });
     if (!partial) {
       EDITABLE_FIELDS.forEach((field) => {
-        if (payload[field] === undefined && !["active"].includes(field))
+        if (
+          payload[field] === undefined &&
+          !["active", "aiLocked"].includes(field)
+        )
           seo[field] = undefined;
       });
     }
@@ -271,7 +269,6 @@ const updateSeo = async (req, res, { partial }) => {
 export const replaceSeo = (req, res) => updateSeo(req, res, { partial: false });
 export const patchSeo = (req, res) => updateSeo(req, res, { partial: true });
 
-
 export const listSeoReadiness = async (req, res) => {
   try {
     const data = await buildSeoReadiness({
@@ -292,7 +289,9 @@ export const listSeoReadiness = async (req, res) => {
 
 export const getSeoReadinessByPageKey = async (req, res) => {
   try {
-    const pageKey = String(req.params.pageKey || "").trim().toLowerCase();
+    const pageKey = String(req.params.pageKey || "")
+      .trim()
+      .toLowerCase();
     const data = await buildSeoReadiness({ pageKey });
     const item = data.items[0];
     if (!item) {

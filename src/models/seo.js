@@ -68,6 +68,11 @@ const SeoSchema = new mongoose.Schema(
     },
     schemaJson: { type: mongoose.Schema.Types.Mixed, default: null },
     active: { type: Boolean, default: true, index: true },
+    // Weekly AI SEO refresh: staff set aiLocked to keep a page hand-written;
+    // aiPrevious holds the values the last refresh replaced, for rollback.
+    aiLocked: { type: Boolean, default: false },
+    aiRefreshedAt: { type: Date, default: null },
+    aiPrevious: { type: mongoose.Schema.Types.Mixed, default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
   },

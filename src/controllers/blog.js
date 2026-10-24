@@ -153,9 +153,20 @@ const deleteBlog = async (req, res, next) => {
     return next(error);
   }
 };
+// Drafts never reach the storefront. Staff can ask for ?status=draft|all,
+// which the route guards with checkAdmin (see blogStatusAccess).
+export const PUBLISHED_FILTER = { status: { $ne: "draft" } };
+export const STAFF_BLOG_STATUSES = ["draft", "all"];
+
+const blogStatusFilter = (status) => {
+  if (status === "draft") return { status: "draft" };
+  if (status === "all") return {};
+  return PUBLISHED_FILTER;
+};
+
 const getBlogs = async (req, res) => {
   try {
-    const blogs = await AquaBlog.find({})
+    const blogs = await AquaBlog.find(blogStatusFilter(req.query.status))
       .populate("category", "_id title")
       .populate("subCategory", "_id title category")
       .populate("product", "_id title")
@@ -187,7 +198,7 @@ const getBlogByTitle = async (req, res) => {
   const { title } = req.params;
   console.log("title", title);
   try {
-    const blogByTitle = await AquaBlog.findOne({ title });
+    const blogByTitle = await AquaBlog.findOne({ title, ...PUBLISHED_FILTER });
     return res.status(200).json({ success: true, data: blogByTitle });
   } catch (error) {
     return res.status(400).json({
@@ -201,7 +212,7 @@ const getBlogBySlug = async (req, res) => {
   try {
     const slug = decodeURIComponent(req.params.slug);
 
-    const blogBySlug = await AquaBlog.findOne({ slug });
+    const blogBySlug = await AquaBlog.findOne({ slug, ...PUBLISHED_FILTER });
 
     if (!blogBySlug) {
       return res.status(404).json({

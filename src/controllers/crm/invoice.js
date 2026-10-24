@@ -15,7 +15,10 @@ const normalizeIndianPhone = (phone) =>
     .replace(/^\+91/, "")
     .replace(/^91/, "");
 
-const validateInvoicePayload = (payload = {}, { allowLegacyGst = false } = {}) => {
+export const validateInvoicePayload = (
+  payload = {},
+  { allowLegacyGst = false } = {},
+) => {
   const errors = {};
   const customerName = payload?.customerDetails?.name;
   const customerPhone = payload?.customerDetails?.phone;
@@ -227,10 +230,74 @@ const deliverInvoiceWhatsApp = async ({
   });
 };
 
-const createInvoice = async (req, res) => {
-  let stockChanges = [];
-  let stockUpdated = false;
+// Consumes stock, saves the invoice and sends it on WhatsApp. Shared by the
+// CRM create endpoint and the AI invoice assistant. The payload must already
+// pass validateInvoicePayload. Throws errors carrying statusCode/errors.
+export const persistInvoice = async (payload) => {
+  const body = { ...payload };
+  const stockChanges = buildStockChanges(body.products, []);
+  await assertStockAvailable(stockChanges);
+  await applyStockChanges(stockChanges);
 
+  let invoice;
+  try {
+    const uniqueId = nanoid(10);
+    const now = new Date();
+    const formattedDate = now.toISOString().split("T")[0];
+    body.invoiceNo = `AQB${uniqueId}|${now.getDate()}${now.getMonth() + 1}${now.getFullYear()}`;
+    body.createdAt = formattedDate;
+    body.updatedAt = formattedDate;
+    body.date = formattedDate;
+    body.transport = body.transport || {};
+    body.transport.deliveryDate = formattedDate;
+    // Only the controlled database migration may create migrated invoices.
+    body.migrated = false;
+    body.migrationReviewed = false;
+    body.migrationReviewedAt = null;
+
+    const savedInvoice = await new AquaInvoice(body).save();
+    invoice = savedInvoice.toObject();
+  } catch (error) {
+    await rollbackStockChanges(stockChanges);
+    throw error;
+  }
+
+  let whatsappDelivery;
+  try {
+    const delivery = await deliverInvoiceWhatsApp({
+      invoice,
+      trigger: "invoice-created",
+      dedupeKey: `invoice:${invoice._id}:whatsapp:auto-create`,
+    });
+    whatsappDelivery = {
+      attempted: true,
+      sent: delivery?.success === true,
+      duplicate: delivery?.duplicate === true,
+      provider: "fast2sms",
+      channel: delivery?.channel || "whatsapp",
+      fallback: delivery?.fallback === true,
+    };
+  } catch (deliveryError) {
+    console.error("Automatic invoice WhatsApp failed", {
+      invoiceId: String(invoice._id),
+      code: deliveryError?.code,
+      message: deliveryError?.message,
+    });
+    whatsappDelivery = {
+      attempted: true,
+      sent: false,
+      provider: "fast2sms",
+      errorCode: deliveryError?.code || "WHATSAPP_DELIVERY_FAILED",
+      message:
+        deliveryError?.message ||
+        "Invoice was created, but WhatsApp delivery failed",
+    };
+  }
+
+  return { invoice, whatsappDelivery };
+};
+
+const createInvoice = async (req, res) => {
   try {
     const { isValid, errors } = validateInvoicePayload(req.body);
     if (!isValid)
@@ -238,67 +305,13 @@ const createInvoice = async (req, res) => {
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
 
-    stockChanges = buildStockChanges(req.body.products, []);
-    await assertStockAvailable(stockChanges);
-    await applyStockChanges(stockChanges);
-    stockUpdated = true;
-
-    const uniqueId = nanoid(10);
-    const now = new Date();
-    const formattedDate = now.toISOString().split("T")[0];
-    req.body.invoiceNo = `AQB${uniqueId}|${now.getDate()}${now.getMonth() + 1}${now.getFullYear()}`;
-    req.body.createdAt = formattedDate;
-    req.body.updatedAt = formattedDate;
-    req.body.date = formattedDate;
-    req.body.transport = req.body.transport || {};
-    req.body.transport.deliveryDate = formattedDate;
-    // Only the controlled database migration may create migrated invoices.
-    req.body.migrated = false;
-    req.body.migrationReviewed = false;
-    req.body.migrationReviewedAt = null;
-
-    const savedInvoice = await new AquaInvoice(req.body).save();
-    const invoice = savedInvoice.toObject();
-
-    let whatsappDelivery;
-    try {
-      const delivery = await deliverInvoiceWhatsApp({
-        invoice,
-        trigger: "invoice-created",
-        dedupeKey: `invoice:${invoice._id}:whatsapp:auto-create`,
-      });
-      whatsappDelivery = {
-        attempted: true,
-        sent: delivery?.success === true,
-        duplicate: delivery?.duplicate === true,
-        provider: "fast2sms",
-        channel: delivery?.channel || "whatsapp",
-        fallback: delivery?.fallback === true,
-      };
-    } catch (deliveryError) {
-      console.error("Automatic invoice WhatsApp failed", {
-        invoiceId: String(invoice._id),
-        code: deliveryError?.code,
-        message: deliveryError?.message,
-      });
-      whatsappDelivery = {
-        attempted: true,
-        sent: false,
-        provider: "fast2sms",
-        errorCode: deliveryError?.code || "WHATSAPP_DELIVERY_FAILED",
-        message:
-          deliveryError?.message ||
-          "Invoice was created, but WhatsApp delivery failed",
-      };
-    }
-
+    const { invoice, whatsappDelivery } = await persistInvoice(req.body);
     res.status(201).json({
       ...invoice,
       ...buildInvoiceViewLinks(invoice._id, invoice),
       whatsappDelivery,
     });
   } catch (error) {
-    if (stockUpdated) await rollbackStockChanges(stockChanges);
     console.error(error);
     res.status(error.statusCode || 500).json({
       status: false,
@@ -344,7 +357,9 @@ const updateInvoice = async (req, res) => {
     req.body.transport.deliveryDate = invoice.transport?.deliveryDate;
 
     if (isMigratedInvoice) {
-      const products = Array.isArray(req.body.products) ? req.body.products : [];
+      const products = Array.isArray(req.body.products)
+        ? req.body.products
+        : [];
       const productsLinked =
         products.length > 0 &&
         products.every((product) =>
@@ -428,8 +443,7 @@ const getInvoices = async (req, res) => {
     if (migrated === "true") filter.migrated = true;
     if (migrated === "false") filter.migrated = { $ne: true };
     if (migrationReviewed === "true") filter.migrationReviewed = true;
-    if (migrationReviewed === "false")
-      filter.migrationReviewed = { $ne: true };
+    if (migrationReviewed === "false") filter.migrationReviewed = { $ne: true };
     if (search) {
       filter.$or = [
         { invoiceNo: { $regex: search, $options: "i" } },

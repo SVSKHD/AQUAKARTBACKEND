@@ -926,8 +926,82 @@ const whatsappById = async (req, res) => {
   }
 };
 
+const MAX_MY_INVOICES = 20;
+
+// The signed-in customer's purchases (Aqua's history sidebar): invoices bound to
+// their Google account, plus unclaimed ones carrying their verified email, the
+// same rule the invoice access flow uses for "owned" / "email-match". Invoices
+// claimed by another account never appear. Summaries only: opening one still
+// goes through /invoice/:id and its Google verification.
+const listMine = async (req, res) => {
+  const firebaseUid = String(req.user?.firebaseUid || "");
+  // Email is trusted only for Google-verified accounts.
+  const email =
+    firebaseUid && (req.user?.emailVerified || req.user?.isEmailVerfied)
+      ? validateEmail(req.user?.email)
+      : "";
+  if (!firebaseUid && !email) {
+    return res.status(200).json({ success: true, invoices: [] });
+  }
+
+  const unclaimed = [
+    { firebaseUid: { $exists: false } },
+    { firebaseUid: null },
+    { firebaseUid: "" },
+  ];
+  const match = [];
+  if (firebaseUid) match.push({ firebaseUid });
+  if (email) {
+    match.push({
+      $and: [
+        {
+          $or: [
+            { customerEmailNormalized: email },
+            { "customerDetails.email": email },
+            { "gstDetails.gstEmail": email },
+          ],
+        },
+        { $or: unclaimed },
+      ],
+    });
+  }
+
+  try {
+    const invoices = await AquaInvoice.find({ $or: match })
+      .sort({ date: -1, createdAt: -1 })
+      .limit(MAX_MY_INVOICES)
+      .maxTimeMS(INVOICE_QUERY_TIMEOUT_MS)
+      .lean();
+    return res.status(200).json({
+      success: true,
+      invoices: invoices.map((invoice) => {
+        const summary = toSummary(invoice, { firebaseUid, email });
+        return {
+          id: summary.id,
+          invoiceNo: summary.invoiceNo,
+          date: summary.date,
+          paidStatus: summary.paidStatus,
+          itemCount: summary.itemCount,
+          total_price: summary.total_price,
+          canView: summary.canView,
+          items: (invoice.products || [])
+            .map((product) => String(product?.productName || "").trim())
+            .filter(Boolean)
+            .slice(0, 3),
+        };
+      }),
+    });
+  } catch (error) {
+    console.error("My invoices lookup failed:", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Could not load your purchases" });
+  }
+};
+
 export default {
   lookup,
+  listMine,
   requestAccess,
   exchange,
   loginAccess,

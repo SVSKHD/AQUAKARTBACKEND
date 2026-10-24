@@ -11,32 +11,23 @@ const maskEmail = (email) => {
   return `${localPart.slice(0, 2)}***@${domain}`;
 };
 
-const sendInvoiceEmail = async (req, res) => {
+// Emails the customer invoice link and logs the attempt. Shared by the CRM
+// endpoint and the AI invoice assistant. Returns { status, body }.
+export const emailInvoiceToCustomer = async (invoice) => {
   let log;
 
   try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid invoice id" });
-    }
-
-    const invoice = await AquaInvoice.findById(id).lean();
-    if (!invoice) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Invoice not found" });
-    }
-
     const email = String(invoice.customerDetails?.email || "")
       .trim()
       .toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invoice does not have a valid customer email",
-      });
+      return {
+        status: 400,
+        body: {
+          success: false,
+          message: "Invoice does not have a valid customer email",
+        },
+      };
     }
 
     const links = buildInvoiceViewLinks(invoice._id);
@@ -80,10 +71,13 @@ const sendInvoiceEmail = async (req, res) => {
           response: delivery.message,
         },
       });
-      return res.status(503).json({
-        success: false,
-        message: delivery.message || "Failed to email invoice",
-      });
+      return {
+        status: 503,
+        body: {
+          success: false,
+          message: delivery.message || "Failed to email invoice",
+        },
+      };
     }
 
     await NotificationLog.findByIdAndUpdate(log._id, {
@@ -93,11 +87,14 @@ const sendInvoiceEmail = async (req, res) => {
       },
     });
 
-    return res.status(202).json({
-      success: true,
-      message: "Invoice emailed successfully.",
-      maskedRecipientEmail: maskEmail(email),
-    });
+    return {
+      status: 202,
+      body: {
+        success: true,
+        message: "Invoice emailed successfully.",
+        maskedRecipientEmail: maskEmail(email),
+      },
+    };
   } catch (error) {
     if (log?._id) {
       await NotificationLog.findByIdAndUpdate(log._id, {
@@ -108,6 +105,35 @@ const sendInvoiceEmail = async (req, res) => {
         },
       });
     }
+    return {
+      status: 500,
+      body: {
+        success: false,
+        message: "We could not email the invoice right now",
+      },
+    };
+  }
+};
+
+const sendInvoiceEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid invoice id" });
+    }
+
+    const invoice = await AquaInvoice.findById(id).lean();
+    if (!invoice) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+
+    const { status, body } = await emailInvoiceToCustomer(invoice);
+    return res.status(status).json(body);
+  } catch (_error) {
     return res.status(500).json({
       success: false,
       message: "We could not email the invoice right now",

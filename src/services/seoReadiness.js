@@ -32,7 +32,7 @@ const normalizeKeyPart = (value) =>
 
 const routeSegment = (value) => encodeURIComponent(String(value || "").trim());
 
-const stripHtml = (value) =>
+export const stripHtml = (value) =>
   String(value || "")
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/gi, " ")
@@ -47,10 +47,14 @@ const wordCount = (value) => {
 const hasImage = (photos) =>
   Array.isArray(photos) &&
   photos.some((photo) =>
-    Boolean(typeof photo === "string" ? photo.trim() : photo?.secure_url || photo?.url),
+    Boolean(
+      typeof photo === "string"
+        ? photo.trim()
+        : photo?.secure_url || photo?.url,
+    ),
   );
 
-const canonicalFor = (route) =>
+export const canonicalFor = (route) =>
   `${STOREFRONT_URL}${route === "/" ? "" : route}`;
 
 const issue = (code, severity, field, message, action) => ({
@@ -70,12 +74,12 @@ const makeEntity = ({ type, id, title, pageKey, route, source = null }) => ({
   source,
 });
 
-const buildCatalog = async () => {
+export const buildCatalog = async () => {
   const [products, categories, subcategories, blogs] = await Promise.all([
     AquaProduct.find({}).lean(),
     AquaCategory.find({}).lean(),
     AquaSubCategory.find({}).lean(),
-    AquaBlog.find({}).lean(),
+    AquaBlog.find({ status: { $ne: "draft" } }).lean(),
   ]);
 
   const staticItems = STATIC_PAGES.map(([pageKey, title, route]) =>
@@ -170,15 +174,69 @@ const scoreSeo = (entity, seo) => {
   }
 
   const checks = [
-    ["title", Boolean(seo.title?.trim()), 18, "MISSING_TITLE", "SEO title is missing"],
-    ["description", Boolean(seo.description?.trim()), 18, "MISSING_META_DESCRIPTION", "Meta description is missing"],
-    ["canonicalUrl", Boolean(seo.canonicalUrl?.trim()), 14, "MISSING_CANONICAL", "Canonical URL is missing"],
-    ["robots", Boolean(seo.robots?.trim()), 8, "MISSING_ROBOTS", "Robots directive is missing"],
-    ["ogTitle", Boolean(seo.ogTitle?.trim()), 8, "MISSING_OG_TITLE", "Open Graph title is missing"],
-    ["ogDescription", Boolean(seo.ogDescription?.trim()), 8, "MISSING_OG_DESCRIPTION", "Open Graph description is missing"],
-    ["ogImage", Boolean(seo.ogImage?.trim()), 8, "MISSING_OG_IMAGE", "Open Graph image is missing"],
-    ["schemaJson", Boolean(seo.schemaJson), 12, "MISSING_SCHEMA", "Structured data is missing"],
-    ["active", seo.active !== false, 6, "SEO_DISABLED", "SEO configuration is disabled"],
+    [
+      "title",
+      Boolean(seo.title?.trim()),
+      18,
+      "MISSING_TITLE",
+      "SEO title is missing",
+    ],
+    [
+      "description",
+      Boolean(seo.description?.trim()),
+      18,
+      "MISSING_META_DESCRIPTION",
+      "Meta description is missing",
+    ],
+    [
+      "canonicalUrl",
+      Boolean(seo.canonicalUrl?.trim()),
+      14,
+      "MISSING_CANONICAL",
+      "Canonical URL is missing",
+    ],
+    [
+      "robots",
+      Boolean(seo.robots?.trim()),
+      8,
+      "MISSING_ROBOTS",
+      "Robots directive is missing",
+    ],
+    [
+      "ogTitle",
+      Boolean(seo.ogTitle?.trim()),
+      8,
+      "MISSING_OG_TITLE",
+      "Open Graph title is missing",
+    ],
+    [
+      "ogDescription",
+      Boolean(seo.ogDescription?.trim()),
+      8,
+      "MISSING_OG_DESCRIPTION",
+      "Open Graph description is missing",
+    ],
+    [
+      "ogImage",
+      Boolean(seo.ogImage?.trim()),
+      8,
+      "MISSING_OG_IMAGE",
+      "Open Graph image is missing",
+    ],
+    [
+      "schemaJson",
+      Boolean(seo.schemaJson),
+      12,
+      "MISSING_SCHEMA",
+      "Structured data is missing",
+    ],
+    [
+      "active",
+      seo.active !== false,
+      6,
+      "SEO_DISABLED",
+      "SEO configuration is disabled",
+    ],
   ];
 
   let score = 0;
@@ -187,7 +245,15 @@ const scoreSeo = (entity, seo) => {
       score += points;
     } else {
       missing.push(`seo.${field}`);
-      issues.push(issue(code, points >= 14 ? "high" : "medium", `seo.${field}`, message, "UPDATE_SEO"));
+      issues.push(
+        issue(
+          code,
+          points >= 14 ? "high" : "medium",
+          `seo.${field}`,
+          message,
+          "UPDATE_SEO",
+        ),
+      );
     }
   });
 
@@ -204,7 +270,11 @@ const scoreSeo = (entity, seo) => {
     );
   }
 
-  if (String(seo.robots || "").toLowerCase().includes("noindex")) {
+  if (
+    String(seo.robots || "")
+      .toLowerCase()
+      .includes("noindex")
+  ) {
     score = Math.max(0, score - 20);
     issues.push(
       issue(
@@ -234,7 +304,15 @@ const scoreContent = (entity) => {
   if (!source.description || words === 0) {
     score = 0;
     missing.push("content.description");
-    issues.push(issue("MISSING_CONTENT", "high", "content.description", "Page content is missing", "UPDATE_ENTITY"));
+    issues.push(
+      issue(
+        "MISSING_CONTENT",
+        "high",
+        "content.description",
+        "Page content is missing",
+        "UPDATE_ENTITY",
+      ),
+    );
   } else {
     const threshold = entity.entityType === "blog" ? 250 : 80;
     if (words < threshold) {
@@ -254,7 +332,15 @@ const scoreContent = (entity) => {
   if (!String(source.keywords || "").trim()) {
     score -= 10;
     missing.push("content.keywords");
-    issues.push(issue("MISSING_TOPIC_TERMS", "low", "content.keywords", "No source keywords/topic terms are stored", "UPDATE_ENTITY"));
+    issues.push(
+      issue(
+        "MISSING_TOPIC_TERMS",
+        "low",
+        "content.keywords",
+        "No source keywords/topic terms are stored",
+        "UPDATE_ENTITY",
+      ),
+    );
   }
 
   return { score: Math.max(0, score), issues, missing };
@@ -266,7 +352,15 @@ const scoreMedia = (entity, seo) => {
       score: seo?.ogImage ? 100 : 0,
       issues: seo?.ogImage
         ? []
-        : [issue("MISSING_SOCIAL_IMAGE", "medium", "seo.ogImage", "Social image is missing", "UPDATE_SEO")],
+        : [
+            issue(
+              "MISSING_SOCIAL_IMAGE",
+              "medium",
+              "seo.ogImage",
+              "Social image is missing",
+              "UPDATE_SEO",
+            ),
+          ],
       missing: seo?.ogImage ? [] : ["seo.ogImage"],
     };
   }
@@ -277,7 +371,15 @@ const scoreMedia = (entity, seo) => {
     score: imageOk ? 100 : 0,
     issues: imageOk
       ? []
-      : [issue("MISSING_PRIMARY_IMAGE", "high", "media.image", "No usable page image was found", "UPDATE_ENTITY")],
+      : [
+          issue(
+            "MISSING_PRIMARY_IMAGE",
+            "high",
+            "media.image",
+            "No usable page image was found",
+            "UPDATE_ENTITY",
+          ),
+        ],
     missing: imageOk ? [] : ["media.image"],
   };
 };
@@ -289,15 +391,70 @@ const scoreMerchant = (entity) => {
 
   const product = entity.source || {};
   const checks = [
-    ["product.title", Boolean(product.title), 12, "MISSING_PRODUCT_TITLE", "Product title is missing"],
-    ["product.price", Number(product.price) > 0, 15, "MISSING_PRICE", "Product price is missing or invalid"],
-    ["product.brand", Boolean(product.brand?.trim()), 12, "MISSING_BRAND", "Brand is missing"],
-    ["product.image", hasImage(product.photos), 15, "MISSING_PRODUCT_IMAGE", "Product image is missing"],
-    ["product.url", Boolean(product.slug || product._id), 10, "MISSING_PRODUCT_URL", "Product URL source is missing"],
-    ["product.googleProductCategory", Boolean(product.googleProductCategory?.trim()), 12, "MISSING_GOOGLE_CATEGORY", "Google Product Category is missing"],
-    ["product.condition", Boolean(product.condition), 8, "MISSING_CONDITION", "Product condition is missing"],
-    ["product.identifier", product.identifierExists === false || Boolean(product.gtin?.trim() || product.mpn?.trim()), 10, "MISSING_IDENTIFIER", "GTIN or MPN is missing while identifierExists is true"],
-    ["product.merchantEnabled", product.merchantEnabled !== false, 6, "MERCHANT_DISABLED", "Product is disabled for Merchant feed"],
+    [
+      "product.title",
+      Boolean(product.title),
+      12,
+      "MISSING_PRODUCT_TITLE",
+      "Product title is missing",
+    ],
+    [
+      "product.price",
+      Number(product.price) > 0,
+      15,
+      "MISSING_PRICE",
+      "Product price is missing or invalid",
+    ],
+    [
+      "product.brand",
+      Boolean(product.brand?.trim()),
+      12,
+      "MISSING_BRAND",
+      "Brand is missing",
+    ],
+    [
+      "product.image",
+      hasImage(product.photos),
+      15,
+      "MISSING_PRODUCT_IMAGE",
+      "Product image is missing",
+    ],
+    [
+      "product.url",
+      Boolean(product.slug || product._id),
+      10,
+      "MISSING_PRODUCT_URL",
+      "Product URL source is missing",
+    ],
+    [
+      "product.googleProductCategory",
+      Boolean(product.googleProductCategory?.trim()),
+      12,
+      "MISSING_GOOGLE_CATEGORY",
+      "Google Product Category is missing",
+    ],
+    [
+      "product.condition",
+      Boolean(product.condition),
+      8,
+      "MISSING_CONDITION",
+      "Product condition is missing",
+    ],
+    [
+      "product.identifier",
+      product.identifierExists === false ||
+        Boolean(product.gtin?.trim() || product.mpn?.trim()),
+      10,
+      "MISSING_IDENTIFIER",
+      "GTIN or MPN is missing while identifierExists is true",
+    ],
+    [
+      "product.merchantEnabled",
+      product.merchantEnabled !== false,
+      6,
+      "MERCHANT_DISABLED",
+      "Product is disabled for Merchant feed",
+    ],
   ];
 
   let score = 0;
@@ -307,7 +464,15 @@ const scoreMerchant = (entity) => {
     if (pass) score += points;
     else {
       missing.push(field);
-      issues.push(issue(code, points >= 12 ? "high" : "medium", field, message, "UPDATE_PRODUCT"));
+      issues.push(
+        issue(
+          code,
+          points >= 12 ? "high" : "medium",
+          field,
+          message,
+          "UPDATE_PRODUCT",
+        ),
+      );
     }
   });
 
@@ -318,7 +483,15 @@ const scoreSchema = (entity, seo) => {
   if (!seo?.schemaJson) {
     return {
       score: 0,
-      issues: [issue("MISSING_SCHEMA", "high", "seo.schemaJson", "Structured data is missing", "UPDATE_SEO")],
+      issues: [
+        issue(
+          "MISSING_SCHEMA",
+          "high",
+          "seo.schemaJson",
+          "Structured data is missing",
+          "UPDATE_SEO",
+        ),
+      ],
       missing: ["seo.schemaJson"],
     };
   }
@@ -330,7 +503,8 @@ const scoreSchema = (entity, seo) => {
       ? "Product"
       : entity.entityType === "blog"
         ? "BlogPosting"
-        : entity.entityType === "category" || entity.entityType === "subcategory"
+        : entity.entityType === "category" ||
+            entity.entityType === "subcategory"
           ? "CollectionPage"
           : null;
 
@@ -359,18 +533,32 @@ const scoreTechnical = (entity, seo) => {
 
   if (!entity.route?.startsWith("/")) {
     score -= 50;
-    issues.push(issue("INVALID_ROUTE", "critical", "route", "Route must start with /", "UPDATE_ENTITY"));
+    issues.push(
+      issue(
+        "INVALID_ROUTE",
+        "critical",
+        "route",
+        "Route must start with /",
+        "UPDATE_ENTITY",
+      ),
+    );
   }
   if (!seo) score -= 30;
   if (seo?.active === false) score -= 40;
-  if (String(seo?.robots || "").toLowerCase().includes("noindex")) score -= 50;
+  if (
+    String(seo?.robots || "")
+      .toLowerCase()
+      .includes("noindex")
+  )
+    score -= 50;
 
   return { score: Math.max(0, score), issues, missing: [] };
 };
 
 const priorityFor = (issues, score) => {
   if (issues.some((item) => item.severity === "critical")) return "P0";
-  if (issues.some((item) => item.severity === "high") || score < 60) return "P1";
+  if (issues.some((item) => item.severity === "high") || score < 60)
+    return "P1";
   if (issues.length || score < 90) return "P2";
   return "P3";
 };
@@ -398,9 +586,13 @@ const buildItem = (entity, seo) => {
     media: media.score,
   };
 
-  const applicable = Object.values(dimensions).filter((value) => Number.isFinite(value));
+  const applicable = Object.values(dimensions).filter((value) =>
+    Number.isFinite(value),
+  );
   const score = applicable.length
-    ? Math.round(applicable.reduce((sum, value) => sum + value, 0) / applicable.length)
+    ? Math.round(
+        applicable.reduce((sum, value) => sum + value, 0) / applicable.length,
+      )
     : 0;
 
   const allIssues = [
@@ -413,7 +605,9 @@ const buildItem = (entity, seo) => {
   ];
 
   const dedupedIssues = [
-    ...new Map(allIssues.map((item) => [`${item.code}:${item.field}`, item])).values(),
+    ...new Map(
+      allIssues.map((item) => [`${item.code}:${item.field}`, item]),
+    ).values(),
   ];
   const missing = [
     ...new Set([
@@ -494,12 +688,18 @@ export const buildSeoReadiness = async ({
 } = {}) => {
   const catalog = await buildCatalog();
   const seoRecords = await Seo.find({}).lean();
-  const seoByKey = new Map(seoRecords.map((record) => [record.pageKey, record]));
+  const seoByKey = new Map(
+    seoRecords.map((record) => [record.pageKey, record]),
+  );
 
-  let items = catalog.map((entity) => buildItem(entity, seoByKey.get(entity.pageKey)));
+  let items = catalog.map((entity) =>
+    buildItem(entity, seoByKey.get(entity.pageKey)),
+  );
 
   if (pageKey) {
-    items = items.filter((item) => item.pageKey === String(pageKey).trim().toLowerCase());
+    items = items.filter(
+      (item) => item.pageKey === String(pageKey).trim().toLowerCase(),
+    );
   }
   if (entityType) {
     items = items.filter((item) => item.entityType === entityType);
@@ -519,17 +719,23 @@ export const buildSeoReadiness = async ({
     items = items.slice(0, Math.min(Number(limit), 1000));
   }
 
-  const allCatalogItems = catalog.map((entity) => buildItem(entity, seoByKey.get(entity.pageKey)));
+  const allCatalogItems = catalog.map((entity) =>
+    buildItem(entity, seoByKey.get(entity.pageKey)),
+  );
   const summary = {
     totalPages: allCatalogItems.length,
     ready: allCatalogItems.filter((item) => item.status === "READY").length,
     needsSeo: allCatalogItems.filter((item) => item.status !== "READY").length,
-    missingSeo: allCatalogItems.filter((item) => item.status === "NEEDS_SEO").length,
+    missingSeo: allCatalogItems.filter((item) => item.status === "NEEDS_SEO")
+      .length,
     critical: allCatalogItems.filter((item) => item.priority === "P0").length,
     high: allCatalogItems.filter((item) => item.priority === "P1").length,
     medium: allCatalogItems.filter((item) => item.priority === "P2").length,
     overallScore: allCatalogItems.length
-      ? Math.round(allCatalogItems.reduce((sum, item) => sum + item.score, 0) / allCatalogItems.length)
+      ? Math.round(
+          allCatalogItems.reduce((sum, item) => sum + item.score, 0) /
+            allCatalogItems.length,
+        )
       : 0,
   };
 
@@ -543,7 +749,9 @@ export const buildSeoReadiness = async ({
           route: items[0].route,
           priority: items[0].priority,
           score: items[0].score,
-          reason: items[0].issues[0]?.message || "Highest-priority SEO readiness item",
+          reason:
+            items[0].issues[0]?.message ||
+            "Highest-priority SEO readiness item",
           adminLinks: items[0].adminLinks,
         }
       : null,

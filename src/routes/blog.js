@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer";
-import BlogOperations from "../controllers/blog.js";
+import BlogOperations, { STAFF_BLOG_STATUSES } from "../controllers/blog.js";
 import userAuth from "../middleware/user.js";
 
 const router = express.Router();
@@ -13,7 +13,13 @@ const upload = multer({
 router.get("/blog-status", (req, res) => {
   res.json({ message: "blog status v1 active" });
 });
-router.get("/all-blogs", BlogOperations.getBlogs);
+// Listing drafts (?status=draft|all) is staff-only.
+const blogStatusAccess = (req, res, next) =>
+  STAFF_BLOG_STATUSES.includes(req.query.status)
+    ? userAuth.checkAdmin(req, res, next)
+    : next();
+
+router.get("/all-blogs", blogStatusAccess, BlogOperations.getBlogs);
 router.get("/blog/:id", BlogOperations.getBlogById);
 router.get("/blog/:title", BlogOperations.getBlogByTitle);
 router.get("/blog-slug/:slug", BlogOperations.getBlogBySlug);

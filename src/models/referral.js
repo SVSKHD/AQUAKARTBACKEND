@@ -19,8 +19,6 @@ const ReferralSchema = new mongoose.Schema(
     referredUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "AquaEcomUser",
-      sparse: true,
-      index: true,
     },
     campaignId: {
       type: mongoose.Schema.Types.ObjectId,

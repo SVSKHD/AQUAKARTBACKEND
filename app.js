@@ -4,6 +4,8 @@ import cors from "cors";
 import morgan from "morgan";
 import multer from "multer";
 import swaggerUi from "swagger-ui-express";
+import { applyCategoryDocs } from "./src/docs/categories.js";
+import { applyRouteGroups } from "./src/docs/routeGroups.js";
 import { promises as fs } from "fs";
 import path from "path";
 import userRoutes from "./src/routes/user.js";
@@ -52,8 +54,22 @@ import MerchantFeedRoutes from "./src/routes/merchantFeed.js";
 import PublicLeadRoutes from "./src/routes/publicLeads.js";
 import StorefrontRoutes from "./src/routes/storefront.js";
 import CRMWhatsAppRoutes from "./src/routes/crm/whatsapp.js";
+import AIRoutes from "./src/routes/ai.js";
+import CRMAIRoutes from "./src/routes/crm/ai.js";
+import CRMScheduledJobRoutes from "./src/routes/crm/scheduledJobs.js";
 
 const app = express();
+
+// Behind a reverse proxy/load balancer, set TRUST_PROXY to the number of
+// proxy hops (usually 1) so req.ip is the real client IP. Per-IP limits
+// (storefront AI quota, rate limiters) depend on it.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set(
+    "trust proxy",
+    Number.isInteger(hops) ? hops : process.env.TRUST_PROXY,
+  );
+}
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -137,6 +153,7 @@ app.use("/v1/analytics", AnalyticsRoutes);
 app.use("/v1/merchant", MerchantFeedRoutes);
 app.use("/v1/leads", PublicLeadRoutes);
 app.use("/v1/storefront", StorefrontRoutes);
+app.use("/v1/ai", AIRoutes);
 
 app.use("/v1/invoices/report", invoiceReportRoutes);
 app.use("/v1/crm", invoiceRoutes);
@@ -154,6 +171,8 @@ app.use("/v1/crm/leads", CRMLeadRoutes);
 app.use("/v1/crm/activities", CRMActivityRoutes);
 app.use("/v1/crm/deals", CRMDealRoutes);
 app.use("/v1/crm/whatsapp", CRMWhatsAppRoutes);
+app.use("/v1/crm/ai", CRMAIRoutes);
+app.use("/v1/crm/jobs", CRMScheduledJobRoutes);
 app.use("/v1/admin", AccessControlRoutes);
 app.use("/v1/admin/coupons", AdminCouponRoutes);
 app.use("/v1/admin", AdminReferralRoutes);
@@ -169,9 +188,21 @@ const swaggerSetup = async () => {
   try {
     const swaggerPath = path.resolve("./swagger-output.json");
     const swaggerData = await fs.readFile(swaggerPath, "utf8");
-    const swaggerDocument = JSON.parse(swaggerData);
+    const swaggerDocument = await applyRouteGroups(
+      applyCategoryDocs(JSON.parse(swaggerData)),
+    );
 
-    app.use("/v1/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+    app.use(
+      "/v1/api-docs",
+      swaggerUi.serve,
+      swaggerUi.setup(swaggerDocument, {
+        swaggerOptions: {
+          tagsSorter: "alpha",
+          operationsSorter: "alpha",
+          docExpansion: "none",
+        },
+      }),
+    );
   } catch (error) {
     console.error("Error loading Swagger JSON:", error);
   }

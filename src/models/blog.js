@@ -110,6 +110,20 @@ const BlogSchema = new mongoose.Schema({
       },
     },
   ],
+  // Blogs saved before this field existed have no status and are treated as
+  // published; public queries filter with { status: { $ne: "draft" } }.
+  status: {
+    type: String,
+    enum: ["draft", "published"],
+    default: "published",
+    index: true,
+  },
+  // "ai" for drafts written by the daily Gemini job.
+  generatedBy: {
+    type: String,
+    enum: ["staff", "ai"],
+    default: "staff",
+  },
   createdAt: {
     type: Date,
     default: Date.now,

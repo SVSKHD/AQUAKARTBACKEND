@@ -4,6 +4,7 @@ import AquaProduct from "../models/product.js";
 import AquaCategory from "../models/category.js";
 import AquaSubCategory from "../models/sub-category.js";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
+import { cleanProductReference as cleanObjectIdField } from "../utils/productReferences.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -62,7 +63,11 @@ const streamUpload = (buffer, folder = "products", resourceType = "auto") =>
     stream.end(buffer);
   });
 
-const uploadDataUrl = async (dataUrl, folder = "products", resourceType = "image") => {
+const uploadDataUrl = async (
+  dataUrl,
+  folder = "products",
+  resourceType = "image",
+) => {
   try {
     const result = await cloudinary.v2.uploader.upload(dataUrl, {
       folder,
@@ -135,7 +140,11 @@ const toArray = (value) => {
 const isDataUrl = (value) =>
   typeof value === "string" && /^data:[\w/+.-]+;base64,/.test(value);
 
-const normalizeBodyMedia = async (mediaInput, folder, resourceType = "image") => {
+const normalizeBodyMedia = async (
+  mediaInput,
+  folder,
+  resourceType = "image",
+) => {
   const mediaItems = toArray(mediaInput);
   const normalized = [];
 
@@ -156,7 +165,8 @@ const normalizeBodyMedia = async (mediaInput, folder, resourceType = "image") =>
       continue;
     }
 
-    const url = item.secure_url || item.url || item.src || item.dataUrl || item.base64;
+    const url =
+      item.secure_url || item.url || item.src || item.dataUrl || item.base64;
 
     if (isDataUrl(url)) {
       normalized.push(await uploadDataUrl(url, folder, resourceType));
@@ -165,9 +175,13 @@ const normalizeBodyMedia = async (mediaInput, folder, resourceType = "image") =>
 
     if (url) {
       normalized.push({
-        id: item.id || item.public_id || `external_${Date.now()}_${normalized.length}`,
+        id:
+          item.id ||
+          item.public_id ||
+          `external_${Date.now()}_${normalized.length}`,
         secure_url: url,
-        delivery_url: item.delivery_url || CloudinaryUtils.cloudinaryDeliveryUrl(url),
+        delivery_url:
+          item.delivery_url || CloudinaryUtils.cloudinaryDeliveryUrl(url),
       });
     }
   }
@@ -183,12 +197,6 @@ const parseBoolean = (value) => {
   if (["false", "0", "no", "off"].includes(value.toLowerCase())) return false;
 
   return value;
-};
-
-const cleanObjectIdField = (value) => {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  return String(value).trim();
 };
 
 const buildProductPayload = (body, extraPayload = {}) => {
@@ -213,7 +221,11 @@ const buildProductPayload = (body, extraPayload = {}) => {
     "discountPrice",
     "dpPrice",
   ].forEach((field) => {
-    if (payload[field] !== undefined && payload[field] !== null && payload[field] !== "") {
+    if (
+      payload[field] !== undefined &&
+      payload[field] !== null &&
+      payload[field] !== ""
+    ) {
       payload[field] = Number(payload[field]);
     }
   });
@@ -299,7 +311,7 @@ const validateProductPayload = (body, { partial = false } = {}) => {
     blog: body.blog,
   };
   Object.entries(referenceValues).forEach(([field, value]) => {
-    if (value && !isValidObjectId(String(value).trim())) {
+    if (value && !isValidObjectId(cleanObjectIdField(value))) {
       errors[field] = `Invalid ${field} id`;
     }
   });
@@ -347,8 +359,16 @@ const CreateProduct = async (req, res) => {
   try {
     const photos = req.files?.photos || [];
     const arPhotos = req.files?.ar || [];
-    const bodyPhotos = await normalizeBodyMedia(req.body.photos, "products", "image");
-    const bodyArPhotos = await normalizeBodyMedia(req.body.arPhotos || req.body.ar, "ar_products", "auto");
+    const bodyPhotos = await normalizeBodyMedia(
+      req.body.photos,
+      "products",
+      "image",
+    );
+    const bodyArPhotos = await normalizeBodyMedia(
+      req.body.arPhotos || req.body.ar,
+      "ar_products",
+      "auto",
+    );
 
     const totalPhotos = photos.length + bodyPhotos.length;
     const totalArPhotos = arPhotos.length + bodyArPhotos.length;
@@ -356,17 +376,26 @@ const CreateProduct = async (req, res) => {
     if (totalPhotos === 0) {
       return res
         .status(400)
-        .json({ success: false, message: "At least one product image is required" });
+        .json({
+          success: false,
+          message: "At least one product image is required",
+        });
     }
     if (totalPhotos > 10) {
       return res
         .status(400)
-        .json({ success: false, message: "A maximum of 10 product images is allowed" });
+        .json({
+          success: false,
+          message: "A maximum of 10 product images is allowed",
+        });
     }
     if (totalArPhotos > 5) {
       return res
         .status(400)
-        .json({ success: false, message: "A maximum of 5 AR files is allowed" });
+        .json({
+          success: false,
+          message: "A maximum of 5 AR files is allowed",
+        });
     }
 
     const { isValid, errors } = validateProductPayload(req.body);
@@ -432,7 +461,9 @@ const updateProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    const { isValid, errors } = validateProductPayload(req.body, { partial: true });
+    const { isValid, errors } = validateProductPayload(req.body, {
+      partial: true,
+    });
     if (!isValid) {
       return res
         .status(400)
@@ -442,8 +473,16 @@ const updateProduct = async (req, res) => {
     const files = req.files || {};
     const newPhotos = files.photos || [];
     const newArPhotos = files.ar || [];
-    const bodyPhotos = await normalizeBodyMedia(req.body.photos, "products", "image");
-    const bodyArPhotos = await normalizeBodyMedia(req.body.arPhotos || req.body.ar, "ar_products", "auto");
+    const bodyPhotos = await normalizeBodyMedia(
+      req.body.photos,
+      "products",
+      "image",
+    );
+    const bodyArPhotos = await normalizeBodyMedia(
+      req.body.arPhotos || req.body.ar,
+      "ar_products",
+      "auto",
+    );
 
     const totalNewPhotos = newPhotos.length + bodyPhotos.length;
     const totalNewArPhotos = newArPhotos.length + bodyArPhotos.length;
@@ -451,12 +490,18 @@ const updateProduct = async (req, res) => {
     if (totalNewPhotos > 10) {
       return res
         .status(400)
-        .json({ success: false, message: "A maximum of 10 product images is allowed" });
+        .json({
+          success: false,
+          message: "A maximum of 10 product images is allowed",
+        });
     }
     if (totalNewArPhotos > 5) {
       return res
         .status(400)
-        .json({ success: false, message: "A maximum of 5 AR files is allowed" });
+        .json({
+          success: false,
+          message: "A maximum of 5 AR files is allowed",
+        });
     }
 
     let photosPayload = product.photos;
@@ -528,7 +573,11 @@ const updateProduct = async (req, res) => {
 
     return res
       .status(200)
-      .json({ success: true, message: "Product updated successfully", data: updated });
+      .json({
+        success: true,
+        message: "Product updated successfully",
+        data: updated,
+      });
   } catch (error) {
     if (error?.statusCode) {
       return res
@@ -594,7 +643,9 @@ const getAllProducts = async (req, res) => {
       }));
     }
 
-    return res.status(200).json({ success: true, count: products.length, data: products });
+    return res
+      .status(200)
+      .json({ success: true, count: products.length, data: products });
   } catch (error) {
     return handleControllerError(error, res, "Failed to fetch products");
   }
@@ -612,7 +663,9 @@ const getLimitedProducts = async (req, res) => {
     }
 
     const products = await AquaProduct.find({}).limit(limit);
-    return res.status(200).json({ success: true, count: products.length, data: products });
+    return res
+      .status(200)
+      .json({ success: true, count: products.length, data: products });
   } catch (error) {
     return handleControllerError(error, res, "Failed to fetch products");
   }
@@ -634,7 +687,9 @@ const getProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    let relatedProducts = await AquaProduct.find({ category: product.category });
+    let relatedProducts = await AquaProduct.find({
+      category: product.category,
+    });
     relatedProducts = relatedProducts.filter(
       (p) => String(p._id) !== String(product._id),
     );
@@ -663,7 +718,9 @@ const getProductByTitle = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    let relatedProducts = await AquaProduct.find({ category: product.category });
+    let relatedProducts = await AquaProduct.find({
+      category: product.category,
+    });
     relatedProducts = relatedProducts.filter(
       (p) => String(p._id) !== String(product._id),
     );
@@ -683,7 +740,10 @@ const getProductByQuery = async (req, res) => {
     if (!searchField || !value) {
       return res
         .status(400)
-        .json({ success: false, message: "Both searchField and value are required" });
+        .json({
+          success: false,
+          message: "Both searchField and value are required",
+        });
     }
 
     const allowedFields = [
@@ -701,9 +761,9 @@ const getProductByQuery = async (req, res) => {
       });
     }
 
-    const product = await AquaProduct.findOne({ [searchField]: value }).populate(
-      "category",
-    );
+    const product = await AquaProduct.findOne({
+      [searchField]: value,
+    }).populate("category");
 
     if (!product) {
       return res
@@ -711,7 +771,9 @@ const getProductByQuery = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    let relatedProducts = await AquaProduct.find({ category: product.category });
+    let relatedProducts = await AquaProduct.find({
+      category: product.category,
+    });
     relatedProducts = relatedProducts.filter(
       (p) => String(p._id) !== String(product._id),
     );
@@ -749,14 +811,20 @@ const addRatingsComments = async (req, res) => {
     if (comment.length > 1000) {
       return res
         .status(400)
-        .json({ success: false, message: "Comment must not exceed 1000 characters" });
+        .json({
+          success: false,
+          message: "Comment must not exceed 1000 characters",
+        });
     }
 
     const parsedRating = Number(rating);
     if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
       return res
         .status(400)
-        .json({ success: false, message: "Rating must be a number between 1 and 5" });
+        .json({
+          success: false,
+          message: "Rating must be a number between 1 and 5",
+        });
     }
 
     if (!req.user?._id) {
@@ -897,14 +965,20 @@ const updateRatingsComments = async (req, res) => {
     if (comment.length > 1000) {
       return res
         .status(400)
-        .json({ success: false, message: "Comment must not exceed 1000 characters" });
+        .json({
+          success: false,
+          message: "Comment must not exceed 1000 characters",
+        });
     }
 
     const parsedRating = Number(rating);
     if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
       return res
         .status(400)
-        .json({ success: false, message: "Rating must be a number between 1 and 5" });
+        .json({
+          success: false,
+          message: "Rating must be a number between 1 and 5",
+        });
     }
 
     if (!req.user?._id) {
@@ -926,7 +1000,10 @@ const updateRatingsComments = async (req, res) => {
     if (!existingReview) {
       return res
         .status(404)
-        .json({ success: false, message: "You have not reviewed this product yet" });
+        .json({
+          success: false,
+          message: "You have not reviewed this product yet",
+        });
     }
 
     existingReview.rating = parsedRating;
@@ -970,7 +1047,10 @@ const deleteReview = async (req, res) => {
     if (!reviewId) {
       return res
         .status(400)
-        .json({ success: false, message: "reviewId query parameter is required" });
+        .json({
+          success: false,
+          message: "reviewId query parameter is required",
+        });
     }
     if (!isValidObjectId(reviewId)) {
       return res

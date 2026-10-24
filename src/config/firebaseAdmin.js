@@ -1,4 +1,12 @@
-import admin from "firebase-admin";
+// Modular entry points: under ESM ("type": "module") the default
+// `firebase-admin` namespace import has no `apps`, so `admin.apps.length` threw.
+import {
+  applicationDefault,
+  cert,
+  getApps,
+  initializeApp,
+} from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
 const requiredInlineEnv = [
   "FIREBASE_PROJECT_ID",
@@ -16,13 +24,13 @@ const configurationError = () => {
 
 const getCredential = () => {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return admin.credential.applicationDefault();
+    return applicationDefault();
   }
 
   const missingEnv = requiredInlineEnv.filter((key) => !process.env[key]);
   if (missingEnv.length) throw configurationError();
 
-  return admin.credential.cert({
+  return cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
@@ -33,10 +41,9 @@ export const initializeFirebaseAdmin = () => {
   if (firebaseAdmin) return firebaseAdmin;
 
   try {
-    if (!admin.apps.length) {
-      admin.initializeApp({ credential: getCredential() });
-    }
-    firebaseAdmin = admin;
+    const app = getApps()[0] || initializeApp({ credential: getCredential() });
+    // Same shape callers already use: getFirebaseAdmin().auth().verifyIdToken()
+    firebaseAdmin = { app, auth: () => getAuth(app) };
     return firebaseAdmin;
   } catch (error) {
     if (error.statusCode === 503) throw error;

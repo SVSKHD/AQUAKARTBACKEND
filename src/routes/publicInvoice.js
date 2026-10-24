@@ -4,6 +4,7 @@ import publicInvoiceController from "../controllers/publicInvoice.js";
 import requireInvoiceAccess from "../middleware/invoiceAccess.js";
 import verifyFirebaseToken from "../middleware/firebaseAuth.js";
 import requireGoogleBackendSession from "../middleware/googleSession.js";
+import userAuth from "../middleware/user.js";
 
 const router = express.Router();
 router.use((_req, res, next) => {
@@ -52,6 +53,8 @@ router.post(
   verifyFirebaseToken,
   publicInvoiceController.loginDirectAccess,
 );
+// Before "/:id" so "mine" isn't read as an invoice id. Signed-in customer only.
+router.get("/mine", userAuth.isLoggedIn, publicInvoiceController.listMine);
 router.get("/", requireInvoiceAccess, publicInvoiceController.list);
 router.get("/:id", requireInvoiceAccess, publicInvoiceController.getById);
 router.post(
