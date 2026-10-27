@@ -124,6 +124,23 @@ const BlogSchema = new mongoose.Schema({
     enum: ["staff", "ai"],
     default: "staff",
   },
+  // Editorial provenance is CRM-only and excluded from normal public queries.
+  sourceAiChat: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "AquaAiChatSession",
+    select: false,
+    index: true,
+  },
+  sourceAiQuestions: {
+    type: [mongoose.Schema.Types.ObjectId],
+    select: false,
+    default: undefined,
+  },
+  sourceAiRequestedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "AquaAdminUser",
+    select: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

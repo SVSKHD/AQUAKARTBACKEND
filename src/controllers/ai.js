@@ -16,6 +16,7 @@ import {
   refundQuota,
 } from "../services/aiQuota.js";
 import { getCatalogueInstruction } from "../services/aiCatalogue.js";
+import { loadCrmChat, saveCrmTurn } from "../services/crm/aiChats.js";
 
 const ECOM_LIMITS = { promptChars: 2000, historyTurns: 10, outputTokens: 800 };
 // Guests also get fewer questions per day (see services/aiQuota.js).
@@ -414,8 +415,8 @@ const listChatHistory = async (req, res) => {
     const filter = { user: req.user._id };
     const [sessions, total] = await Promise.all([
       AiChatSession.find(filter)
-        .select("title messageCount lastMessageAt createdAt")
-        .sort({ lastMessageAt: -1 })
+        .select("title messageCount lastMessageAt createdAt pinned")
+        .sort({ pinned: -1, lastMessageAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
@@ -475,6 +476,63 @@ const deleteChatSession = async (req, res) => {
   }
 };
 
+export const CHAT_TITLE_MAX = 80;
+
+// Rename and/or pin one of the customer's own saved chats. Body: { title?, pinned? }.
+const updateChatSession = async (req, res) => {
+  const filter = findOwnSession(req);
+  if (!filter) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Chat session not found" });
+  }
+  const { title, pinned } = req.body || {};
+  const $set = {};
+  if (title !== undefined) {
+    const clean =
+      typeof title === "string" ? title.replace(/\s+/g, " ").trim() : "";
+    if (!clean || clean.length > CHAT_TITLE_MAX) {
+      return res.status(400).json({
+        success: false,
+        message: `Title must be 1–${CHAT_TITLE_MAX} characters`,
+      });
+    }
+    $set.title = clean;
+  }
+  if (pinned !== undefined) {
+    if (typeof pinned !== "boolean") {
+      return res
+        .status(400)
+        .json({ success: false, message: "pinned must be true or false" });
+    }
+    $set.pinned = pinned;
+    $set.pinnedAt = pinned ? new Date() : null;
+  }
+  if (!Object.keys($set).length) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Nothing to update" });
+  }
+  try {
+    const session = await AiChatSession.findOneAndUpdate(
+      filter,
+      { $set },
+      { new: true, projection: "title messageCount lastMessageAt pinned" },
+    ).lean();
+    if (!session) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Chat session not found" });
+    }
+    return res.json({ success: true, data: session });
+  } catch (error) {
+    console.error("AI chat history update failed:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update chat session" });
+  }
+};
+
 const clearChatHistory = async (req, res) => {
   try {
     const { deletedCount } = await AiChatSession.deleteMany({
@@ -494,12 +552,21 @@ const crmGenerate = async (req, res) => {
   if (error) return res.status(400).json({ success: false, message: error });
 
   try {
+    const chat = await loadCrmChat(req.user, req.body.sessionId);
+    if (chat)
+      options.history = sanitizeHistory(
+        chat.messages,
+        CRM_LIMITS.historyTurns,
+        CRM_LIMITS.promptChars,
+      );
     const result = await generateContent(options);
+    const sessionId = await saveCrmTurn(req.user, chat, options, result.text);
     return res.json({
       success: true,
       data: {
         reply: result.text,
         ...(options.thinking ? { thoughts: result.thoughts } : {}),
+        sessionId,
         model: result.model,
         finishReason: result.finishReason,
         usage: result.usage,
@@ -510,15 +577,28 @@ const crmGenerate = async (req, res) => {
   }
 };
 
-const crmGenerateStream = (req, res) => {
+const crmGenerateStream = async (req, res) => {
   const { options, error } = crmOptions(req.body);
   if (error) return res.status(400).json({ success: false, message: error });
-  return streamToClient(req, res, options, (done) => ({
+  let chat;
+  try {
+    chat = await loadCrmChat(req.user, req.body.sessionId);
+    if (chat)
+      options.history = sanitizeHistory(
+        chat.messages,
+        CRM_LIMITS.historyTurns,
+        CRM_LIMITS.promptChars,
+      );
+  } catch (caught) {
+    return sendError(res, caught);
+  }
+  return streamToClient(req, res, options, async (done) => ({
     reply: done.reply,
     thoughts: done.thoughts,
     model: done.model,
     finishReason: done.finishReason,
     usage: done.usage,
+    sessionId: await saveCrmTurn(req.user, chat, options, done.reply),
   }));
 };
 
@@ -533,6 +613,7 @@ const AIOperations = {
   carryQuota,
   listChatHistory,
   getChatSession,
+  updateChatSession,
   deleteChatSession,
   clearChatHistory,
   crmGenerate,

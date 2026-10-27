@@ -27,6 +27,12 @@ router.get(
   userAuth.isLoggedIn,
   AIOperations.getChatSession,
 );
+// Rename / pin: { title?, pinned? }
+router.patch(
+  "/chat/history/:id",
+  userAuth.isLoggedIn,
+  AIOperations.updateChatSession,
+);
 router.delete(
   "/chat/history/:id",
   userAuth.isLoggedIn,

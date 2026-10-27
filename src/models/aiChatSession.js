@@ -25,11 +25,15 @@ const AiChatSessionSchema = new mongoose.Schema(
     messages: { type: [ChatMessageSchema], default: [] },
     messageCount: { type: Number, default: 0 },
     lastMessageAt: { type: Date, default: Date.now },
+    // Pinned chats list first in the customer's history.
+    pinned: { type: Boolean, default: false },
+    pinnedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 AiChatSessionSchema.index({ user: 1, lastMessageAt: -1 });
+AiChatSessionSchema.index({ user: 1, pinned: -1, lastMessageAt: -1 });
 
 export default mongoose.models.AquaAiChatSession ||
   mongoose.model("AquaAiChatSession", AiChatSessionSchema);

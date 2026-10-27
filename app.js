@@ -6,6 +6,8 @@ import multer from "multer";
 import swaggerUi from "swagger-ui-express";
 import { applyCategoryDocs } from "./src/docs/categories.js";
 import { applyRouteGroups } from "./src/docs/routeGroups.js";
+import { applyCrmAiDocs } from "./src/docs/crmAi.js";
+import { applyCrmCustomerAiDocs } from "./src/docs/crmCustomerAi.js";
 import { promises as fs } from "fs";
 import path from "path";
 import userRoutes from "./src/routes/user.js";
@@ -189,7 +191,9 @@ const swaggerSetup = async () => {
     const swaggerPath = path.resolve("./swagger-output.json");
     const swaggerData = await fs.readFile(swaggerPath, "utf8");
     const swaggerDocument = await applyRouteGroups(
-      applyCategoryDocs(JSON.parse(swaggerData)),
+      applyCrmCustomerAiDocs(
+        applyCrmAiDocs(applyCategoryDocs(JSON.parse(swaggerData))),
+      ),
     );
 
     app.use(

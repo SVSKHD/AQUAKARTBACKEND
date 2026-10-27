@@ -142,7 +142,48 @@ const getRedemptions = async (req, res) => {
   return res.json({ success: true, data });
 };
 
+// Public: coupons a shopper can try right now, so the storefront can point at
+// the one that saves the most. Account-targeted and used-up coupons are left
+// out; checkout still validates whichever code is applied.
+const publicFields =
+  "code description discountType discountValue maxDiscount minimumOrder endsAt firstOrderOnly productIds categoryIds";
+const getActiveCoupons = async (_req, res) => {
+  try {
+    const now = new Date();
+    const rows = await Coupon.find({
+      status: "active",
+      startsAt: { $lte: now },
+      endsAt: { $gte: now },
+      $or: [{ userIds: { $exists: false } }, { userIds: { $size: 0 } }],
+    })
+      .select(`${publicFields} usageLimit usageCount`)
+      .sort({ endsAt: 1 })
+      .limit(50)
+      .maxTimeMS(5000)
+      .lean();
+    const data = rows
+      .filter((c) => !c.usageLimit || (c.usageCount || 0) < c.usageLimit)
+      .map((c) => ({
+        code: c.code,
+        description: c.description || "",
+        discountType: c.discountType,
+        discountValue: c.discountValue,
+        maxDiscount: c.maxDiscount ?? null,
+        minimumOrder: c.minimumOrder || 0,
+        endsAt: c.endsAt,
+        firstOrderOnly: !!c.firstOrderOnly,
+        productIds: (c.productIds || []).map(String),
+        categoryIds: (c.categoryIds || []).map(String),
+      }));
+    res.set("Cache-Control", "public, max-age=300");
+    return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export default {
+  getActiveCoupons,
   createCoupon,
   getCoupons,
   getCouponById,

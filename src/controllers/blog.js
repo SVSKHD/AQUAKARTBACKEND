@@ -181,7 +181,14 @@ const getBlogs = async (req, res) => {
 const getBlogById = async (req, res) => {
   const { id } = req.params;
   try {
-    const blogById = await AquaBlog.findById(id);
+    const blogById = await AquaBlog.findOne({
+      _id: id,
+      ...blogStatusFilter(req.query.status),
+    });
+    if (!blogById)
+      return res
+        .status(404)
+        .json({ success: false, message: "Blog not found" });
     const relatedProducts = await AquaProduct.find({
       category: blogById.category,
     });

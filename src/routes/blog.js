@@ -20,7 +20,7 @@ const blogStatusAccess = (req, res, next) =>
     : next();
 
 router.get("/all-blogs", blogStatusAccess, BlogOperations.getBlogs);
-router.get("/blog/:id", BlogOperations.getBlogById);
+router.get("/blog/:id", blogStatusAccess, BlogOperations.getBlogById);
 router.get("/blog/:title", BlogOperations.getBlogByTitle);
 router.get("/blog-slug/:slug", BlogOperations.getBlogBySlug);
 router.post(

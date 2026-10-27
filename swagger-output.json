@@ -2060,13 +2060,20 @@
     },
     "/v1/blog/{id}": {
       "get": {
-        "description": "",
+        "description": "Public lookup excludes drafts. To load a draft, CRM administrators supply ?status=draft or ?status=all with an admin Bearer token.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string",
+            "enum": ["published", "draft", "all"],
+            "description": "draft/all requires administrator authentication"
           }
         ],
         "responses": {
@@ -2075,6 +2082,9 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "404": {
+            "description": "Blog not found or not published"
           }
         },
         "tags": ["Blog"]
@@ -2647,6 +2657,20 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        },
+        "tags": ["Coupons"]
+      }
+    },
+    "/v1/coupons/active": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "500": {
+            "description": "Internal Server Error"
           }
         },
         "tags": ["Coupons"]
@@ -3917,6 +3941,55 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "tags": ["AI"]
+      },
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "example": "any"
+                },
+                "pinned": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -9425,33 +9498,1295 @@
     },
     "/v1/crm/ai/generate": {
       "post": {
-        "description": "",
+        "tags": ["CRM / AI"],
+        "summary": "Generate a reply and save its completed turn",
+        "description": "Staff-only, no daily customer quota. Uses the last 30 stored messages for context. A successful save returns sessionId. Archived chats must be restored. A concurrent completed turn or deletion returns 409; reload before retrying. Custom generation settings must be supplied on each request.",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["application/json"],
+        "consumes": ["application/json"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["prompt"],
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000,
+                  "example": "Draft a customer follow-up"
+                },
+                "sessionId": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$",
+                  "example": "6710a1b2c3d4e5f6a7b8c9d0",
+                  "description": "Continue your chat. Server history replaces client history. Omit to create a chat after the first successful reply."
+                },
+                "history": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string",
+                        "pattern": "^[a-fA-F0-9]{24}$",
+                        "example": "6710a1b2c3d4e5f6a7b8c9d0"
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": ["user", "model"]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  },
+                  "description": "Optional import/context for a new conversation only. Last 30 entries, each capped to 20,000 characters."
+                },
+                "systemInstruction": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "default": 0.7
+                },
+                "json": {
+                  "type": "boolean"
+                },
+                "thinking": {
+                  "description": "false/off, true (medium), or string medium/high",
+                  "example": "medium"
+                }
+              }
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/CrmGenerateResult"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Bad Request"
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
           },
           "401": {
-            "description": "Unauthorized"
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "409": {
+            "description": "Chat is archived or changed during generation",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "429": {
+            "description": "AI provider rate limit (not a CRM daily quota)",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "502": {
+            "description": "AI provider failure",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "503": {
+            "description": "AI not configured or unavailable",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
           }
-        },
-        "tags": ["CRM / AI"]
+        }
       }
     },
     "/v1/crm/ai/generate/stream": {
       "post": {
-        "description": "",
+        "tags": ["CRM / AI"],
+        "summary": "Stream a reply and save its completed turn",
+        "description": "Staff-only, no daily customer quota. Uses the last 30 stored messages for context. A successful save returns sessionId. Archived chats must be restored. A concurrent completed turn or deletion returns 409; reload before retrying. Custom generation settings must be supplied on each request.",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["text/event-stream", "application/json"],
+        "consumes": ["application/json"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["prompt"],
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20000,
+                  "example": "Draft a customer follow-up"
+                },
+                "sessionId": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$",
+                  "example": "6710a1b2c3d4e5f6a7b8c9d0",
+                  "description": "Continue your chat. Server history replaces client history. Omit to create a chat after the first successful reply."
+                },
+                "history": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string",
+                        "pattern": "^[a-fA-F0-9]{24}$",
+                        "example": "6710a1b2c3d4e5f6a7b8c9d0"
+                      },
+                      "role": {
+                        "type": "string",
+                        "enum": ["user", "model"]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  },
+                  "description": "Optional import/context for a new conversation only. Last 30 entries, each capped to 20,000 characters."
+                },
+                "systemInstruction": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "default": 0.7
+                },
+                "json": {
+                  "type": "boolean"
+                },
+                "thinking": {
+                  "description": "false/off, true (medium), or string medium/high",
+                  "example": "medium"
+                }
+              }
+            }
+          }
+        ],
         "responses": {
+          "200": {
+            "description": "SSE: thought {index,title,text}; delta {text}; done {reply,thoughts,model,finishReason,usage,sessionId}. done is sent only after persistence succeeds. Before streaming starts errors use JSON/HTTP status; afterwards error {status,message} uses SSE on HTTP 200. Partial/error replies are not saved.",
+            "schema": {
+              "type": "string"
+            }
+          },
           "400": {
-            "description": "Bad Request"
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
           },
           "401": {
-            "description": "Unauthorized"
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "409": {
+            "description": "Chat is archived or changed during generation",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "429": {
+            "description": "AI provider rate limit (not a CRM daily quota)",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "502": {
+            "description": "AI provider failure",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "503": {
+            "description": "AI not configured or unavailable",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
           }
-        },
-        "tags": ["CRM / AI"]
+        }
+      }
+    },
+    "/v1/crm/ai/chats": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "List and search your CRM chats",
+        "description": "Pinned first, then lastMessageAt descending, then _id descending. List responses omit messages.",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "default": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "type": "string",
+            "maxLength": 120,
+            "description": "Literal, case-insensitive title search"
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "type": "boolean",
+            "description": "Omit to include pinned and unpinned chats"
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "type": "boolean",
+            "default": false,
+            "description": "true returns archived chats only"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/CrmChatSummary"
+                  }
+                },
+                "pagination": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "pages": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["CRM / AI"],
+        "summary": "Create an empty CRM conversation",
+        "description": "",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["application/json"],
+        "consumes": ["application/json"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "example": "Customer follow-ups"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/CrmChat"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/ai/chats/{id}": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "Read your chat and its message history",
+        "description": "Retains the latest 200 messages. No TTL. Includes archived chats; never reads customer or invoice-draft sessions.",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "x-example": "6710a1b2c3d4e5f6a7b8c9d0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/CrmChat"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["CRM / AI"],
+        "summary": "Rename, pin/unpin, archive/restore your chat",
+        "description": "At least one recognized field is required. Omitted fields are unchanged. Pinning stamps pinnedAt; unpinning clears it. Returns metadata without messages.",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["application/json"],
+        "consumes": ["application/json"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "x-example": "6710a1b2c3d4e5f6a7b8c9d0"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "pinned": {
+                  "type": "boolean"
+                },
+                "archived": {
+                  "type": "boolean"
+                }
+              },
+              "minProperties": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/CrmChatSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["CRM / AI"],
+        "summary": "Permanently delete your chat",
+        "description": "",
+        "security": [
+          {
+            "CrmStaffToken": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "x-example": "6710a1b2c3d4e5f6a7b8c9d0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "404": {
+            "description": "Chat not found or owned by another staff account",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          },
+          "500": {
+            "description": "Persistence or generation failed",
+            "schema": {
+              "$ref": "#/definitions/CrmChatError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/ai/users": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "Search customer users with AI chat statistics",
+        "description": "Safe profile allowlist only; passwords, OTPs and provider payloads are never selected. All users are eligible, including users with zero saved chats.",
+        "security": [
+          {
+            "CrmCustomerAiStaff": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "default": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "type": "string",
+            "maxLength": 120,
+            "description": "Literal name/email search or exact phone number"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/CrmAiCustomer"
+                  }
+                },
+                "pagination": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "pages": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, pagination, instructions or question selection",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "403": {
+            "description": "Insufficient permission",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "404": {
+            "description": "User or user-owned chat not found",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/ai/users/{userId}": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "Read a customer profile and chat totals",
+        "description": "",
+        "security": [
+          {
+            "CrmCustomerAiStaff": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/CrmAiCustomer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, pagination, instructions or question selection",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "403": {
+            "description": "Insufficient permission",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "404": {
+            "description": "User or user-owned chat not found",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/ai/users/{userId}/chats": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "List this customer's saved storefront chats",
+        "description": "Newest activity first. Does not include staff-owned CRM chats or unsaved guest chats.",
+        "security": [
+          {
+            "CrmCustomerAiStaff": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "default": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/CrmCustomerChatSummary"
+                  }
+                },
+                "pagination": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "pages": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, pagination, instructions or question selection",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "403": {
+            "description": "Insufficient permission",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "404": {
+            "description": "User or user-owned chat not found",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/ai/users/{userId}/chats/{chatId}": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "Read a customer's questions and AI answers",
+        "description": "Returns retained messages and answered qa pairs with questionId/answerId. Only a chat whose user matches userId can be loaded.",
+        "security": [
+          {
+            "CrmCustomerAiStaff": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          {
+            "name": "chatId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/CrmCustomerChat"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, pagination, instructions or question selection",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "403": {
+            "description": "Insufficient permission",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "404": {
+            "description": "User or user-owned chat not found",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/ai/users/{userId}/chats/{chatId}/blog-drafts": {
+      "get": {
+        "tags": ["CRM / AI"],
+        "summary": "List blogs generated from this customer chat",
+        "description": "Requires blogs.manage in addition to customer/chat read permissions. Returns metadata without article body, including status of subsequently published drafts.",
+        "security": [
+          {
+            "CrmCustomerAiStaff": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          {
+            "name": "chatId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000,
+            "default": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/CrmCustomerBlog"
+                  }
+                },
+                "pagination": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "pages": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, pagination, instructions or question selection",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "403": {
+            "description": "Insufficient permission",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "404": {
+            "description": "User or user-owned chat not found",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["CRM / AI"],
+        "summary": "Generate a draft blog from selected customer Q/A",
+        "description": "Requires blogs.manage. Uses stored exchanges, redacts known names and common contact/reference patterns before AI generation, then saves an unpublished draft with hidden source metadata and an audit entry. Review facts and remaining personal details before publishing with existing blog editor. Each POST creates a separate draft; serialize clicks. Guests/trimmed messages cannot be recovered.",
+        "security": [
+          {
+            "CrmCustomerAiStaff": []
+          }
+        ],
+        "produces": ["application/json"],
+        "consumes": ["application/json"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          {
+            "name": "chatId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "questionIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-fA-F0-9]{24}$"
+                  },
+                  "description": "User-role message IDs from this chat's qa list. Omit to use its latest 20 complete exchanges."
+                },
+                "instructions": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "example": "Write a practical hard-water troubleshooting guide"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Draft created; never auto-published",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "blog": {
+                      "$ref": "#/definitions/CrmCustomerBlog"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "chatId": {
+                          "type": "string",
+                          "pattern": "^[a-fA-F0-9]{24}$"
+                        },
+                        "questionIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-fA-F0-9]{24}$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, pagination, instructions or question selection",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "401": {
+            "description": "Staff authentication required",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "403": {
+            "description": "Insufficient permission",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "404": {
+            "description": "User or user-owned chat not found",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "429": {
+            "description": "AI provider rate limit",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "502": {
+            "description": "Invalid/insufficient AI output or provider failure",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          },
+          "503": {
+            "description": "AI not configured or unavailable",
+            "schema": {
+              "$ref": "#/definitions/CrmCustomerAiError"
+            }
+          }
+        }
       }
     },
     "/v1/crm/ai/invoice/products": {
@@ -10881,6 +12216,388 @@
           "type": "string"
         }
       }
+    },
+    "CrmChatSummary": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$",
+          "example": "6710a1b2c3d4e5f6a7b8c9d0"
+        },
+        "staff": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$",
+          "example": "6710a1b2c3d4e5f6a7b8c9d0"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "pinnedAt": {
+          "type": "string",
+          "format": "date-time",
+          "x-nullable": true
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "messageCount": {
+          "type": "integer",
+          "description": "Total stored/imported message count including messages trimmed from retention."
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "CrmChat": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$",
+          "example": "6710a1b2c3d4e5f6a7b8c9d0"
+        },
+        "staff": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$",
+          "example": "6710a1b2c3d4e5f6a7b8c9d0"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "pinnedAt": {
+          "type": "string",
+          "format": "date-time",
+          "x-nullable": true
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "messageCount": {
+          "type": "integer",
+          "description": "Total stored/imported message count including messages trimmed from retention."
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "properties": {
+              "_id": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{24}$",
+                "example": "6710a1b2c3d4e5f6a7b8c9d0"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["user", "model"]
+              },
+              "text": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CrmChatError": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "example": false
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "CrmGenerateResult": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$",
+          "example": "6710a1b2c3d4e5f6a7b8c9d0"
+        },
+        "reply": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "finishReason": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "thoughts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "CrmAiCustomer": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "number"
+        },
+        "photoURL": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "loginCount": {
+          "type": "number"
+        },
+        "emailVerified": {
+          "type": "boolean"
+        },
+        "ai": {
+          "type": "object",
+          "properties": {
+            "chats": {
+              "type": "integer"
+            },
+            "messages": {
+              "type": "integer"
+            },
+            "lastMessageAt": {
+              "type": "string",
+              "format": "date-time",
+              "x-nullable": true
+            }
+          }
+        }
+      }
+    },
+    "CrmCustomerChatSummary": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$"
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "messageCount": {
+          "type": "integer"
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "CrmCustomerChat": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$"
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "messageCount": {
+          "type": "integer"
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_id": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{24}$"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["user", "model"]
+              },
+              "text": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "qa": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "questionId": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{24}$"
+              },
+              "answerId": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{24}$"
+              },
+              "question": {
+                "type": "string"
+              },
+              "answer": {
+                "type": "string"
+              },
+              "askedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "answeredAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CrmCustomerBlog": {
+      "type": "object",
+      "properties": {
+        "_id": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{24}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "published"]
+        },
+        "generatedBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "CrmCustomerAiError": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "example": false
+        },
+        "message": {
+          "type": "string"
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "securityDefinitions": {
@@ -10889,6 +12606,18 @@
       "in": "header",
       "name": "Authorization",
       "description": "Enter Bearer <admin JWT>. Requires role 1 or super-admin; disabled staff are denied."
+    },
+    "CrmStaffToken": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "Authorization",
+      "description": "Bearer <staff JWT>. Chats are private to that staff account."
+    },
+    "CrmCustomerAiStaff": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "Authorization",
+      "description": "Bearer <staff JWT>. Review requires customers.read + ai.chats.read. Blog draft actions additionally require blogs.manage. Super-admin/legacy role 1 has access."
     }
   },
   "tags": [

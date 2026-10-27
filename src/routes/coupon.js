@@ -6,6 +6,7 @@ const router = express.Router();
 router.get("/coupon-status", (_req, res) =>
   res.json({ success: true, status: "active" }),
 );
+router.get("/coupons/active", controller.getActiveCoupons);
 router.post(
   "/create-coupon",
   ...requirePermission("coupons.manage"),
