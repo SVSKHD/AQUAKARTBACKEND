@@ -18,6 +18,43 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-10-28
+
+### Public recent-purchases demand feed from invoices
+
+- Request/problem: The e-commerce store needs to show the latest purchases
+  from the shopper's area so customers can see which products are in demand.
+- Changes/result: Added public `GET /v1/storefront/recent-purchases` with
+  optional `area` (literal, case-insensitive address match, max 60 chars),
+  `limit` (1-20, default 10) and `days` (1-90, default 30, by invoice
+  `createdAt`). Quotations are excluded. It returns `recent` purchase lines (product
+  name/slug/id, quantity, locality picked from the free-text address or the
+  requested area, time rounded down to the hour) and `trending`: top 5
+  products by invoice count, plus units. Only address, products and createdAt
+  are selected; names, phones, emails, invoice numbers and full addresses never
+  leave the service. Responses are cacheable (60s, CDN 300s). Added an explicit
+  Swagger contract in the Storefront group.
+- Files: `src/services/storefrontDemand.js`,
+  `src/controllers/storefrontStats.js`, `src/routes/storefront.js`,
+  `src/docs/storefront.js`, `app.js`, `swagger-autogen.js`,
+  `swagger-output.json`, `test/storefrontDemand.test.js`,
+  `docs/PROJECT_MAP.md`.
+- Validation: `node --check` on each changed JS file passed;
+  `node --test test/storefrontDemand.test.js` passed 4/4 (unit tests with
+  mocked Mongoose, no database). `npm run swagger` succeeded and the
+  generated operation has the Storefront tag, the `area`/`limit`/`days` params
+  and 200/500 responses. Full `node --test`: 150/151 passed; the failure
+  (`test/invoiceViews.test.js` "builds separate admin and customer invoice
+  destinations from one id") also fails with this change stashed, so it was
+  already failing. Not run against a live database.
+- Limitations/follow-up: Locality extraction is a heuristic over free-text
+  addresses (last comma/line segment that isn't the city, state, PIN or a house line;
+  falls back to Hyderabad/Secunderabad or null). The `area` filter is an
+  unindexed regex within the date window. Paid status is not filtered,
+  matching `/v1/storefront/stats`. Migrated invoices may carry migration-time
+  `createdAt` values. `swagger-output.json` already had uncommitted changes
+  before this regeneration. The storefront UI does not use the feed yet.
+
 ## 2026-10-26
 
 ### CRM customer AI review and Q/A-to-blog draft workflow

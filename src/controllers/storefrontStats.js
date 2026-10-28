@@ -1,4 +1,8 @@
 import AquaInvoice from "../models/crm/invoice.js";
+import {
+  getRecentDemand,
+  parseDemandQuery,
+} from "../services/storefrontDemand.js";
 
 const getStorefrontStats = async (_req, res) => {
   try {
@@ -103,4 +107,22 @@ const getStorefrontStats = async (_req, res) => {
   }
 };
 
-export default { getStorefrontStats };
+// Anonymous recent purchases and most-bought products, optionally for one area.
+const getRecentPurchases = async (req, res) => {
+  try {
+    const data = await getRecentDemand(parseDemandQuery(req.query));
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=3600",
+    );
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Failed to build recent purchases:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load recent purchases",
+    });
+  }
+};
+
+export default { getStorefrontStats, getRecentPurchases };

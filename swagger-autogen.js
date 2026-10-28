@@ -5,6 +5,7 @@ import { applyCategoryDocs } from "./src/docs/categories.js";
 import { applyRouteGroups } from "./src/docs/routeGroups.js";
 import { applyCrmAiDocs } from "./src/docs/crmAi.js";
 import { applyCrmCustomerAiDocs } from "./src/docs/crmCustomerAi.js";
+import { applyStorefrontDocs } from "./src/docs/storefront.js";
 
 // Swagger configuration
 // const doc = {
@@ -38,7 +39,9 @@ const generateSwaggerDocs = async () => {
     const result = await swaggerAutogen()(outputFile, endpointsFiles);
     const document = JSON.parse(await fs.readFile(outputFile, "utf8"));
     await applyRouteGroups(
-      applyCrmCustomerAiDocs(applyCrmAiDocs(applyCategoryDocs(document))),
+      applyStorefrontDocs(
+        applyCrmCustomerAiDocs(applyCrmAiDocs(applyCategoryDocs(document))),
+      ),
     );
     await fs.writeFile(outputFile, JSON.stringify(document, null, 2) + "\n");
     if (result?.success) {
