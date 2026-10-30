@@ -2,15 +2,20 @@
 
 The daily job uses the invoice purchase date as its schedule anchor.
 
+`GET /v1/service-reminders/mine` lists reminders for invoices the shopper owns,
+using the same rule as `GET /v1/invoices/public/mine`: invoices bound to their
+Firebase UID, plus unclaimed invoices with their Google-verified email. Profile
+phone numbers are not used, because shoppers can set them without verification.
+
 ## Default product schedules
 
-| Product name | Regeneration |
-| --- | --- |
-| Auto 25 | Every calendar month |
-| Auto 40 | Every calendar month |
-| Auto 100L | Every calendar month |
-| Auto Sand Filter | Every calendar month |
-| Bathroom Water Softener | Every 7 days |
+| Product name            | Regeneration         |
+| ----------------------- | -------------------- |
+| Auto 25                 | Every calendar month |
+| Auto 40                 | Every calendar month |
+| Auto 100L               | Every calendar month |
+| Auto Sand Filter        | Every calendar month |
+| Bathroom Water Softener | Every 7 days         |
 
 Every invoice product also receives an annual service reminder unless its
 product record sets `reminderPolicy.annualService` to `false`.

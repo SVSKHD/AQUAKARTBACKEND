@@ -60,6 +60,11 @@ const OrderSchema = new mongoose.Schema(
     shippingMethod: String,
     shippingCost: Number,
     estimatedDelivery: Date,
+    // Slot the shopper picked at checkout; the team confirms it by phone.
+    installation: {
+      day: String, // YYYY-MM-DD
+      slot: String, // e.g. "12 pm – 3 pm"
+    },
     isOrderDelivery: {
       type: Boolean,
     },

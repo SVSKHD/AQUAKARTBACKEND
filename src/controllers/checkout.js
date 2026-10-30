@@ -2,7 +2,10 @@ import CheckoutSession from "../models/checkoutSession.js";
 import Order from "../models/orders.js";
 import Coupon from "../models/coupon.js";
 import CouponRedemption from "../models/couponRedemption.js";
-import { createCheckoutSession } from "../services/checkout.js";
+import {
+  createCheckoutSession,
+  installationFrom,
+} from "../services/checkout.js";
 
 const sessionView = (session) => ({
   id: session._id,
@@ -43,12 +46,10 @@ export const createCodOrder = async (req, res) => {
     expiresAt: { $gt: new Date() },
   });
   if (!session)
-    return res
-      .status(409)
-      .json({
-        success: false,
-        message: "Checkout session is invalid or expired",
-      });
+    return res.status(409).json({
+      success: false,
+      message: "Checkout session is invalid or expired",
+    });
   const address = req.body.shippingAddress;
   if (
     !address ||
@@ -57,12 +58,10 @@ export const createCodOrder = async (req, res) => {
     !address.state ||
     !address.postalCode
   )
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Complete shipping address is required",
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Complete shipping address is required",
+    });
   const order = await Order.create({
     user: req.user._id,
     orderId: `AQOD-${Date.now()}`,
@@ -85,6 +84,7 @@ export const createCodOrder = async (req, res) => {
     shippingAddress: address,
     shippingMethod: "Standard",
     estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    installation: installationFrom(req.body.installation),
     orderStatus: "Processing",
     offerApplied: Boolean(session.couponCode),
     offerAppliedDetails: session.couponCode

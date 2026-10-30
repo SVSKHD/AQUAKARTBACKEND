@@ -21,6 +21,10 @@ const safeUser = (user) => ({
   emailVerified: Boolean(user.emailVerified || user.isEmailVerfied),
   phone: user.phone || null,
   role: user.role,
+  dob: user.dob || null,
+  // The address book is the account's: every device and page reads it from here.
+  addresses: user.addresses || [],
+  selectedAddress: user.selectedAddress || null,
 });
 
 const googleLogin = async (req, res) => {
@@ -134,4 +138,5 @@ const logout = async (req, res) =>
     message: "Signed out successfully",
   });
 
+export { safeUser };
 export default { googleLogin, me, logout };

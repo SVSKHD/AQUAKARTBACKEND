@@ -10,6 +10,7 @@ import {
   verifyPhonePePayment,
 } from "../services/gateways/phonepe.js";
 import { writeAudit } from "../services/audit.js";
+import { installationFrom } from "../services/checkout.js";
 import { qualifyReferralForPaidOrder } from "../services/referrals.js";
 
 const gatewayHandlers = {
@@ -34,7 +35,7 @@ export const methods = async (_req, res) => {
   return res.json({ success: true, data });
 };
 
-const createOrderFromSession = async (session, userId, address) =>
+const createOrderFromSession = async (session, userId, address, installation) =>
   Order.create({
     user: userId,
     orderId: `AQOD-${Date.now()}`,
@@ -57,6 +58,7 @@ const createOrderFromSession = async (session, userId, address) =>
     shippingAddress: address,
     shippingMethod: "Standard",
     estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    installation: installationFrom(installation),
     orderStatus: "Processing",
     offerApplied: Boolean(session.couponCode),
     offerAppliedDetails: session.couponCode
@@ -117,7 +119,12 @@ export const createPayment = async (req, res) => {
         success: false,
         message: "Complete shipping address is required",
       });
-    const order = await createOrderFromSession(session, req.user._id, address);
+    const order = await createOrderFromSession(
+      session,
+      req.user._id,
+      address,
+      req.body.installation,
+    );
     const transactionId = order.transactionId;
     const attempt = await PaymentAttempt.create({
       checkoutSessionId: session._id,

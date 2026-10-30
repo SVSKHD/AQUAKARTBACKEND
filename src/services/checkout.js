@@ -103,3 +103,14 @@ export const createCheckoutSession = async ({ userId, cart, couponCode }) => {
     expiresAt: new Date(Date.now() + 15 * 60 * 1000),
   });
 };
+
+// The installation slot from a checkout body, or undefined when it's missing or
+// malformed (a slot is a preference, so a bad one never blocks the order).
+export const installationFrom = (value) => {
+  const day = String(value?.day || "").trim();
+  const slot = String(value?.slot || "")
+    .trim()
+    .slice(0, 40);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !slot) return undefined;
+  return { day, slot };
+};

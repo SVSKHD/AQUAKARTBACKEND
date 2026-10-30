@@ -204,7 +204,9 @@ const verifyPhoneLogin = async (req, res) => {
   }
 
   try {
-    const user = await AquaEcomUser.findOne({ phone: normalizedPhone.localPhone });
+    const user = await AquaEcomUser.findOne({
+      phone: normalizedPhone.localPhone,
+    });
 
     if (!user) {
       return res
@@ -341,25 +343,93 @@ const userForgetPassword = async (req, res) => {
 };
 
 // Update User Details
+// The only fields a shopper may set on their own account (what the storefront
+// profile, address book and checkout send). Everything else (role, sign-in and
+// OTP data, invoice links, email) is dropped, as are dotted or $ keys.
+const EDITABLE_FIELDS = [
+  "firstName",
+  "lastName",
+  "phone",
+  "dob",
+  "alternativeEmail",
+  "photo",
+  "gstDetails",
+  "addresses",
+  "selectedAddress",
+];
+
+export const editableDetails = (newDetails) => {
+  if (
+    !newDetails ||
+    typeof newDetails !== "object" ||
+    Array.isArray(newDetails)
+  )
+    return {};
+  return Object.fromEntries(
+    Object.entries(newDetails).filter(([key]) => EDITABLE_FIELDS.includes(key)),
+  );
+};
+
+const sameEmail = (a, b) =>
+  String(a || "")
+    .trim()
+    .toLowerCase() ===
+  String(b || "")
+    .trim()
+    .toLowerCase();
+
 const updateDetails = async (req, res) => {
   const { id } = req.params;
-  const { newDetails } = req.body;
+
+  // A signed-in shopper updates their own account only.
+  if (String(req.user?._id) !== String(id)) {
+    return res
+      .status(403)
+      .json({ message: "You can only update your account" });
+  }
+
+  // Older profile pages resend the current email with every save; only an
+  // actual change is refused, and said so, rather than silently ignored.
+  const requestedEmail = req.body?.newDetails?.email;
+  if (requestedEmail && !sameEmail(requestedEmail, req.user.email)) {
+    return res.status(400).json({
+      message:
+        "Your email comes from your sign-in account and can't be changed here.",
+    });
+  }
+
+  const newDetails = editableDetails(req.body?.newDetails);
+  // An empty phone clears it: a stored null would collide on the unique
+  // (sparse) phone index with every other account that cleared theirs.
+  const clearPhone =
+    "phone" in newDetails &&
+    (newDetails.phone === null || String(newDetails.phone).trim() === "");
+  if (clearPhone) delete newDetails.phone;
 
   try {
-    const user = await AquaEcomUser.findById(id);
+    const updatedUser = await AquaEcomUser.findByIdAndUpdate(
+      id,
+      {
+        $set: newDetails,
+        ...(clearPhone ? { $unset: { phone: 1 } } : {}),
+      },
+      { new: true, runValidators: true },
+    ).select("-password");
 
-    if (!user) {
+    if (!updatedUser) {
       return res.status(400).json({ message: "User not found" });
     }
 
-    const updatedUser = await AquaEcomUser.findByIdAndUpdate(
-      id,
-      { $set: newDetails },
-      { new: true },
-    );
-
     return res.status(200).json(updatedUser);
   } catch (error) {
+    if (error?.code === 11000) {
+      return res
+        .status(409)
+        .json({ message: "That phone number is already on another account" });
+    }
+    if (error?.name === "ValidationError" || error?.name === "CastError") {
+      return res.status(400).json({ message: "Some details are not valid" });
+    }
     console.error("Error during updating user details:", error);
     return res.status(500).json({ message: "Server error" });
   }

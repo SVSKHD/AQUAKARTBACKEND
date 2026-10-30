@@ -18,6 +18,81 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-10-29
+
+### Return saved addresses with the signed-in account
+
+- Request/problem: Addresses saved to the account never came back to the
+  storefront after signing in again or on another device. `safeUser()` omitted
+  them. `POST /user/update-details/:id` also let any signed-in user update any
+  account, including `role`.
+- Changes/result: (Made by the AQUAKARTECOM storefront session; reviewed here,
+  then hardened in the next entry.) `safeUser()` now returns `dob`, `addresses`
+  and `selectedAddress` for `POST /auth/google` and `GET /auth/me`.
+  `update-details` accepts only the caller's own id (else 403) and no longer
+  returns the password hash.
+- Files: `src/controllers/googleAuth.js`, `src/controllers/user.js`,
+  `test/userAccountDetails.test.js`.
+- Validation: covered by the unit tests in the next entry. Not tried in a
+  browser or against a live database.
+- Limitations/follow-up: The storefront reloads the account from `/auth/me`, so
+  this backend must be deployed before the storefront change shows addresses.
+
+### Restrict profile updates to safe fields and stop phone-based reminder lookups
+
+- Request/problem: The protected-field blocklist from the entry above still
+  let shoppers set OTP and sign-in fields and dotted paths such as
+  `invoices.0.invoiceId`, and email edits were silently ignored. Separately,
+  `GET /service-reminders/mine` matched invoices by the profile phone (editable
+  without verification) and by unverified email, so a shopper could set another
+  customer's phone and see that customer's purchases.
+- Changes/result: `update-details` now saves only an allowlist (`firstName`,
+  `lastName`, `phone`, `dob`, `alternativeEmail`, `photo`, `gstDetails`,
+  `addresses`, `selectedAddress`) and runs schema validators. A changed email
+  returns 400 with a message (resending the current email is still accepted).
+  An empty phone is `$unset` instead of stored as null. Duplicate phone returns
+  409, and validation/cast errors return 400. Service reminders now use the
+  same ownership rule as `/invoices/public/mine`: Firebase UID, or unclaimed
+  invoices with the Google-verified email. The phone is no longer used.
+- Files: `src/controllers/user.js`, `src/controllers/serviceReminders.js`,
+  `test/userAccountDetails.test.js`, `test/serviceRemindersOwnership.test.js`,
+  `docs/AUTH_GOOGLE_FIREBASE.md`, `docs/PRODUCT_SERVICE_REMINDERS.md`,
+  `swagger-output.json`.
+- Validation: `node --check` on both controllers passed;
+  `node --test test/userAccountDetails.test.js test/serviceRemindersOwnership.test.js test/serviceReminders.test.js`
+  passed 14/14 (mocked Mongoose). `npm run swagger` succeeded;
+  `/v1/user/update-details/{id}` lists 200/400/401/403/409/500. Full
+  `node --test`: 161/162 passed; the failure is the same `invoiceViews` test that
+  already failed before these changes. Not run against a live database.
+- Limitations/follow-up: Older storefront pages
+  (`pageComponents/userDasboard/profle.js`, `pageComponents/checkout/index.js`)
+  still show an editable email field and will now get the 400 if it is changed.
+  Customers whose invoices match only by phone (no Google account bound and no
+  verified email match) no longer see service reminders until the invoice is
+  claimed. The unrouted `updateIdentifierDetails` in `src/controllers/user.js`
+  is unsafe if it is ever mounted.
+
+### Save the installation slot chosen at checkout
+
+- Request/problem: The storefront asks for an installation day and slot at
+  checkout, but the backend never received or stored it.
+- Changes/result: (Made by another agent session; reviewed here, not modified.)
+  Orders have an `installation: { day, slot }` field. Both
+  `POST /checkout/orders/cod` and `POST /payments` read `req.body.installation`
+  through `installationFrom()`, which keeps a `YYYY-MM-DD` day and a slot of up
+  to 40 characters, and drops anything malformed without failing the order.
+  Documented in `docs/COMMERCE_PLATFORM_API.md`.
+- Files: `src/models/orders.js`, `src/services/checkout.js`,
+  `src/controllers/checkout.js`, `src/controllers/payments.js`,
+  `test/checkoutInstallation.test.js`, `docs/COMMERCE_PLATFORM_API.md`.
+- Validation: `node --test test/checkoutInstallation.test.js` passed 2/2. Also
+  covered by the full run above. Not tried with a real order.
+- Limitations/follow-up: The day is only format-checked, so past dates or
+  impossible dates such as `2026-02-31` are accepted. There is no
+  requested/confirmed status. The CRM order screens and new-order notifications
+  do not show the slot yet. The storefront must send `installation` with both
+  order requests.
+
 ## 2026-10-28
 
 ### Public recent-purchases demand feed from invoices

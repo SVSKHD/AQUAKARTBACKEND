@@ -42,9 +42,16 @@ Send a unique `Idempotency-Key` header.
     "city": "...",
     "state": "...",
     "postalCode": "..."
-  }
+  },
+  "installation": { "day": "2026-10-30", "slot": "12 pm – 3 pm" }
 }
 ```
+
+`installation` is optional on both `POST /v1/payments` and
+`POST /v1/checkout/orders/cod`. It is saved on the order as `installation.day`
+(`YYYY-MM-DD`) and `installation.slot` (up to 40 characters). A missing or
+malformed value is dropped and never blocks the order. The team confirms the
+slot by phone.
 
 ## CRM API
 
