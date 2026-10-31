@@ -16,7 +16,9 @@
     "test": "node --test",
     "swagger": "node src/scripts/generate-swagger.js",
     "seed:blog:dog-hard-water": "node src/scripts/seed-dog-hard-water-blog.js",
-    "seed:blog:pawsattva-aquakart": "node src/scripts/seed-pawsattva-aquakart-blog.js"
+    "seed:blog:pawsattva-aquakart": "node src/scripts/seed-pawsattva-aquakart-blog.js",
+    "role": "node src/scripts/set-user-role.js",
+    "roles:seed": "node src/scripts/set-user-role.js list"
   },
   "keywords": [],
   "author": "",

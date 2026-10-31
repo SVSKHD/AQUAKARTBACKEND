@@ -4,6 +4,7 @@ import "./config.js";
 import cloudinary from "cloudinary";
 import app from "./app.js";
 import mongooseConnect from "./src/utils/db.js";
+import UserRole from "./src/models/userRole.js";
 import generateSwaggerDocs from "./swagger-autogen.js";
 import { startScheduler } from "./src/services/scheduler/index.js";
 import { isTestingMode } from "./src/services/aiQuota.js";
@@ -19,7 +20,16 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-mongooseConnect(process.env.DB_URL);
+// Once connected: make sure the storefront roles (admin, tester, user) exist.
+mongooseConnect(process.env.DB_URL).then(async (connected) => {
+  if (!connected) return;
+  try {
+    const roles = await UserRole.ensureDefaults();
+    console.log(`User roles: ${roles.map((r) => r.slug).join(", ")}`);
+  } catch (error) {
+    console.error("Could not create the default user roles:", error);
+  }
+});
 // Runs the built-in reminder jobs and any jobs created from the CRM.
 startScheduler();
 if (isTestingMode()) {

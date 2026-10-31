@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import "./userRole.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
@@ -114,6 +115,13 @@ const UserSchema = new mongoose.Schema(
     role: {
       type: Number,
       default: 2,
+    },
+    // The account's role (admin / tester / user) in the aquauserroles
+    // collection. Unset means "user", the default. See constants/roles.js.
+    roleRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AquaUserRole",
+      default: null,
     },
     referral: [
       {

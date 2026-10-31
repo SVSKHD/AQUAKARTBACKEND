@@ -42,11 +42,45 @@ test("guests are keyed by IP and customers by account", () => {
   assert.deepEqual(quotaSubject({ user: null, ip: "1.2.3.4" }), {
     tier: "guest",
     key: "ip:1.2.3.4",
+    role: null,
   });
   assert.deepEqual(quotaSubject({ user: { _id: "u1" }, ip: "1.2.3.4" }), {
     tier: "user",
     key: "user:u1",
+    role: null,
   });
+});
+
+test("admins and testers chat without a limit, on any environment", async () => {
+  delete process.env.TESTING_MODE;
+  const admin = quotaSubject({ user: { _id: "a1", role: 1 }, ip: "1.2.3.4" });
+  const tester = quotaSubject({ user: { _id: "t1", role: 4 }, ip: "1.2.3.4" });
+  const customer = quotaSubject({
+    user: { _id: "c1", role: 2 },
+    ip: "1.2.3.4",
+  });
+  const staff = quotaSubject({ user: { _id: "s1", role: 3 }, ip: "1.2.3.4" });
+  assert.equal(admin.role, "admin");
+  assert.equal(tester.role, "tester");
+  assert.equal(customer.role, null);
+  assert.equal(staff.role, null);
+
+  // No database is connected here: an unlimited role must never query it.
+  for (const [subject, access] of [
+    [admin, "admin"],
+    [tester, "tester"],
+  ]) {
+    const claim = await consumeQuota(subject);
+    assert.equal(claim.allowed, true);
+    assert.equal(claim.day, null);
+    assert.equal(claim.quota.unlimited, true);
+    assert.equal(claim.quota.access, access);
+    assert.equal(claim.quota.testingMode, false);
+    const quota = await getQuota(subject);
+    assert.equal(quota.unlimited, true);
+    assert.equal(quota.access, access);
+    await refundQuota(subject, claim.day);
+  }
 });
 
 test("TESTING_MODE=true makes the storefront quota unlimited without counting", async (t) => {

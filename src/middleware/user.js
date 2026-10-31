@@ -17,7 +17,8 @@ const isLoggedIn = async (req, res, next) => {
       return res.status(401).json({ message: "Token is not valid" });
     }
 
-    const user = await AquaEcomUser.findById(decoded._id);
+    // With its role, which decides things like unlimited AI chats.
+    const user = await AquaEcomUser.findById(decoded._id).populate("roleRef");
 
     if (!user) {
       console.log("User not found in DB"); // Additional log for missing user

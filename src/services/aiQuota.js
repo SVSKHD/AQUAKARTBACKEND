@@ -1,7 +1,10 @@
 import AiUsage from "../models/aiUsage.js";
+import { unlimitedAiRole } from "../constants/roles.js";
 
 // Storefront AI daily allowance: guests are counted per IP, logged-in
-// customers per account. Days roll over at midnight IST. CRM is unlimited.
+// customers per account. Days roll over at midnight IST. CRM is unlimited,
+// and so are admin and tester accounts (see constants/roles.js) on every
+// environment.
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -16,15 +19,22 @@ const positiveEnv = (name, fallback) => {
 export const isTestingMode = () =>
   String(process.env.TESTING_MODE || "").toLowerCase() === "true";
 
+// `access` says why there's no limit: the account's role ("admin" /
+// "tester") or the environment ("testing").
 const unlimitedQuota = (subject, now) => ({
   tier: subject.tier,
   limit: null,
   used: 0,
   remaining: null,
   unlimited: true,
-  testingMode: true,
+  access: subject.role || "testing",
+  testingMode: !subject.role,
   resetsAt: nextReset(now).toISOString(),
 });
+
+// Nothing counted: the environment is in testing mode, or the account's role
+// is unlimited.
+const isUnlimited = (subject) => Boolean(subject.role) || isTestingMode();
 
 export const dailyLimit = (tier) =>
   tier === "user"
@@ -42,8 +52,12 @@ export const nextReset = (now = new Date()) => {
 
 export const quotaSubject = (req) =>
   req.user
-    ? { tier: "user", key: `user:${req.user._id}` }
-    : { tier: "guest", key: `ip:${req.ip}` };
+    ? {
+        tier: "user",
+        key: `user:${req.user._id}`,
+        role: unlimitedAiRole(req.user),
+      }
+    : { tier: "guest", key: `ip:${req.ip}`, role: null };
 
 const describe = (subject, used, now) => {
   const limit = dailyLimit(subject.tier);
@@ -57,7 +71,7 @@ const describe = (subject, used, now) => {
 };
 
 export const getQuota = async (subject, now = new Date()) => {
-  if (isTestingMode()) return unlimitedQuota(subject, now);
+  if (isUnlimited(subject)) return unlimitedQuota(subject, now);
   const usage = await AiUsage.findOne({ key: subject.key, day: quotaDay(now) })
     .select("count")
     .lean();
@@ -67,7 +81,7 @@ export const getQuota = async (subject, now = new Date()) => {
 // Atomically takes one question from today's allowance.
 // Returns { allowed, quota, day }; `day` is needed to refund.
 export const consumeQuota = async (subject, now = new Date()) => {
-  if (isTestingMode()) {
+  if (isUnlimited(subject)) {
     return { allowed: true, day: null, quota: unlimitedQuota(subject, now) };
   }
   const day = quotaDay(now);
@@ -103,8 +117,12 @@ export const consumeQuota = async (subject, now = new Date()) => {
 // and can't be repeated to change the count. Called only when the client says
 // this browser chatted as a guest, so shared IPs don't penalise other customers.
 export const carryGuestUsage = async (user, ip, now = new Date()) => {
-  const subject = { tier: "user", key: `user:${user._id}` };
-  if (isTestingMode()) return unlimitedQuota(subject, now);
+  const subject = {
+    tier: "user",
+    key: `user:${user._id}`,
+    role: unlimitedAiRole(user),
+  };
+  if (isUnlimited(subject)) return unlimitedQuota(subject, now);
   const day = quotaDay(now);
   const guest = await AiUsage.findOne({ key: `ip:${ip}`, day })
     .select("count")
@@ -132,7 +150,7 @@ export const carryGuestUsage = async (user, ip, now = new Date()) => {
 };
 
 export const refundQuota = async (subject, day) => {
-  if (!day) return; // nothing was counted (testing mode)
+  if (!day) return; // nothing was counted (testing mode or unlimited role)
   await AiUsage.updateOne(
     { key: subject.key, day, count: { $gt: 0 } },
     { $inc: { count: -1 } },

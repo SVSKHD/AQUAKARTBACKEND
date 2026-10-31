@@ -28,7 +28,8 @@ const optionalUserAuth = async (req, res, next) => {
       });
     }
 
-    const user = await AquaEcomUser.findById(decoded._id);
+    // With its role, which decides things like unlimited AI chats.
+    const user = await AquaEcomUser.findById(decoded._id).populate("roleRef");
     if (!user) {
       return res.status(401).json({
         success: false,

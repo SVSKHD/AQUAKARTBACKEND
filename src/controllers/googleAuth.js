@@ -1,4 +1,5 @@
 import AquaEcomUser from "../models/user.js";
+import { userRoleSlug } from "../constants/roles.js";
 
 const firstNameFrom = (name = "") => name.trim().split(/\s+/)[0] || "";
 
@@ -21,6 +22,8 @@ const safeUser = (user) => ({
   emailVerified: Boolean(user.emailVerified || user.isEmailVerfied),
   phone: user.phone || null,
   role: user.role,
+  // "admin" | "tester" | "user" (the default).
+  roleName: userRoleSlug(user),
   dob: user.dob || null,
   // The address book is the account's: every device and page reads it from here.
   addresses: user.addresses || [],
