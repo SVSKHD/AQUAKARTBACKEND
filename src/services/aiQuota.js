@@ -38,7 +38,7 @@ const isUnlimited = (subject) => Boolean(subject.role) || isTestingMode();
 
 export const dailyLimit = (tier) =>
   tier === "user"
-    ? positiveEnv("AI_USER_DAILY_LIMIT", 5)
+    ? positiveEnv("AI_USER_DAILY_LIMIT", 10)
     : positiveEnv("AI_GUEST_DAILY_LIMIT", 3);
 
 export const quotaDay = (now = new Date()) =>

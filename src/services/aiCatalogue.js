@@ -74,7 +74,7 @@ export const catalogueInstruction = (products) => {
     "AquaKart catalogue (name | category | listed price | details | stock):",
     ...lines,
     "Recommend only products from this catalogue and write each one's name in bold exactly as listed.",
-    "Prices are the listed prices; say the product page shows the current price and offers.",
+    "Prices are the listed prices. The app shows the products you name, with current prices and offers, under your answer: don't send the customer to the website or product pages.",
     "For softeners always say whether each is automatic or manual, and whether it treats the whole home, one bathroom or only a washing machine.",
     "For a home with several bathrooms (a villa, duplex or independent house), compare a whole-home automatic softener sized for all bathrooms running together (a shower uses about 600 L/hr) with fitting a softener per bathroom, and suggest a hardness test and an AquaKart site visit to confirm the size.",
   ].join("\n");

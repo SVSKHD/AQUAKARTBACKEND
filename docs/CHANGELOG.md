@@ -18,6 +18,38 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-01
+
+### Raise signed-in AI chat limit to 10 and stop scheduler errors without a DB
+
+- Request/problem: Signed-in storefront customers were limited to 5 AI
+  questions per day. Separately, the scheduler looked like it was failing. A
+  read-only check of `AquaScheduledJob`/`AquaScheduledJobRun` showed all five
+  built-in jobs with `lastStatus: success` and `failureCount: 0`. The failures
+  were local: Node's resolver intermittently returned `querySrv ESERVFAIL` /
+  `queryTxt ESERVFAIL` for the Atlas SRV record, although Windows'
+  `Resolve-DnsName` resolved it. Mongoose does not retry a failed first
+  connect, and `startScheduler()` kept ticking every 30s. So every tick logged
+  `Scheduler tick failed` (buffering timeout) until restart.
+- Changes/result: The default `AI_USER_DAILY_LIMIT` is now 10 (guests stay at
+  3). Both remain overridable by env, and the variables are now listed in
+  `.env.example`. `mongooseConnect()` retries the first connection up to 10
+  times, 15s apart. The scheduler loop skips ticks while
+  `mongoose.connection.readyState !== 1`, logging one "paused" and one
+  "resumed" line instead of an error every 30s.
+- Files: `src/services/aiQuota.js`, `test/aiQuota.test.js`, `.env.example`,
+  `src/utils/db.js`, `src/services/scheduler/index.js`, `docs/CHANGELOG.md`.
+- Validation: `node --check` on the three changed source files passed;
+  `node --test test/aiQuota.test.js test/scheduler.test.js test/userRoles.test.js`
+  passed 19/19. `npx eslint` could not run (no `eslint.config.*` in the repo).
+  The DB retry and scheduler pause were not exercised live; the server was not
+  started.
+- Limitations/follow-up: A deployment that sets `AI_USER_DAILY_LIMIT=5`
+  explicitly keeps 5. The storefront may show a hard-coded "5" in its copy.
+  The local DNS issue itself is environmental (VPN/corporate DNS on the
+  Ethernet adapter). Workarounds are a non-SRV `mongodb://` connection string
+  or fixing the adapter's DNS order.
+
 ## 2026-10-29
 
 ### Return saved addresses with the signed-in account

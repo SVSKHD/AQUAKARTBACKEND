@@ -1,4 +1,5 @@
 import os from "os";
+import mongoose from "mongoose";
 import ScheduledJob from "../../models/crm/scheduledJob.js";
 import ScheduledJobRun from "../../models/crm/scheduledJobRun.js";
 import { ACTIONS } from "./actions.js";
@@ -342,8 +343,20 @@ export const startScheduler = () => {
 
   let timer;
   let stopped = false;
+  let waitingForDb = false;
   const loop = async () => {
     try {
+      // Without a connection every query buffers and times out, so each tick
+      // would just log a failure. Wait quietly until MongoDB is connected.
+      if (mongoose.connection.readyState !== 1) {
+        if (!waitingForDb) {
+          console.warn("Scheduler paused: waiting for MongoDB connection");
+        }
+        waitingForDb = true;
+        return;
+      }
+      if (waitingForDb) console.log("Scheduler resumed: MongoDB connected");
+      waitingForDb = false;
       await tick();
     } catch (error) {
       console.error("Scheduler tick failed:", error.message);

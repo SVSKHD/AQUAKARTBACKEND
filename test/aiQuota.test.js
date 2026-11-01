@@ -25,17 +25,17 @@ test("quota days roll over at midnight IST", () => {
   );
 });
 
-test("guests get 3 questions and logged-in customers 5 by default", (t) => {
+test("guests get 3 questions and logged-in customers 10 by default", (t) => {
   t.after(() => {
     delete process.env.AI_GUEST_DAILY_LIMIT;
     delete process.env.AI_USER_DAILY_LIMIT;
   });
   assert.equal(dailyLimit("guest"), 3);
-  assert.equal(dailyLimit("user"), 5);
+  assert.equal(dailyLimit("user"), 10);
   process.env.AI_GUEST_DAILY_LIMIT = "2";
   process.env.AI_USER_DAILY_LIMIT = "abc";
   assert.equal(dailyLimit("guest"), 2);
-  assert.equal(dailyLimit("user"), 5);
+  assert.equal(dailyLimit("user"), 10);
 });
 
 test("guests are keyed by IP and customers by account", () => {
@@ -122,7 +122,7 @@ test("a guest who logs in keeps today's guest questions, once", async (t) => {
   const q = await carryGuestUsage({ _id: "u1" }, "1.2.3.4", now);
   assert.deepEqual(
     { tier: q.tier, limit: q.limit, used: q.used, remaining: q.remaining },
-    { tier: "user", limit: 5, used: 3, remaining: 2 },
+    { tier: "user", limit: 10, used: 3, remaining: 7 },
   );
   assert.equal(writes[0].filter.key, "user:u1");
   assert.equal(writes[0].update.$setOnInsert.count, 3);
