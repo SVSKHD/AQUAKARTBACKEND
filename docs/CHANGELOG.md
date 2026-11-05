@@ -137,6 +137,28 @@ tests, or docs:
   - **Deployment:** the reverse proxy must forward the root OAuth paths.
     `instagram.publish` must be assigned to a role.
 
+### Fix Docker `npm ci` failure: lockfile out of sync for npm 10
+
+- Problem: Jenkins build #228 (commit `9c70320`) failed at `npm ci` with
+  "Missing: gcp-metadata@7.0.1 / google-logging-utils@1.2.0 from lock file".
+  `mongoose`'s nested `mongodb@7.7.0` declares an optional peer
+  `gcp-metadata@^7.0.1`. The root copy is 9.2.2, which doesn't satisfy it. The
+  lockfile was written with npm 11, which leaves that peer out. The image's
+  npm 10.9.9 (`node:22-alpine`) requires it to be listed.
+- Result: regenerated the lockfile with `npx npm@10.9.9 install
+--package-lock-only --ignore-scripts`. It adds only
+  `node_modules/mongoose/node_modules/gcp-metadata@7.0.1` and
+  `.../google-logging-utils@1.2.0`, both marked optional peers. No
+  `package.json` or dependency version changes.
+- Files: `package-lock.json`, `docs/CHANGELOG.md`.
+- Validation: on a scratch copy of `package.json` and `package-lock.json`,
+  `npm ci --omit=dev --ignore-scripts` passed with npm 10.9.9 (398 packages)
+  and with local npm 11.16.0 (396 packages). I did not run a Docker or
+  Jenkins build.
+- Follow-up: regenerate the lockfile with npm 10 (or pin the same npm
+  version locally and in the Dockerfile). Otherwise a lockfile written by
+  npm 11 can break the build again.
+
 ## 2026-11-01
 
 ### Raise signed-in AI chat limit to 10 and stop scheduler errors without a DB
