@@ -145,6 +145,49 @@ const BlogSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // Set on every update (see hooks below); integrations use it as the
+  // revision for conflict checks. Older blogs fall back to createdAt.
+  updatedAt: Date,
+  // When the blog went live through the MCP publish tool.
+  publishedAt: Date,
+  // Provenance for content written through the Aquakart MCP server (e.g.
+  // ChatGPT), kept apart from the generatedBy enum. Not selected by default,
+  // so public/CRM responses are unchanged; MCP tools select "+integration".
+  integration: {
+    type: {
+      _id: false,
+      source: { type: String, enum: ["mcp"] },
+      clientId: String,
+      clientName: String,
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
+      // SHA-256 of the normalized title + article text; blocks resubmitting
+      // the same article as a second blog.
+      contentHash: String,
+      modelUsed: String,
+      createdByOperation: String,
+      lastUpdatedByOperation: String,
+      publishedByOperation: String,
+      publishedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "AquaAdminUser",
+      },
+    },
+    select: false,
+    default: undefined,
+  },
+});
+
+// One blog per article content from MCP; staff blogs have no such field.
+BlogSchema.index(
+  { "integration.contentHash": 1 },
+  {
+    unique: true,
+    partialFilterExpression: { "integration.contentHash": { $type: "string" } },
+  },
+);
+
+BlogSchema.pre(["findOneAndUpdate", "updateOne", "updateMany"], function () {
+  this.set({ updatedAt: new Date() });
 });
 
 const AquaBlog =

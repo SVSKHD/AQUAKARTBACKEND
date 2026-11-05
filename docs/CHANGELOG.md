@@ -42,6 +42,101 @@ tests, or docs:
   against production. `swagger-output.json` also picked up regeneration
   changes from earlier route edits.
 
+### Remote MCP server for ChatGPT/Claude: blog drafts, publishing, Instagram
+
+- Request/problem: Let ChatGPT, Claude and other MCP clients read, draft,
+  illustrate and publish Aquakart blogs, and post Instagram creatives through
+  Meta's API using temporary Cloudinary storage. Images must be cleaned up
+  only after verified publication. No backend cron job and no Aureon. The
+  task first asked for an Aureon REST API; the user replaced it mid-task
+  with the MCP brief, so that partial work was folded in or deleted, not
+  shipped.
+- Changes/result:
+  - **MCP endpoint:** `POST /v1/mcp` (Streamable HTTP, stateless, official
+    `@modelcontextprotocol/sdk` 1.32.2). It is off (503) until
+    `MCP_PUBLIC_BASE_URL` is set.
+  - **OAuth 2.1:** served at the API root via the SDK's `mcpAuthRouter`
+    with a MongoDB-backed provider.
+    - DCR is limited to allowlisted ChatGPT/Claude/loopback redirects.
+      Clients are public PKCE clients, so no secrets are stored.
+    - Staff sign in on a consent page; each scope needs `blogs.manage` or
+      the new CRM permission `instagram.publish`.
+    - Codes and tokens are stored hashed. Refresh tokens rotate, and reuse
+      or code replay revokes the grant. Staff status and permissions are
+      re-checked on every request.
+    - `npm run mcp:grants` lists and revokes grants.
+  - **Tools (13):** `aquakart_list_blogs`, `_get_blog`, `_get_blog_status`,
+    `_create_blog`, `_update_blog`, `_upload_image`, `_attach_image`,
+    `_publish_blog`, `_upload_instagram_image`, `_publish_instagram`,
+    `_get_instagram_status`, `_list_instagram_posts` and
+    `_cleanup_instagram_asset`. Each has strict zod input/output schemas,
+    per-tool scopes with an OAuth step-up hint, structured error codes,
+    idempotency keys (`AquaMcpOperation` ledger), audit log entries and JSON
+    log lines with correlation ids.
+  - **Blogs:** stored in the existing `AquaBlog` collection, always created
+    as drafts. HTML goes through an allowlist (`sanitize-html`). Duplicate
+    content, titles and slugs are rejected. Only drafts are edited, and
+    images survive partial updates. Publish runs quality checks, is atomic,
+    and repeating it changes nothing.
+  - **Blog model additions:** `updatedAt` (set by an update hook),
+    `publishedAt`, and a hidden `integration` block with a unique partial
+    `contentHash` index. Existing CRM/storefront behaviour is unchanged.
+  - **Images:** ChatGPT file params, downloaded over HTTPS only from trusted
+    hosts and only to public IPs (checked at connect time), or base64.
+    Formats are detected from the bytes. Images are de-duplicated by
+    SHA-256. Branded headers overlay a stored Cloudinary logo.
+  - **Instagram:**
+    - Temp images live in `aquakart/instagram-temp/`, with a Meta Graph
+      client (token sent only in a header).
+    - The lifecycle state machine uses persisted publish attempts, bounded
+      container polling and reconciliation of lost `media_publish`
+      responses, so nothing is re-posted blindly.
+    - A durable MongoDB-leased cleanup worker deletes only the recorded
+      temp public id 30 minutes (configurable) after verified publication,
+      with exponential backoff. Cloudinary `not found` counts as cleaned.
+  - **Gemini job:** unchanged. The guide documents how to disable it in the
+    CRM.
+- Files: `app.js`, `index.js`, `swagger-autogen.js`, `package.json`,
+  `package-lock.json`, `.env.example`, `src/routes/mcp.js`,
+  `src/services/mcp/{config,errors,operations,imageInput,blogTools,instagramTools,instagramGraph,oauthProvider,consentPage,server,store,index}.js`,
+  `src/models/mcp/{mcpOperation,mcpMedia,oauth,instagramAsset}.js`,
+  `src/validators/mcp/blog.js`, `src/models/blog.js`,
+  `src/controllers/blog.js` (exports `validateTaxonomy`),
+  `src/constants/permissions.js`, `src/docs/mcp.js`,
+  `src/docs/routeGroups.js`, `src/scripts/mcp-grants.js`,
+  `swagger-output.json`, `test/mcpServer.test.js`,
+  `test/mcpBlogTools.test.js`, `test/mcpInstagram.test.js`,
+  `test/blogRoutesRegression.test.js`, `test/support/mcpFakes.js`,
+  `docs/MCP_BLOG_PUBLISHING.md`, `docs/README.md`, `docs/PROJECT_MAP.md`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed on all changed/new source files.
+  - The four new test files pass 37/37 in unit tests with in-memory fakes:
+    an HTTP end-to-end OAuth/MCP flow over localhost plus mocked
+    Cloudinary/Meta/MongoDB.
+  - Full `node --test`: 208/209. The one failure,
+    `test/invoiceViews.test.js` "builds separate admin and customer invoice
+    destinations", also fails with this task's tracked changes stashed.
+  - `npm run swagger` succeeded and adds MCP/OAuth operations under "MCP".
+    No existing operation changed; the diff is mostly regeneration
+    formatting.
+  - Not run: the server against a database, a real ChatGPT/Claude
+    connection, real Cloudinary uploads, real Meta calls, any publish, and
+    `npm run lint` (no ESLint flat config).
+- Limitations/follow-up:
+  - **Unverified ChatGPT behaviour:** OpenAI docs don't confirm that
+    unattended scheduled tasks can call a custom MCP connector, skip write
+    approvals, or pass generated images as file params. Scheduled publishing
+    is unverified until an end-to-end scheduled run is done.
+  - **Defaults to confirm:** the ChatGPT `download_url` host (default
+    `*.oaiusercontent.com`) and the Meta API version (default `v26.0`).
+  - **Instagram token:** the long-lived token isn't refreshed
+    automatically.
+  - **Rate limits and lockfile:** rate limits are per instance, and
+    `pnpm-lock.yaml` was not updated (npm lockfile only).
+  - **Deployment:** the reverse proxy must forward the root OAuth paths.
+    `instagram.publish` must be assigned to a role.
+
 ## 2026-11-01
 
 ### Raise signed-in AI chat limit to 10 and stop scheduler errors without a DB

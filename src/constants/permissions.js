@@ -6,6 +6,7 @@ export const PERMISSIONS = Object.freeze([
   "customers.read",
   "ai.chats.read",
   "blogs.manage",
+  "instagram.publish",
   "coupons.read",
   "coupons.manage",
   "referrals.read",

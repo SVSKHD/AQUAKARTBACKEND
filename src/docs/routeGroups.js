@@ -26,6 +26,7 @@ const labels = {
   stock: "Stock",
   ai: "AI",
   seo: "SEO",
+  mcp: "MCP",
   phonepegatway: "PhonePe Gateway",
 };
 const humanize = (name) =>

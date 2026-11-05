@@ -9,6 +9,7 @@ import { applyRouteGroups } from "./src/docs/routeGroups.js";
 import { applyCrmAiDocs } from "./src/docs/crmAi.js";
 import { applyCrmCustomerAiDocs } from "./src/docs/crmCustomerAi.js";
 import { applyStorefrontDocs } from "./src/docs/storefront.js";
+import { applyMcpDocs } from "./src/docs/mcp.js";
 import { promises as fs } from "fs";
 import path from "path";
 import userRoutes from "./src/routes/user.js";
@@ -60,6 +61,7 @@ import CRMWhatsAppRoutes from "./src/routes/crm/whatsapp.js";
 import AIRoutes from "./src/routes/ai.js";
 import CRMAIRoutes from "./src/routes/crm/ai.js";
 import CRMScheduledJobRoutes from "./src/routes/crm/scheduledJobs.js";
+import McpRoutes, { mcpOAuthRouter } from "./src/routes/mcp.js";
 
 const app = express();
 
@@ -82,6 +84,11 @@ const upload = multer({
 
 const BASE = process.env.WHATSAPPAPI;
 const KEY = process.env.WHATSAPPAPIKEY;
+
+// Aquakart MCP server (ChatGPT/Claude connectors) and its OAuth endpoints.
+// Mounted before the global body parsers so it enforces its own limits.
+app.use(mcpOAuthRouter);
+app.use("/v1/mcp", McpRoutes);
 
 app.use(
   express.json({
@@ -192,9 +199,11 @@ const swaggerSetup = async () => {
     const swaggerPath = path.resolve("./swagger-output.json");
     const swaggerData = await fs.readFile(swaggerPath, "utf8");
     const swaggerDocument = await applyRouteGroups(
-      applyStorefrontDocs(
-        applyCrmCustomerAiDocs(
-          applyCrmAiDocs(applyCategoryDocs(JSON.parse(swaggerData))),
+      applyMcpDocs(
+        applyStorefrontDocs(
+          applyCrmCustomerAiDocs(
+            applyCrmAiDocs(applyCategoryDocs(JSON.parse(swaggerData))),
+          ),
         ),
       ),
     );

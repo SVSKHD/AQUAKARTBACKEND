@@ -8,6 +8,8 @@ import UserRole from "./src/models/userRole.js";
 import generateSwaggerDocs from "./swagger-autogen.js";
 import { startScheduler } from "./src/services/scheduler/index.js";
 import { isTestingMode } from "./src/services/aiQuota.js";
+import { mcpServices } from "./src/routes/mcp.js";
+import { startInstagramCleanupWorker } from "./src/services/mcp/index.js";
 
 const PORT = process.env.PORT || 5300; // Default to port 3000 if PORT is not set
 
@@ -32,6 +34,9 @@ mongooseConnect(process.env.DB_URL).then(async (connected) => {
 });
 // Runs the built-in reminder jobs and any jobs created from the CRM.
 startScheduler();
+// Deletes temporary Instagram images after verified publication (no-op
+// unless MCP and Instagram are configured).
+startInstagramCleanupWorker(mcpServices);
 if (isTestingMode()) {
   console.warn(
     "TESTING_MODE is on: storefront AI daily question limits are disabled.",

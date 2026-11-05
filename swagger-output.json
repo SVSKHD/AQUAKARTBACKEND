@@ -71,6 +71,56 @@
         "tags": ["General"]
       }
     },
+    "/v1/mcp/oauth/consent": {
+      "post": {
+        "tags": ["MCP"],
+        "summary": "Staff sign-in and consent form submit",
+        "description": "Posted by the HTML page from /authorize. Staff sign in with CRM email/password; each granted scope needs its CRM permission (blogs.manage or instagram.publish). Redirects to the client's registered redirect_uri with code+state, or error=access_denied. 10 requests / 15 min per IP.",
+        "consumes": ["application/x-www-form-urlencoded"],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "formData",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "email",
+            "in": "formData",
+            "type": "string"
+          },
+          {
+            "name": "password",
+            "in": "formData",
+            "type": "string",
+            "format": "password"
+          },
+          {
+            "name": "scope",
+            "in": "formData",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "decision",
+            "in": "formData",
+            "type": "string",
+            "enum": ["approve", "deny"]
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to client"
+          },
+          "400": {
+            "description": "Form re-shown with an error, or request expired"
+          }
+        }
+      }
+    },
     "/v1/whatsapp/webhook/meta/": {
       "get": {
         "description": "",
@@ -12141,6 +12191,246 @@
         },
         "tags": ["CRM / SEO"]
       }
+    },
+    "/v1/mcp": {
+      "post": {
+        "tags": ["MCP"],
+        "summary": "MCP endpoint (Streamable HTTP, stateless)",
+        "description": "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image (media:upload); aquakart_publish_blog (blogs:publish); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup). Tool errors return result.isError with structuredContent.error.code. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "jsonrpc": {
+                  "type": "string",
+                  "example": "2.0"
+                },
+                "id": {
+                  "type": "integer",
+                  "example": 1
+                },
+                "method": {
+                  "type": "string",
+                  "example": "tools/call"
+                },
+                "params": {
+                  "type": "object"
+                }
+              },
+              "required": ["jsonrpc", "method"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response"
+          },
+          "401": {
+            "description": "Missing/invalid token; WWW-Authenticate carries resource_metadata"
+          },
+          "413": {
+            "description": "Body too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "503": {
+            "description": "MCP disabled"
+          }
+        }
+      },
+      "get": {
+        "tags": ["MCP"],
+        "summary": "Not supported (stateless server)",
+        "responses": {
+          "405": {
+            "description": "Use POST"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["MCP"],
+        "summary": "Not supported (stateless server)",
+        "responses": {
+          "405": {
+            "description": "Use POST"
+          }
+        }
+      }
+    },
+    "/.well-known/oauth-protected-resource/v1/mcp": {
+      "get": {
+        "tags": ["MCP"],
+        "summary": "Protected resource metadata (RFC 9728)",
+        "description": "resource, authorization_servers, scopes_supported.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "OAuth error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "invalid_grant"
+                },
+                "error_description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/oauth-authorization-server": {
+      "get": {
+        "tags": ["MCP"],
+        "summary": "Authorization server metadata (RFC 8414)",
+        "description": "Endpoints, S256 PKCE, grant types, scopes.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "OAuth error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "invalid_grant"
+                },
+                "error_description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/register": {
+      "post": {
+        "tags": ["MCP"],
+        "summary": "Dynamic client registration (RFC 7591)",
+        "description": "Public clients only (no secret issued). redirect_uris must match MCP_OAUTH_ALLOWED_REDIRECT_URIS or be loopback when allowed.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "201": {
+            "description": "Registered"
+          },
+          "400": {
+            "description": "OAuth error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "invalid_grant"
+                },
+                "error_description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authorize": {
+      "get": {
+        "tags": ["MCP"],
+        "summary": "Authorization (PKCE S256)",
+        "description": "Validates the request and renders the staff sign-in/consent page.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "OAuth error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "invalid_grant"
+                },
+                "error_description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/token": {
+      "post": {
+        "tags": ["MCP"],
+        "summary": "Token endpoint",
+        "description": "authorization_code (with code_verifier) and refresh_token grants. Refresh tokens rotate; reuse revokes the grant.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "OAuth error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "invalid_grant"
+                },
+                "error_description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/revoke": {
+      "post": {
+        "tags": ["MCP"],
+        "summary": "Token revocation (RFC 7009)",
+        "description": "Revokes the whole grant of the given token.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "OAuth error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "invalid_grant"
+                },
+                "error_description": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -12797,6 +13087,11 @@
       "in": "header",
       "name": "Authorization",
       "description": "Bearer <staff JWT>. Review requires customers.read + ai.chats.read. Blog draft actions additionally require blogs.manage. Super-admin/legacy role 1 has access."
+    },
+    "bearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
     }
   },
   "tags": [
@@ -12923,6 +13218,10 @@
     {
       "name": "Invoices / Public",
       "description": "Invoices / Public endpoints"
+    },
+    {
+      "name": "MCP",
+      "description": "MCP endpoints"
     },
     {
       "name": "Merchant Feed",

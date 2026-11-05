@@ -64,7 +64,7 @@ const normalizeReference = (value) => {
   return String(value);
 };
 
-const validateTaxonomy = async ({ category, subCategory }) => {
+export const validateTaxonomy = async ({ category, subCategory }) => {
   if (category && !(await AquaCategory.exists({ _id: category }))) {
     return "Selected category was not found";
   }

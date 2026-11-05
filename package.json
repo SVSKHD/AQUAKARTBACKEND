@@ -18,12 +18,14 @@
     "seed:blog:dog-hard-water": "node src/scripts/seed-dog-hard-water-blog.js",
     "seed:blog:pawsattva-aquakart": "node src/scripts/seed-pawsattva-aquakart-blog.js",
     "role": "node src/scripts/set-user-role.js",
-    "roles:seed": "node src/scripts/set-user-role.js list"
+    "roles:seed": "node src/scripts/set-user-role.js list",
+    "mcp:grants": "node src/scripts/mcp-grants.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "axios": "^1.20.0",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.11.0",
@@ -44,11 +46,13 @@
     "nanoid": "^6.0.2",
     "nodemailer": "^10.2.0",
     "pg-sdk-node": "https://phonepe.mycloudrepo.io/public/repositories/phonepe-pg-sdk-node/releases/v2/phonepe-pg-sdk-node.tgz",
+    "sanitize-html": "^2.18.1",
     "swagger-autogen": "^2.23.7",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
+    "write-excel-file": "^4.1.1",
     "yamljs": "^0.3.0",
-    "write-excel-file": "^4.1.1"
+    "zod": "^4.6.7"
   },
   "pnpm": {
     "ignoredBuiltDependencies": [
