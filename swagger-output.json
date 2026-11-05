@@ -4011,6 +4011,40 @@
         "tags": ["AI"]
       }
     },
+    "/v1/ai/transcribe": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "audio": {
+                  "example": "any"
+                },
+                "mimeType": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "413": {
+            "description": "Payload Too Large"
+          }
+        },
+        "tags": ["AI"]
+      }
+    },
     "/v1/ai/chat/history": {
       "get": {
         "description": "",

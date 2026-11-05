@@ -6,6 +6,8 @@ import {
   generateContent,
   isGeminiConfigured,
   streamContent,
+  TRANSCRIBE_MIME_TYPES,
+  transcribeAudio,
 } from "../services/gemini.js";
 import {
   carryGuestUsage,
@@ -605,6 +607,51 @@ const crmGenerateStream = async (req, res) => {
   }));
 };
 
+// About a minute of compressed speech; base64 adds a third.
+const AUDIO_MAX_BYTES = 1024 * 1024;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+// Voice questions: { audio: base64, mimeType } → { text }. Free (the question
+// it becomes is counted when it's sent), but only while questions are left,
+// so it can't be used to transcribe without limit.
+const transcribe = async (req, res) => {
+  const { audio, mimeType } = req.body || {};
+  const type = String(mimeType || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!TRANSCRIBE_MIME_TYPES.includes(type)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Unsupported audio format" });
+  }
+  if (typeof audio !== "string" || !audio || !BASE64.test(audio)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "audio is required (base64)" });
+  }
+  if (Math.floor((audio.length * 3) / 4) > AUDIO_MAX_BYTES) {
+    return res.status(413).json({
+      success: false,
+      message: "Recording is too long. Keep it under a minute.",
+    });
+  }
+  try {
+    const quotaNow = await getQuota(quotaSubject(req));
+    if (!quotaNow.unlimited && quotaNow.remaining <= 0) {
+      return quotaExceeded(res, quotaNow);
+    }
+    const result = await transcribeAudio({ audio, mimeType: type });
+    const max = req.user ? ECOM_LIMITS.promptChars : GUEST_LIMITS.promptChars;
+    return res.json({
+      success: true,
+      data: { text: result.text.slice(0, max) },
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+
 const status = (_req, res) => {
   res.json({ success: true, data: { configured: isGeminiConfigured() } });
 };
@@ -613,6 +660,7 @@ const AIOperations = {
   ecomChat,
   ecomChatStream,
   quota,
+  transcribe,
   carryQuota,
   listChatHistory,
   getChatSession,

@@ -18,6 +18,30 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-05
+
+### Storefront voice questions: `POST /v1/ai/transcribe`
+
+- Request/problem: The storefront mic relied on the browser's Web Speech API,
+  which most browsers lack or block, so voice questions didn't work. The
+  storefront now records audio itself and needs it turned into text.
+- Changes/result: `transcribeAudio` in `src/services/gemini.js` sends the clip
+  inline to Gemini (temperature 0, verbatim, keeps the spoken language; "no
+  speech" comes back empty). `AIOperations.transcribe` accepts
+  `{ audio: base64, mimeType }` (WebM/Ogg/MP4/MPEG/AAC/WAV, up to 1 MB,
+  about a minute), returns `{ text }` cut to the caller's prompt limit, is not
+  counted, and returns the usual `AI_DAILY_LIMIT` 429 once today's questions
+  are used up. Route uses `optionalUserAuth`. Swagger regenerated.
+- Files: `src/services/gemini.js`, `src/controllers/ai.js`, `src/routes/ai.js`,
+  `test/aiTranscribe.test.js`, `swagger-output.json`, `docs/CHANGELOG.md`.
+- Validation: `node --check` on the three source files;
+  `node --test test/aiTranscribe.test.js test/gemini.test.js test/aiQuota.test.js test/aiChatUpdate.test.js test/routeGroups.test.js`
+  passed (23/23); `npm run swagger` succeeded. Not run: a live Gemini call,
+  `npm run lint` (the installed ESLint finds no flat config).
+- Limitations/follow-up: Needs deploying before the storefront mic works
+  against production. `swagger-output.json` also picked up regeneration
+  changes from earlier route edits.
+
 ## 2026-11-01
 
 ### Raise signed-in AI chat limit to 10 and stop scheduler errors without a DB

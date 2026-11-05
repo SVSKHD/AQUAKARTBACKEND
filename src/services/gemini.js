@@ -237,6 +237,51 @@ export const generateTurn = async ({ fetchImpl = fetch, ...options }) => {
   };
 };
 
+// Voice questions: the recorded clip goes to Gemini inline and comes back as
+// the customer's words, which the storefront then sends as a normal question.
+export const TRANSCRIBE_MIME_TYPES = [
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/aac",
+  "audio/wav",
+];
+const NO_SPEECH = "[no speech]";
+const TRANSCRIBE_INSTRUCTION = [
+  "Transcribe the customer's speech in this audio exactly as spoken, for a",
+  "water purifier and softener store's chat. Keep the language they spoke",
+  "(English, Hindi, Telugu, or a mix), in its usual script. Fix only obvious",
+  "punctuation. Do not answer, translate, summarise or add anything.",
+  `Reply with only the words. If there is no clear speech, reply ${NO_SPEECH}.`,
+].join(" ");
+
+export const transcribeAudio = async ({
+  audio,
+  mimeType,
+  fetchImpl = fetch,
+  model,
+}) => {
+  const result = await generateContent({
+    fetchImpl,
+    model,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType, data: audio } },
+          { text: "Transcribe this." },
+        ],
+      },
+    ],
+    systemInstruction: TRANSCRIBE_INSTRUCTION,
+    temperature: 0,
+    maxOutputTokens: 600,
+  });
+  const text = result.text.trim();
+  return { text: text === NO_SPEECH ? "" : text, model: result.model };
+};
+
 async function* readSse(body) {
   const decoder = new TextDecoder();
   let buffer = "";

@@ -14,6 +14,9 @@ router.get("/quota", optionalUserAuth, AIOperations.quota);
 router.post("/quota/carry-guest", userAuth.isLoggedIn, AIOperations.carryQuota);
 router.post("/chat", optionalUserAuth, AIOperations.ecomChat);
 router.post("/chat/stream", optionalUserAuth, AIOperations.ecomChatStream);
+// Voice questions: { audio (base64), mimeType } → { text }. Not counted; needs
+// questions left today.
+router.post("/transcribe", optionalUserAuth, AIOperations.transcribe);
 
 // Saved conversations (logged-in customers only).
 router.get("/chat/history", userAuth.isLoggedIn, AIOperations.listChatHistory);
