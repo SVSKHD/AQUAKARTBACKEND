@@ -18,6 +18,188 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-06
+
+### MCP: product and coupon tools; error results without structuredContent
+
+- Request/problem: add products read/add and coupons read/add to the MCP
+  server. While testing with the SDK client, a separate problem turned up.
+  Every MCP error result included `structuredContent` that didn't match
+  the tool's output schema. SDK-based clients reject such results, so the
+  real error code (for example `INSUFFICIENT_SCOPE`) never reached them.
+- Changes/result:
+  - **New tools:** `aquakart_list_products`, `aquakart_get_product`
+    (`products:read`); `aquakart_create_product` (`products:write`);
+    `aquakart_list_coupons`, `aquakart_get_coupon` (`coupons:read`);
+    `aquakart_create_coupon` (`coupons:write`).
+  - **Permissions:** new CRM permissions `products.read` and
+    `products.manage`, assigned to no role. Only super-admin and role 1 have
+    them, matching the admin-only CRM product routes. Coupon scopes use the
+    existing `coupons.read` and `coupons.manage`. `products:write` and
+    `coupons:write` start unticked on the consent page.
+  - **Read limits:** product reads never return `dpPrice`, reviews or
+    reviewer/customer ids. Coupon reads give `targetedAccounts` (a count)
+    instead of customer ids.
+  - **Product creation:** products go live immediately, because the model
+    has no draft state. New products get `merchantEnabled: false` by
+    default. Photos come from `aquakart_upload_image` media ids. The
+    description is sanitized. Duplicate titles and SKUs are refused.
+  - **Coupon creation:** coupons are drafts unless `status: "active"` is
+    passed. Codes are stored uppercase. Percentages are capped at 100,
+    `endsAt` must be in the future, and product/category ids are checked.
+    Coupons can't be targeted at customer accounts.
+  - **Idempotency and audit:** both writes are idempotent and audited
+    (`mcp.product.create`, `mcp.coupon.create`). A hidden `mcpOperation`
+    field (`select: false`) on `AquaProduct` and `AquaCoupon` lets a retry
+    after a crash return the saved record instead of creating a duplicate.
+  - **Shared images:** replacing a blog title image no longer deletes an
+    MCP-uploaded image that a product uses.
+  - **Error results:** they now carry the JSON only in `content[0].text`,
+    with no `structuredContent`. Success results are unchanged.
+- Files: `src/services/mcp/catalogTools.js` (new),
+  `src/services/mcp/server.js`, `src/services/mcp/store.js`,
+  `src/services/mcp/config.js`, `src/services/mcp/consentPage.js`,
+  `src/services/mcp/oauthProvider.js`, `src/services/mcp/index.js`,
+  `src/routes/mcp.js`, `src/constants/permissions.js`,
+  `src/models/product.js`, `src/models/coupon.js`, `src/docs/mcp.js`,
+  `swagger-output.json`, `test/mcpCatalogTools.test.js` (new),
+  `test/mcpServer.test.js`, `docs/MCP_BLOG_PUBLISHING.md`,
+  `docs/PROJECT_MAP.md`, `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed on every changed source file.
+  - `node --test test/mcpCatalogTools.test.js test/mcpServer.test.js
+test/mcpBlogTools.test.js test/mcpInstagram.test.js
+test/blogRoutesRegression.test.js`: 46/46 passed. The new file runs 9
+    tests, including a real SDK `Client` over `InMemoryTransport` that
+    checks scope enforcement and error results.
+  - Full `node --test`: 217/218 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` invoice-destination test.
+  - `npm run swagger` succeeded, then Prettier ran on `swagger-output.json`.
+    Only the two MCP endpoint descriptions changed.
+  - Unit tests and in-memory fakes only. I made no calls against MongoDB,
+    Cloudinary or production, and created no products or coupons.
+- Limitations/follow-up:
+  - Not deployed.
+  - **Reconnect:** existing connections must reconnect and tick the new
+    scopes to use these tools.
+  - **No edits through MCP:** there are no tools to update or delete
+    products or to activate, pause or archive coupons; use the CRM.
+  - **Image folder:** product photos added through MCP are stored under
+    `Blogs/mcp_<hash>`, not `products/`.
+
+### MCP: Aquakart logo on the consent page and logo references for AI images
+
+- Request/problem: show the Aquakart logo on the MCP consent page. Give MCP
+  clients (LLMs) the official logo files to use as references when they
+  create images.
+- Changes/result:
+  - **Consent page:** shows the round badge logo provided by the user,
+    white in dark mode and original otherwise. The CSP now allows images
+    only from the logo's host (`res.cloudinary.com`).
+  - **Brand tool:** new tool `aquakart_get_brand_assets` (no scope; any
+    signed-in connection). It returns the clean PNGs (`logo_nt2v92.png`,
+    `logo-white_rpvptt.png`) as `url` and the badge renditions as
+    `previewUrl`. It also returns the usage rules (never redraw or
+    recolour; original on light backgrounds, white on dark) and how to
+    apply the exact logo with `applyBrandLogo`. The server `instructions`
+    tell clients to call it before making branded images.
+  - **Logo overlay:** the overlay logo now defaults to `logo_nt2v92` (and
+    `logo-white_rpvptt` for `logoVariant: "white"`, a new
+    `aquakart_attach_image` option). Before, `applyBrandLogo` returned
+    `LOGO_NOT_CONFIGURED` until `AQUAKART_LOGO_PUBLIC_ID` was set.
+    `AQUAKART_LOGO_PUBLIC_ID=none` turns overlays off.
+  - **New optional env vars:** `AQUAKART_LOGO_WHITE_PUBLIC_ID`,
+    `MCP_BRAND_LOGO_URL`, `MCP_BRAND_LOGO_WHITE_URL`,
+    `MCP_CONSENT_LOGO_URL`, `MCP_CONSENT_LOGO_WHITE_URL`.
+- Files: `src/services/mcp/config.js`, `src/services/mcp/consentPage.js`,
+  `src/services/mcp/oauthProvider.js`, `src/services/mcp/blogTools.js`,
+  `src/services/mcp/store.js`, `src/services/mcp/server.js`,
+  `src/docs/mcp.js`, `swagger-output.json`, `.env.example`,
+  `test/mcpBlogTools.test.js`, `test/mcpCatalogTools.test.js`,
+  `test/mcpServer.test.js`, `docs/MCP_BLOG_PUBLISHING.md`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `curl` fetched all four logo URLs (two badges, two clean files): each
+    returned 200 `image/png`.
+  - `node --check` passed on the changed files.
+  - MCP and blog regression tests: 49/49 passed. New tests cover the
+    consent-page logo and CSP, the default and white overlay, and the
+    brand tool over the SDK client.
+  - Full `node --test`: 220/221 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` test.
+  - `npm run swagger` succeeded, followed by Prettier; only the
+    `/v1/mcp` description changed.
+  - I did not check the consent page in a browser, and I did not run the
+    overlay against Cloudinary.
+- Limitations/follow-up:
+  - Not deployed.
+  - **Logo fidelity:** image models may still distort a reference logo;
+    only the overlay guarantees the exact file.
+  - **Instagram:** Instagram uploads have no overlay option yet.
+
+### MCP: category, subcategory and page SEO tools (CRUD and readiness)
+
+- Request/problem: add CRUD for categories, subcategories and page SEO to
+  the MCP server, plus SEO for all pages.
+- Changes/result:
+  - **New tools (15):**
+    - categories and subcategories: `aquakart_list/get/create/update/delete_category`
+      and the same for `_subcategory`
+    - page SEO: `aquakart_list_seo`, `aquakart_get_seo`,
+      `aquakart_create_seo`, `aquakart_update_seo`
+    - `aquakart_get_seo_readiness`, the existing CRM readiness report over
+      every page (static, product, category, subcategory, blog)
+  - **Scopes:** `categories:read` and `categories:write` map to
+    `products.read` and `products.manage`, since the CRM category routes
+    are admin-only. `seo:read` and `seo:write` map to `seo.read` and
+    `seo.manage`. The write scopes start unticked on the consent page.
+  - **Rules, matching the CRM:**
+    - deletes are refused while subcategories or products use the record
+      (`CATEGORY_IN_USE`, `SUBCATEGORY_IN_USE`)
+    - a subcategory can't move to another category while products use it
+    - category creation needs a photo
+    - SEO validation reuses `buildSeoPayload`
+    - SEO has no hard delete; `active: false` switches a page off
+  - **Extras:**
+    - Titles must be unique, since the storefront looks them up by title.
+    - Renames return a URL-change warning.
+    - Replaced photos are never deleted from Cloudinary.
+    - Updates and deletes accept `expectedRevision`.
+    - Writes are idempotent and audited (`mcp.category.*`,
+      `mcp.subcategory.*`, `mcp.seo.*`).
+    - A hidden `mcpOperation` field (`select: false`) on `AquaCategory`,
+      `AquaSubCategory` and `AquaSeo` makes create retries crash-safe.
+    - A blog's replaced title image is now also kept when a category or
+      subcategory uses it.
+- Files: `src/services/mcp/taxonomySeoTools.js` (new),
+  `src/services/mcp/taxonomySeoSchemas.js` (new),
+  `src/services/mcp/server.js`, `src/services/mcp/store.js`,
+  `src/services/mcp/config.js`, `src/services/mcp/consentPage.js`,
+  `src/services/mcp/oauthProvider.js`, `src/services/mcp/index.js`,
+  `src/routes/mcp.js`, `src/models/category.js`,
+  `src/models/sub-category.js`, `src/models/seo.js`, `src/docs/mcp.js`,
+  `swagger-output.json`, `test/mcpTaxonomySeo.test.js` (new),
+  `docs/MCP_BLOG_PUBLISHING.md`, `docs/PROJECT_MAP.md`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed on every changed file.
+  - `node --test test/mcpTaxonomySeo.test.js`: 7/7 passed, including SDK
+    `Client` over `InMemoryTransport`.
+  - Full `node --test`: 227/228 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` test.
+  - `npm run swagger` succeeded, followed by Prettier; only the MCP endpoint
+    descriptions changed.
+  - Fakes only: I ran nothing against MongoDB or Cloudinary, and the Mongo
+    store queries and aggregation were not run against a real database.
+- Limitations/follow-up:
+  - Not deployed.
+  - **Reconnect:** connections must reconnect and tick the new scopes.
+  - **Stray photos:** photos replaced through MCP stay in Cloudinary.
+  - **Readiness size:** the readiness report is capped at 200 pages per
+    call.
+  - **AI refresh:** the weekly AI SEO refresh can overwrite pages edited
+    through MCP unless `aiLocked: true` is set.
+
 ## 2026-11-05
 
 ### Storefront voice questions: `POST /v1/ai/transcribe`

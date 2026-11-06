@@ -75,7 +75,7 @@
       "post": {
         "tags": ["MCP"],
         "summary": "Staff sign-in and consent form submit",
-        "description": "Posted by the HTML page from /authorize. Staff sign in with CRM email/password; each granted scope needs its CRM permission (blogs.manage or instagram.publish). Redirects to the client's registered redirect_uri with code+state, or error=access_denied. 10 requests / 15 min per IP.",
+        "description": "Posted by the HTML page from /authorize. Staff sign in with CRM email/password; each granted scope needs its CRM permission (blogs.manage, instagram.publish, products.read/products.manage (also categories), coupons.read/coupons.manage, seo.read/seo.manage). Redirects to the client's registered redirect_uri with code+state, or error=access_denied. 10 requests / 15 min per IP.",
         "consumes": ["application/x-www-form-urlencoded"],
         "parameters": [
           {
@@ -12196,7 +12196,7 @@
       "post": {
         "tags": ["MCP"],
         "summary": "MCP endpoint (Streamable HTTP, stateless)",
-        "description": "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image (media:upload); aquakart_publish_blog (blogs:publish); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup). Tool errors return result.isError with structuredContent.error.code. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
+        "description": "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_get_brand_assets (any signed-in connection: official logo files and usage rules); aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image (media:upload); aquakart_publish_blog (blogs:publish); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup); aquakart_list_products, aquakart_get_product (products:read); aquakart_create_product (products:write); aquakart_list_coupons, aquakart_get_coupon (coupons:read); aquakart_create_coupon (coupons:write); aquakart_list_categories, aquakart_get_category, aquakart_list_subcategories, aquakart_get_subcategory (categories:read); aquakart_create/update/delete_category and _subcategory (categories:write); aquakart_list_seo, aquakart_get_seo, aquakart_get_seo_readiness (seo:read); aquakart_create_seo, aquakart_update_seo (seo:write). Tool errors return result.isError with the JSON error ({ ok: false, error: { code, message } }) in content[0].text; successful results also carry structuredContent. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
         "security": [
           {
             "bearerAuth": []

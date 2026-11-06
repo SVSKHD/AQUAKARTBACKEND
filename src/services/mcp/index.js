@@ -3,6 +3,8 @@ import { writeAudit } from "../audit.js";
 import { loadMcpConfig } from "./config.js";
 import { createOperationRunner } from "./operations.js";
 import { createBlogTools } from "./blogTools.js";
+import { createCatalogTools } from "./catalogTools.js";
+import { createTaxonomySeoTools } from "./taxonomySeoTools.js";
 import { createInstagramTools } from "./instagramTools.js";
 import { createInstagramGraph } from "./instagramGraph.js";
 import { createOAuthProvider } from "./oauthProvider.js";
@@ -33,6 +35,16 @@ export const buildMcpServices = (env = process.env) => {
       uploader: cloudinaryUploader,
       runOperation,
       config,
+      audit,
+    }),
+    catalogTools: createCatalogTools({
+      store: mongoStore,
+      runOperation,
+      audit,
+    }),
+    taxonomySeoTools: createTaxonomySeoTools({
+      store: mongoStore,
+      runOperation,
       audit,
     }),
     instagramTools: createInstagramTools({

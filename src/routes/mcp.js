@@ -29,6 +29,8 @@ export const createMcpRouters = ({
   provider,
   blogTools,
   instagramTools,
+  catalogTools,
+  taxonomySeoTools,
 }) => {
   const router = express.Router();
   const oauthRouter = express.Router();
@@ -111,6 +113,8 @@ export const createMcpRouters = ({
     const server = createAquakartMcpServer({
       blogTools,
       instagramTools,
+      catalogTools,
+      taxonomySeoTools,
       auth,
       correlationId: req.correlationId,
       resourceMetadataUrl,

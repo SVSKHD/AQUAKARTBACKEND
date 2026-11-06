@@ -22,6 +22,8 @@ const AquaSubCategorySchema = new mongoose.Schema(
       ref: "AquaCategory",
       required: true,
     },
+    // MCP operation that created it (crash-safe retries); hidden.
+    mcpOperation: { type: String, select: false },
   },
   {
     timestamps: true,

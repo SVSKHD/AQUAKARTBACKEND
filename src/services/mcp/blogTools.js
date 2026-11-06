@@ -163,6 +163,44 @@ export const createBlogTools = ({
   const hasScope = (ctx, scope) => ctx.auth.scopes.includes(scope);
 
   return {
+    // Official logo files and rules for MCP clients that generate images.
+    getBrandAssets() {
+      const { brand } = config;
+      return {
+        brand: {
+          name: brand.name,
+          logos: [
+            {
+              variant: "original",
+              url: brand.logoUrl,
+              previewUrl: brand.badgeUrl,
+              format: "png",
+              useOn: "light or white backgrounds",
+            },
+            {
+              variant: "white",
+              url: brand.logoWhiteUrl,
+              previewUrl: brand.badgeWhiteUrl,
+              format: "png",
+              useOn: "dark backgrounds and photos",
+            },
+          ],
+          overlay: {
+            available: Boolean(config.logoPublicId),
+            howTo:
+              "For a blog title image, generate the artwork WITHOUT a logo, upload it with aquakart_upload_image, then call aquakart_attach_image with applyBrandLogo: true (logoVariant 'white' on dark images). The server composites the real logo file, bottom-right.",
+          },
+          rules: [
+            "Use `url` (the clean logo file) as the visual reference; `previewUrl` is only a round badge rendition for display, so do not copy its red border or dark circle.",
+            "Never redraw, re-letter, recolour, stretch, rotate, crop or add effects to the logo. If an image needs the logo and you cannot place the exact file, leave clear space and use the logo overlay instead.",
+            "Use the original logo on light backgrounds and the white logo on dark backgrounds or busy photos.",
+            "Keep clear space around the logo of at least a quarter of its height, and keep it legible (roughly 15-20% of the image width).",
+            "Do not invent taglines, certifications or partner logos.",
+          ],
+        },
+      };
+    },
+
     async listBlogs({ status = "all", query, page = 1, limit = 20 }) {
       const { items, total } = await store.listBlogs({
         status,
@@ -501,13 +539,17 @@ export const createBlogTools = ({
           if (args.applyBrandLogo && !config.logoPublicId) {
             throw new BlogToolError(
               "LOGO_NOT_CONFIGURED",
-              "AQUAKART_LOGO_PUBLIC_ID is not set on the server",
+              "Logo overlays are turned off (AQUAKART_LOGO_PUBLIC_ID=none)",
             );
           }
           const titleImage = {
             id: media.publicId,
             secure_url: args.applyBrandLogo
-              ? uploader.brandedUrl(media.publicId, config)
+              ? uploader.brandedUrl(
+                  media.publicId,
+                  config,
+                  args.logoVariant || "original",
+                )
               : media.secureUrl,
           };
           const previous = blog.titleImages?.[0];

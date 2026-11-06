@@ -17,6 +17,8 @@ const AquaCategorySchema = new mongoose.Schema(
     keywords: {
       type: String,
     },
+    // MCP operation that created it (crash-safe retries); hidden.
+    mcpOperation: { type: String, select: false },
   },
   {
     timestamps: true,

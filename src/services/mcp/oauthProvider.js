@@ -123,6 +123,10 @@ export const createOAuthProvider = ({
   now = () => new Date(),
 }) => {
   const consentAction = `${config.baseUrl}${MCP_PATH}/oauth/consent`;
+  const consentLogo = {
+    light: config.brand?.badgeUrl,
+    dark: config.brand?.badgeWhiteUrl,
+  };
 
   const issueTokens = async ({
     clientId,
@@ -237,12 +241,13 @@ export const createOAuthProvider = ({
         resource: config.resourceUrl,
         expiresAt: new Date(now().getTime() + 10 * 60000),
       });
-      consentSecurityHeaders(res, params.redirectUri);
+      consentSecurityHeaders(res, params.redirectUri, consentLogo);
       res
         .status(200)
         .type("html")
         .send(
           renderConsentPage({
+            logo: consentLogo,
             action: consentAction,
             requestId,
             clientName: client.client_name,
@@ -278,12 +283,13 @@ export const createOAuthProvider = ({
         return res.redirect(302, url.href);
       };
       const again = (error) => {
-        consentSecurityHeaders(res, pending.redirectUri);
+        consentSecurityHeaders(res, pending.redirectUri, consentLogo);
         return res
           .status(400)
           .type("html")
           .send(
             renderConsentPage({
+              logo: consentLogo,
               action: consentAction,
               requestId,
               clientName: client?.clientName,
@@ -321,7 +327,7 @@ export const createOAuthProvider = ({
       const granted = permittedScopes(staff, ticked);
       if (!granted.length) {
         return again(
-          "Choose at least one access your account is permitted to grant (blogs need blogs.manage; Instagram needs instagram.publish).",
+          "Choose at least one access your account is permitted to grant (blogs need blogs.manage; Instagram needs instagram.publish; products need products.read/products.manage; coupons need coupons.read/coupons.manage; categories need products.read/products.manage; SEO needs seo.read/seo.manage).",
         );
       }
       const consumed = await store.consumeRequest(sha256(requestId), now());

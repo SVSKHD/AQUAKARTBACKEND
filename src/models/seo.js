@@ -75,6 +75,8 @@ const SeoSchema = new mongoose.Schema(
     aiPrevious: { type: mongoose.Schema.Types.Mixed, default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
+    // MCP operation that created it (crash-safe retries); hidden.
+    mcpOperation: { type: String, select: false },
   },
   { timestamps: true },
 );

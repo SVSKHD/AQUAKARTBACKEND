@@ -13,6 +13,14 @@ export const MCP_SCOPES = {
   igUpload: "instagram:upload",
   igPublish: "instagram:publish",
   igCleanup: "instagram:cleanup",
+  productsRead: "products:read",
+  productsWrite: "products:write",
+  couponsRead: "coupons:read",
+  couponsWrite: "coupons:write",
+  categoriesRead: "categories:read",
+  categoriesWrite: "categories:write",
+  seoRead: "seo:read",
+  seoWrite: "seo:write",
 };
 export const MCP_SCOPE_LIST = Object.values(MCP_SCOPES);
 export const MCP_SCOPE_LABELS = {
@@ -24,9 +32,25 @@ export const MCP_SCOPE_LABELS = {
   "instagram:upload": "Upload Instagram creatives to temporary storage",
   "instagram:publish": "Post to the Aquakart Instagram account",
   "instagram:cleanup": "Delete temporary Instagram creatives",
+  "products:read":
+    "Read the product catalogue (no dealer prices or reviewer details)",
+  "products:write":
+    "Add new products; they appear on the live website immediately",
+  "coupons:read": "Read coupons and their usage counts",
+  "coupons:write":
+    "Create coupons (draft by default; active ones apply at checkout)",
+  "categories:read": "Read categories and subcategories",
+  "categories:write":
+    "Create, edit and delete categories and subcategories on the live website",
+  "seo:read": "Read page SEO settings and the SEO readiness report",
+  "seo:write":
+    "Create and edit page SEO settings (titles, descriptions, canonical, social tags) on the live website",
 };
 // The CRM permission a staff member needs before they can grant a scope.
-// Scopes never reach beyond blogs/Instagram: no customers, orders, payments.
+// Scopes cover blogs, Instagram, the product catalogue, categories, coupons
+// and page SEO only:
+// never customers, orders or payments. products.* are admin-only by default
+// (super-admin / role 1), matching the CRM product routes (checkAdmin).
 export const SCOPE_PERMISSIONS = {
   "blogs:read": "blogs.manage",
   "blogs:write": "blogs.manage",
@@ -36,6 +60,15 @@ export const SCOPE_PERMISSIONS = {
   "instagram:upload": "instagram.publish",
   "instagram:publish": "instagram.publish",
   "instagram:cleanup": "instagram.publish",
+  "products:read": "products.read",
+  "products:write": "products.manage",
+  "coupons:read": "coupons.read",
+  "coupons:write": "coupons.manage",
+  // Category/subcategory routes are admin-only in the CRM (checkAdmin).
+  "categories:read": "products.read",
+  "categories:write": "products.manage",
+  "seo:read": "seo.read",
+  "seo:write": "seo.manage",
 };
 // OAuth callbacks of supported MCP clients: ChatGPT (stable RFC 9207 URI and
 // per-connector callback ids) and Claude. Claude Code and other native
@@ -50,6 +83,31 @@ const DEFAULT_REDIRECTS = [
 // Hosts ChatGPT serves file-param download_url links from. Confirm against
 // a real call before production; see docs/MCP_BLOG_PUBLISHING.md.
 const DEFAULT_FILE_HOSTS = "*.oaiusercontent.com";
+
+// Official Aquakart logo files in the aquakartproducts Cloudinary account.
+const LOGO_BASE = "https://res.cloudinary.com/aquakartproducts/image/upload";
+const BADGE = "w_1000,c_fill,ar_1:1,g_auto,r_max,bo_5px_solid_red,b_rgb:262c35";
+export const DEFAULT_BRAND = {
+  logoId: "logo_nt2v92",
+  logoWhiteId: "logo-white_rpvptt",
+  logoUrl: `${LOGO_BASE}/v1793926813/logo_nt2v92.png`,
+  logoWhiteUrl: `${LOGO_BASE}/v1793926813/logo-white_rpvptt.png`,
+  badgeUrl: `${LOGO_BASE}/${BADGE}/v1793926813/logo_nt2v92.png`,
+  badgeWhiteUrl: `${LOGO_BASE}/${BADGE}/v1793926813/logo-white_rpvptt.png`,
+};
+const logoId = (value, fallback) => {
+  const id = String(value || "").trim();
+  if (id.toLowerCase() === "none") return null;
+  return id || fallback;
+};
+const httpsUrl = (value) => {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" ? url.href : null;
+  } catch (_error) {
+    return null;
+  }
+};
 
 const positive = (value, fallback, max = Infinity) => {
   const number = Number(value);
@@ -121,7 +179,23 @@ export const loadMcpConfig = (env = process.env) => {
       true,
     ),
     // Trusted logo already stored in Cloudinary (never AI-generated).
-    logoPublicId: String(env.AQUAKART_LOGO_PUBLIC_ID || "").trim() || null,
+    // Defaults to the official Aquakart logo; "none" turns overlays off.
+    logoPublicId: logoId(env.AQUAKART_LOGO_PUBLIC_ID, DEFAULT_BRAND.logoId),
+    logoWhitePublicId: logoId(
+      env.AQUAKART_LOGO_WHITE_PUBLIC_ID,
+      DEFAULT_BRAND.logoWhiteId,
+    ),
+    brand: {
+      name: "Aquakart",
+      // Clean files: the reference for anyone reproducing the logo.
+      logoUrl: httpsUrl(env.MCP_BRAND_LOGO_URL) || DEFAULT_BRAND.logoUrl,
+      logoWhiteUrl:
+        httpsUrl(env.MCP_BRAND_LOGO_WHITE_URL) || DEFAULT_BRAND.logoWhiteUrl,
+      // Round badge renditions shown on the consent page.
+      badgeUrl: httpsUrl(env.MCP_CONSENT_LOGO_URL) || DEFAULT_BRAND.badgeUrl,
+      badgeWhiteUrl:
+        httpsUrl(env.MCP_CONSENT_LOGO_WHITE_URL) || DEFAULT_BRAND.badgeWhiteUrl,
+    },
     logoGravity: String(env.MCP_LOGO_GRAVITY || "south_east").trim(),
     logoWidthRatio: positive(env.MCP_LOGO_WIDTH_RATIO, 0.18, 0.5),
     operationLockMs: Math.trunc(

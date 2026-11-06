@@ -333,7 +333,8 @@ test("ChatGPT file params download through the trusted downloader", async () => 
 });
 
 test("attach sets the title image, publish runs checks, and repeat publishes are no-ops", async () => {
-  const { tools, store } = setup();
+  // Logo overlays switched off: applyBrandLogo is refused.
+  const { tools, store } = setup({ AQUAKART_LOGO_PUBLIC_ID: "none" });
   const { blog } = await tools.createBlog(draftArgs(), PUBLISH);
   await rejects(
     tools.publishBlog(
@@ -416,6 +417,51 @@ test("branded title images use the stored logo", async () => {
     WRITE,
   );
   assert.match(attached.titleImage.secure_url, /l_logo/);
+});
+
+test("the official logo is the default overlay and brand assets describe it", async () => {
+  const { tools, uploader, config } = setup();
+  assert.equal(config.logoPublicId, "logo_nt2v92");
+  assert.equal(config.logoWhitePublicId, "logo-white_rpvptt");
+  const variants = [];
+  uploader.brandedUrl = (publicId, _config, variant) => {
+    variants.push(variant);
+    return `https://res.cloudinary.com/demo/image/upload/l_${variant}/${publicId}`;
+  };
+  const { blog } = await tools.createBlog(draftArgs(), WRITE);
+  const { media } = await tools.uploadImage(
+    { idempotencyKey: "img-0001", imageBase64: PNG.toString("base64") },
+    WRITE,
+  );
+  await tools.attachImage(
+    {
+      idempotencyKey: "attach-white-1",
+      blogId: blog.blogId,
+      mediaId: media.mediaId,
+      applyBrandLogo: true,
+      logoVariant: "white",
+    },
+    WRITE,
+  );
+  assert.deepEqual(variants, ["white"]);
+
+  const { brand } = tools.getBrandAssets();
+  assert.deepEqual(
+    brand.logos.map((logo) => [logo.variant, logo.url]),
+    [
+      [
+        "original",
+        "https://res.cloudinary.com/aquakartproducts/image/upload/v1793926813/logo_nt2v92.png",
+      ],
+      [
+        "white",
+        "https://res.cloudinary.com/aquakartproducts/image/upload/v1793926813/logo-white_rpvptt.png",
+      ],
+    ],
+  );
+  assert.match(brand.logos[1].previewUrl, /r_max,bo_5px_solid_red/);
+  assert.equal(brand.overlay.available, true);
+  assert.ok(brand.rules.some((rule) => /Never redraw/.test(rule)));
 });
 
 test("changing a live blog's image needs blogs:publish", async () => {

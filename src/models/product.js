@@ -190,6 +190,10 @@ const AquaProductSchema = new mongoose.Schema({
     type: Date,
     default: Date.now(),
   },
+  // Set only for products added through the MCP server: the operation that
+  // created it, so a retried request after a crash returns it instead of
+  // creating a duplicate. Hidden from all existing queries.
+  mcpOperation: { type: String, select: false },
 });
 
 const AquaProduct =

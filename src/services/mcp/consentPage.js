@@ -17,17 +17,28 @@ const SENSITIVE = new Set([
   "blogs:publish",
   "instagram:publish",
   "instagram:cleanup",
+  "products:write",
+  "coupons:write",
+  "categories:write",
+  "seo:write",
 ]);
 
-export const consentSecurityHeaders = (res, redirectUri) => {
-  let target = "";
+const originOf = (url) => {
   try {
-    target = new URL(redirectUri).origin;
+    return new URL(url).origin;
   } catch (_error) {
-    target = "";
+    return "";
   }
+};
+
+// logo = { light, dark } image URLs; only their origins may load images.
+export const consentSecurityHeaders = (res, redirectUri, logo = {}) => {
+  const target = originOf(redirectUri);
+  const images = [...new Set([logo.light, logo.dark].map(originOf))]
+    .filter(Boolean)
+    .join(" ");
   res.set({
-    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${target}; frame-ancestors 'none'; base-uri 'none'`,
+    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; ${images ? `img-src ${images}; ` : ""}form-action 'self' ${target}; frame-ancestors 'none'; base-uri 'none'`,
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
@@ -42,7 +53,12 @@ export const renderConsentPage = ({
   scopes,
   email = "",
   error = "",
+  logo = {},
 }) => {
+  // White logo in dark mode, original otherwise.
+  const logoHtml = logo.light
+    ? `<picture class="logo">${logo.dark ? `<source srcset="${escape(logo.dark)}" media="(prefers-color-scheme: dark)">` : ""}<img src="${escape(logo.light)}" alt="Aquakart" width="72" height="72"></picture>`
+    : "";
   let host = "";
   try {
     host = new URL(redirectUri).host;
@@ -74,10 +90,13 @@ export const renderConsentPage = ({
   .actions { display:flex; gap:8px; margin-top:20px; }
   button { flex:1; padding:10px; border-radius:8px; border:1px solid var(--line); font:inherit; cursor:pointer; background:transparent; color:inherit; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .logo { display:block; text-align:center; margin:0 0 12px; }
+  .logo img { width:72px; height:72px; border-radius:50%; object-fit:contain; }
 </style></head>
 <body><main><div class="card">
+  ${logoHtml}
   <h1>Connect ${escape(clientName || "an MCP client")} to Aquakart</h1>
-  <p>Sign in with your Aquakart staff account. Access is limited to blogs and Instagram publishing, and is returned to <strong>${escape(host)}</strong>.</p>
+  <p>Sign in with your Aquakart staff account. Access is limited to blogs, Instagram, products, categories, coupons and page SEO, and is returned to <strong>${escape(host)}</strong>.</p>
   ${error ? `<p class="error" role="alert">${escape(error)}</p>` : ""}
   <form method="post" action="${escape(action)}">
     <input type="hidden" name="request_id" value="${escape(requestId)}">

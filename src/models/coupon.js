@@ -38,6 +38,8 @@ const CouponSchema = new mongoose.Schema(
       index: true,
     },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
+    // MCP operation that created the coupon (crash-safe retries); hidden.
+    mcpOperation: { type: String, select: false },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
     // Legacy fields kept during e-commerce migration.
     discountPercentage: Number,

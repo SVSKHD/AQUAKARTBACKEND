@@ -1,9 +1,10 @@
-# Aquakart MCP server: blog and Instagram publishing
+# Aquakart MCP server: blogs, Instagram, catalogue, coupons and SEO
 
-Last reviewed: 2026-11-05 (Asia/Calcutta). Verify details in source:
+Last reviewed: 2026-11-06 (Asia/Calcutta). Verify details in source:
 `src/routes/mcp.js`, `src/services/mcp/`, `src/models/mcp/`,
 `src/validators/mcp/blog.js`. Tests: `test/mcpServer.test.js`,
 `test/mcpBlogTools.test.js`, `test/mcpInstagram.test.js`,
+`test/mcpCatalogTools.test.js`, `test/mcpTaxonomySeo.test.js`,
 `test/blogRoutesRegression.test.js`.
 
 A remote MCP server lets an authorized MCP client (ChatGPT, Claude, Claude
@@ -14,6 +15,11 @@ Code, MCP Inspector) do these jobs:
 - upload and attach blog images
 - publish blogs
 - post images to the Aquakart Instagram account
+- read the product catalogue and add products
+- read coupons and create coupons
+- create, read, update and delete categories and subcategories
+- create, read and update page SEO, and run the SEO readiness report over
+  all pages
 
 The client starts every action. The backend has no cron job for this
 workflow. The only background work is the cleanup worker, which deletes
@@ -54,14 +60,28 @@ the MCP SDK serves them relative to the issuer. The reverse proxy must forward
   - `blogs:*` and `media:upload` need `blogs.manage`
   - `instagram:*` needs `instagram.publish`, a new permission; assign it to
     the role in CRM Access Control
+  - `products:read` needs `products.read` and `products:write` needs
+    `products.manage`. Both are new and assigned to no role, so only
+    super-admins and role 1 have them, matching the admin-only CRM product
+    routes
+  - `coupons:read` needs `coupons.read` and `coupons:write` needs
+    `coupons.manage`, the same permissions the CRM coupon routes use
+  - `categories:read` and `categories:write` need `products.read` and
+    `products.manage` (the CRM category routes are admin-only)
+  - `seo:read` and `seo:write` need `seo.read` and `seo.manage`
 
   Super-admin and legacy role 1 have every permission.
 
 - **Scopes:** `blogs:read`, `blogs:write`, `media:upload`, `blogs:publish`,
   `instagram:read`, `instagram:upload`, `instagram:publish`,
-  `instagram:cleanup`. Publish and cleanup scopes start unticked on the consent
-  page, so granting them is always a deliberate choice. No scope reaches
-  customers, orders, payments or other CRM data.
+  `instagram:cleanup`, `products:read`, `products:write`, `coupons:read`,
+  `coupons:write`, `categories:read`, `categories:write`, `seo:read`,
+  `seo:write`. Live-effect scopes start unticked on the consent page
+  (`blogs:publish`, `instagram:publish`, `instagram:cleanup`,
+  `products:write`, `coupons:write`, `categories:write`, `seo:write`), so
+  granting them is always a
+  deliberate choice. No scope reaches customers, orders, payments or other
+  CRM data.
 - **Clients:** Dynamic Client Registration only accepts redirect URIs on the
   allowlist:
   - ChatGPT: `https://chatgpt.com/connector_platform_oauth_redirect` and
@@ -116,38 +136,64 @@ same key when retrying after a timeout.
 
 Results:
 
-- **Success:** `structuredContent = { ok: true, …, correlationId, operationId?, replayed? }`
-- **Failure:** `isError: true` with `{ ok: false, error: { code, message, details?, retryable? }, correlationId, operationId? }`
+- **Success:** `structuredContent` (and the same JSON in `content[0].text`) = `{ ok: true, …, correlationId, operationId?, replayed? }`
+- **Failure:** `isError: true`; the JSON `{ ok: false, error: { code, message, details?, retryable? }, correlationId, operationId? }` is in `content[0].text` only. Error results carry no `structuredContent`: it would not match the tool's output schema, and SDK-based clients reject such results.
 
 A missing scope returns `INSUFFICIENT_SCOPE` plus
 `_meta["mcp/www_authenticate"]`, which prompts the client to re-authorize.
 
 | Tool                               | Scope               | Input (main fields)                                                                                       | Output (main fields)                                                          |
 | ---------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `aquakart_get_brand_assets`        | none (any sign-in)  | none                                                                                                      | `brand` (`logos[]` original/white `url` + `previewUrl`, `overlay`, `rules`)   |
 | `aquakart_list_blogs`              | `blogs:read`        | `status` draft/published/all, `query`, `page`, `limit≤50`                                                 | `blogs[]` (id, title, slug, status, revision, publicUrl)                      |
 | `aquakart_get_blog`                | `blogs:read`        | `blogId` or `slug`                                                                                        | `blog` with HTML, SEO fields, references, images                              |
 | `aquakart_get_blog_status`         | `blogs:read`        | `blogId` or `slug`                                                                                        | `status`, `publicUrl`, `visibleOnStorefront`, `revision`                      |
 | `aquakart_create_blog`             | `blogs:write`       | `idempotencyKey`, `title` (10-120), `description` (HTML), optional slug/SEO/taxonomy fields, `modelUsed`  | `blog` (always `draft`), `warnings`                                           |
 | `aquakart_update_blog`             | `blogs:write`       | `idempotencyKey`, `blogId`, `expectedRevision?`, any content field (null clears)                          | `blog`                                                                        |
 | `aquakart_upload_image`            | `media:upload`      | `idempotencyKey`, `image` (ChatGPT file) **or** `imageBase64`                                             | `media` (`mediaId`, `publicId`, `secure_url`), `deduplicated`                 |
-| `aquakart_attach_image`            | `blogs:write`       | `idempotencyKey`, `blogId`, `mediaId`, `applyBrandLogo?`, `expectedRevision?`                             | `blog`, `titleImage` `{ id, secure_url }`                                     |
+| `aquakart_attach_image`            | `blogs:write`       | `idempotencyKey`, `blogId`, `mediaId`, `applyBrandLogo?`, `logoVariant?`, `expectedRevision?`             | `blog`, `titleImage` `{ id, secure_url }`                                     |
 | `aquakart_publish_blog`            | `blogs:publish`     | `idempotencyKey`, `blogId`, `expectedRevision?`                                                           | `blog`, `publicUrl`, `alreadyPublished`, `visibleOnStorefront`                |
 | `aquakart_upload_instagram_image`  | `instagram:upload`  | `idempotencyKey`, `image` or `imageBase64`                                                                | `asset` (`assetId`, status, cleanup fields), `deduplicated`                   |
 | `aquakart_publish_instagram`       | `instagram:publish` | `idempotencyKey`, `assetId`, `caption` (≤2,200 chars, ≤30 hashtags, ≤20 mentions, plain text), `altText?` | `asset` (`instagramMediaId`, `permalink`, `cleanupAfter`), `alreadyPublished` |
 | `aquakart_get_instagram_status`    | `instagram:read`    | `assetId`                                                                                                 | `asset`                                                                       |
 | `aquakart_list_instagram_posts`    | `instagram:read`    | `status?`, `page`, `limit≤50`                                                                             | `assets[]`                                                                    |
 | `aquakart_cleanup_instagram_asset` | `instagram:cleanup` | `idempotencyKey`, `assetId`                                                                               | `asset`, `cleaned`, `alreadyCleaned`                                          |
+| `aquakart_list_products`           | `products:read`     | `query?`, `category?`, `inStock?`, `page`, `limit≤50`                                                     | `products[]` (id, title, brand, price, offer price, stock, category, image)   |
+| `aquakart_get_product`             | `products:read`     | `productId`                                                                                               | `product` with description, SEO/merchant fields, photos, rating summary       |
+| `aquakart_create_product`          | `products:write`    | `idempotencyKey`, `title`, `description` (HTML), `price`, `stock`, `brand`, `mediaIds` (1-10), optional   | `product` (live immediately; `merchantEnabled` false unless asked)            |
+| `aquakart_list_coupons`            | `coupons:read`      | `status?`, `query?` (code), `page`, `limit≤50`                                                            | `coupons[]` (discount, validity, limits, usage, status, `targetedAccounts`)   |
+| `aquakart_get_coupon`              | `coupons:read`      | `couponId` or `code`                                                                                      | `coupon`                                                                      |
+| `aquakart_create_coupon`           | `coupons:write`     | `idempotencyKey`, `code`, `discountType`, `discountValue`, `endsAt`, optional limits/restrictions/status  | `coupon` (`draft` unless `status: "active"`)                                  |
+
+Category, subcategory and SEO tools:
+
+| Tool                                                         | Scope              | Notes                                                                                         |
+| ------------------------------------------------------------ | ------------------ | --------------------------------------------------------------------------------------------- |
+| `aquakart_list_categories`, `aquakart_get_category`          | `categories:read`  | Photos, keywords, subcategory/product counts; get includes subcategories                      |
+| `aquakart_create_category`, `aquakart_update_category`       | `categories:write` | Create needs `mediaIds` (1-5); update is partial, takes `expectedRevision`                    |
+| `aquakart_delete_category`                                   | `categories:write` | Refused while subcategories/products use it (`CATEGORY_IN_USE`)                               |
+| `aquakart_list_subcategories`, `aquakart_get_subcategory`    | `categories:read`  | Optional `category` filter                                                                    |
+| `aquakart_create_subcategory`, `aquakart_update_subcategory` | `categories:write` | Needs an existing parent; can't move while products use it                                    |
+| `aquakart_delete_subcategory`                                | `categories:write` | Refused while products use it (`SUBCATEGORY_IN_USE`)                                          |
+| `aquakart_list_seo`, `aquakart_get_seo`                      | `seo:read`         | By `seoId` or `pageKey`; `active` filter                                                      |
+| `aquakart_get_seo_readiness`                                 | `seo:read`         | Every page: status, priority, score, issues, actions; `pageKey`/`entityType`/`status` filters |
+| `aquakart_create_seo`, `aquakart_update_seo`                 | `seo:write`        | CRM validation; partial updates; `active: false` switches a page off                          |
 
 Run `tools/list` for the full JSON Schemas.
 
 Common error codes:
 
 - **Validation and references:** `VALIDATION_FAILED`, `INVALID_REFERENCE`
-- **Duplicates:** `DUPLICATE_CONTENT`, `DUPLICATE_TITLE`, `SLUG_TAKEN`
+- **Duplicates:** `DUPLICATE_CONTENT`, `DUPLICATE_TITLE`, `SLUG_TAKEN`,
+  `DUPLICATE_SKU`, `COUPON_CODE_TAKEN`
 - **Concurrency and idempotency:** `REVISION_CONFLICT`,
   `IDEMPOTENCY_KEY_REUSED`, `OPERATION_IN_PROGRESS`
 - **Blogs:** `BLOG_NOT_FOUND`, `BLOG_NOT_DRAFT`, `PUBLISH_CHECKS_FAILED`
   (details list the failed checks)
+- **Catalogue:** `PRODUCT_NOT_FOUND`, `COUPON_NOT_FOUND`,
+  `CATEGORY_NOT_FOUND`, `SUBCATEGORY_NOT_FOUND`, `CATEGORY_IN_USE`,
+  `SUBCATEGORY_IN_USE`
+- **SEO:** `SEO_NOT_FOUND`, `PAGE_KEY_TAKEN`
 - **Images:** `UNSUPPORTED_IMAGE_TYPE`, `IMAGE_TOO_LARGE`,
   `UNTRUSTED_IMAGE_SOURCE`, `IMAGE_DOWNLOAD_FAILED`, `MEDIA_NOT_FOUND`,
   `LOGO_NOT_CONFIGURED`
@@ -157,6 +203,104 @@ Common error codes:
   `ALREADY_POSTED`, `INVALID_ASPECT_RATIO`, `INVALID_CAPTION`
 - **Cleanup:** `CLEANUP_NOT_ALLOWED`, `CLEANUP_FAILED`
 - **General:** `STORAGE_UNAVAILABLE`, `INTERNAL_ERROR`
+
+## Product and coupon rules
+
+Source: `src/services/mcp/catalogTools.js`. Data access is in
+`src/services/mcp/store.js`, limited by the `PRODUCT_FIELDS` and
+`COUPON_FIELDS` allowlists.
+
+- **What reads return:** products never include `dpPrice` (dealer price),
+  reviews or reviewer/customer ids. Coupons report `targetedAccounts` (a
+  count) instead of the customer ids they are restricted to.
+- **Products go live immediately.** `AquaProduct` has no draft state and the
+  storefront lists every product, so `aquakart_create_product` publishes.
+  - New products have `merchantEnabled: false`, which keeps them out of the
+    Google Merchant feed, unless the call passes `merchantEnabled: true`.
+  - Images: upload each with `aquakart_upload_image` first and pass the
+    `mediaIds` (1-10; the first is the main photo). They are stored under
+    `Blogs/mcp_<hash>` like blog images, not in the CRM `products/` folder.
+  - Description HTML is sanitized with the blog allowlist, and tags are
+    stripped from text fields. `discountPrice` must be below `price`, and
+    `discountPricePercentage` is computed. `user` is the staff member, as
+    the CRM sets it.
+  - A duplicate title (case-insensitive) gives `DUPLICATE_TITLE` and a
+    duplicate SKU gives `DUPLICATE_SKU`. Category and subcategory are checked
+    against the taxonomy.
+  - A hidden `mcpOperation` field (`select: false`) records the creating
+    operation. A retry after a crash then returns the saved product instead
+    of adding a second one.
+  - There are no MCP tools to edit or delete products; use the CRM.
+- **Coupons are drafts by default.** `status` defaults to `draft`, which
+  checkout refuses. Pass `status: "active"` to make a coupon usable at once.
+  - Codes are stored uppercase (3-32 letters, digits, `_` or `-`). An
+    existing code gives `COUPON_CODE_TAKEN`.
+  - Percentage values are capped at 100. `endsAt` must be in the future and
+    after `startsAt`, which defaults to now. Product and category ids must
+    exist.
+  - Coupons cannot be restricted to customer accounts through MCP.
+  - `createdBy` and `updatedBy` are the staff member. A hidden `mcpOperation`
+    makes retries crash-safe, as for products.
+  - Activate, pause or archive coupons in the CRM; there is no MCP update
+    tool.
+- **Shared images:** replacing a blog's title image never deletes an
+  MCP-uploaded image that a product still uses.
+- Writes are audited as `mcp.product.create` and `mcp.coupon.create`.
+
+## Category, subcategory and page SEO rules
+
+Source: `src/services/mcp/taxonomySeoTools.js` (logic) and
+`src/services/mcp/taxonomySeoSchemas.js` (tool schemas). They work on the
+existing `AquaCategory`, `AquaSubCategory` and `AquaSeo` collections and
+follow the CRM rules.
+
+- **Permissions:** `categories:read` and `categories:write` reuse
+  `products.read` and `products.manage`, because the CRM category routes are
+  admin-only. `seo:read` and `seo:write` need `seo.read` and `seo.manage`.
+  The write scopes start unticked.
+- **Categories:**
+  - Create needs 1-5 images from `aquakart_upload_image`; the CRM also
+    requires a photo.
+  - Titles must be unique (case-insensitive), because the storefront looks
+    categories up by title.
+  - Renaming returns `TITLE_CHANGED_STOREFRONT_URL`.
+  - Text is stored plain, with tags stripped.
+  - A delete is refused with `CATEGORY_IN_USE` while subcategories or products
+    use the category. Deleting something already gone returns
+    `alreadyDeleted: true`.
+- **Subcategories:**
+  - The parent category must exist, images are optional and titles are
+    unique.
+  - Moving a subcategory to another category is refused while products use
+    it.
+  - A delete is refused with `SUBCATEGORY_IN_USE` while products use it.
+- **Photos:** `mediaIds` replaces a category's or subcategory's photos. The
+  old files are **not** deleted from Cloudinary (the
+  `OLD_PHOTOS_KEPT_IN_CLOUDINARY` warning), because they may be shared CRM
+  images. A blog's replaced title image is kept if a category or subcategory
+  uses it.
+- **Page SEO:**
+  - Input is validated with the CRM's `buildSeoPayload`:
+    - `route` starts with `/`
+    - canonical and image URLs are absolute http(s)
+    - keywords are de-duplicated
+    - `pageKey` is lowercase and unique (`PAGE_KEY_TAKEN`)
+  - Updates are partial. Empty strings clear text fields, and the title
+    cannot be emptied.
+  - There is no hard delete, matching the CRM: `active: false` switches a
+    page's SEO off.
+  - `aiLocked: true` keeps the weekly AI SEO refresh from changing a page.
+    MCP leaves it unchanged unless asked.
+- **SEO readiness:** `aquakart_get_seo_readiness` runs the CRM readiness
+  report (`src/services/seoReadiness.js`) over every storefront page:
+  static pages, products, categories, subcategories and blogs. For each page
+  it returns the status, priority, score, missing fields, issues and
+  recommended actions, plus the site summary and the next best action.
+  CRM admin links are left out.
+- **Retries and audit:** all writes are idempotent. Updates and deletes take
+  `expectedRevision` (`REVISION_CONFLICT`). A hidden `mcpOperation` field
+  makes create retries crash-safe. Writes are audited as
+  `mcp.category.*`, `mcp.subcategory.*` and `mcp.seo.*`.
 
 ## Blog rules
 
@@ -217,8 +361,40 @@ are ignored. Limits:
   replaced MCP image is deleted only when no other blog uses it. Staff images
   are never deleted.
 - **Branded headers:** `applyBrandLogo: true` overlays the official logo
-  already stored in Cloudinary (`AQUAKART_LOGO_PUBLIC_ID`) using a Cloudinary
-  transformation. The logo is never AI-generated.
+  already stored in Cloudinary using a Cloudinary transformation (bottom-right
+  by default). The logo is never AI-generated.
+  - The default logo ids are `logo_nt2v92` (original) and
+    `logo-white_rpvptt` (white). Override them with `AQUAKART_LOGO_PUBLIC_ID`
+    and `AQUAKART_LOGO_WHITE_PUBLIC_ID`, or set `none` to turn overlays off
+    (`LOGO_NOT_CONFIGURED`).
+  - `logoVariant: "white"` uses the white logo for dark images.
+
+## Logo references for AI-generated images
+
+- `aquakart_get_brand_assets` needs no scope; any signed-in connection can
+  call it. The server's MCP `instructions` tell clients to call it before
+  creating a branded image.
+- **What it returns:**
+  - for each logo (original and white): `url`, the clean PNG to use as
+    the reference, and `previewUrl`, the round badge with a red border on
+    a dark background. The badge is shown on the consent page and must not
+    be copied.
+  - rules: never redraw, recolour or distort the logo; use the original on
+    light backgrounds and the white logo on dark ones; keep clear space
+  - how to get the exact logo on a blog image: generate the image without
+    a logo, upload it, then attach with `applyBrandLogo`
+- **Files:** clean logos are
+  `https://res.cloudinary.com/aquakartproducts/image/upload/v1793926813/logo_nt2v92.png`
+  and `.../logo-white_rpvptt.png`. Override them with `MCP_BRAND_LOGO_URL` and
+  `MCP_BRAND_LOGO_WHITE_URL`.
+- **Limits:** image models may still distort a logo they are shown. Only the
+  overlay guarantees the exact file. Instagram uploads have no overlay
+  option, so a logo in an Instagram creative is only as accurate as the
+  model that made it.
+
+The consent page shows the badge logo: white in dark mode, original
+otherwise (`MCP_CONSENT_LOGO_URL` and `MCP_CONSENT_LOGO_WHITE_URL`). Its CSP
+allows images only from the logo's host.
 
 ## Instagram publishing
 

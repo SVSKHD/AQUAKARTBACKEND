@@ -349,6 +349,7 @@ test("ChatGPT-style OAuth + MCP flow: discovery, consent, tools and scope enforc
     "aquakart_create_blog",
     "aquakart_get_blog",
     "aquakart_get_blog_status",
+    "aquakart_get_brand_assets",
     "aquakart_get_instagram_status",
     "aquakart_list_blogs",
     "aquakart_list_instagram_posts",
@@ -414,7 +415,7 @@ test("ChatGPT-style OAuth + MCP flow: discovery, consent, tools and scope enforc
   );
   assert.equal(publish.body.result.isError, true);
   assert.equal(
-    publish.body.result.structuredContent.error.code,
+    JSON.parse(publish.body.result.content[0].text).error.code,
     "INSUFFICIENT_SCOPE",
   );
   assert.match(
@@ -428,7 +429,7 @@ test("ChatGPT-style OAuth + MCP flow: discovery, consent, tools and scope enforc
     {},
   );
   assert.equal(
-    ig.body.result.structuredContent.error.code,
+    JSON.parse(ig.body.result.content[0].text).error.code,
     "INSUFFICIENT_SCOPE",
   );
   assert.equal(env.store.blogs[0].status, "draft");
@@ -549,7 +550,7 @@ test("publishing needs an explicitly granted scope, and disabling staff cuts acc
     { idempotencyKey: "pub-e2e-0001", blogId: objectId() },
   );
   assert.equal(
-    missing.body.result.structuredContent.error.code,
+    JSON.parse(missing.body.result.content[0].text).error.code,
     "BLOG_NOT_FOUND",
   );
 
@@ -562,7 +563,7 @@ test("publishing needs an explicitly granted scope, and disabling staff cuts acc
     {},
   );
   assert.equal(
-    stripped.body.result.structuredContent.error.code,
+    JSON.parse(stripped.body.result.content[0].text).error.code,
     "INSUFFICIENT_SCOPE",
   );
   env.staff.status = "disabled";
