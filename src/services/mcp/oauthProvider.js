@@ -121,6 +121,7 @@ export const createOAuthProvider = ({
   config,
   store = mongoOAuthStore,
   now = () => new Date(),
+  log = console,
 }) => {
   const consentAction = `${config.baseUrl}${MCP_PATH}/oauth/consent`;
   const consentLogo = {
@@ -174,16 +175,36 @@ export const createOAuthProvider = ({
       const client = await store.getClient(clientId);
       return client ? toClientInfo(client) : undefined;
     },
-    // Dynamic Client Registration (RFC 7591). Only allowlisted redirect URIs;
-    // registered as a public client, so no secret is issued or stored.
+    // Dynamic Client Registration (RFC 7591). Only allowlisted redirect URIs
+    // are registered: extra, unlisted URIs a client offers are dropped (it can
+    // never be redirected to them); with none allowed the request fails.
+    // Registered as a public PKCE client, so no secret is issued or stored.
     registerClient: async (client) => {
-      const uris = client.redirect_uris || [];
-      const refused = uris.filter((uri) => !redirectUriAllowed(uri, config));
-      if (!uris.length || refused.length) {
+      const offered = (client.redirect_uris || []).map(String);
+      const uris = offered.filter((uri) => redirectUriAllowed(uri, config));
+      const refused = offered.filter((uri) => !uris.includes(uri));
+      const logLine = (ok, reason) =>
+        log.log(
+          JSON.stringify({
+            event: "mcp.oauth.register",
+            ok,
+            reason,
+            clientName: String(client.client_name || "").slice(0, 100),
+            redirectUris: offered.slice(0, 10),
+            refused: refused.slice(0, 10),
+            requestedAuthMethod: client.token_endpoint_auth_method || null,
+          }),
+        );
+      if (!uris.length) {
+        logLine(false, "no_allowed_redirect_uri");
         throw new InvalidClientMetadataError(
           `redirect_uri not allowed: ${refused.join(", ") || "none given"}`,
         );
       }
+      logLine(
+        true,
+        refused.length ? "dropped_unlisted_redirect_uris" : undefined,
+      );
       const {
         client_secret: _secret,
         client_secret_expires_at: _expires,

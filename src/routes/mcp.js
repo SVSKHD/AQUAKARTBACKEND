@@ -49,6 +49,66 @@ export const createMcpRouters = ({
 
   const resourceUrl = new URL(config.resourceUrl);
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resourceUrl);
+  // One JSON log line per failed OAuth request (registration, authorize,
+  // token, revoke), so client connection problems are diagnosable. Never
+  // logs codes, tokens, secrets or PKCE verifiers.
+  oauthRouter.use(
+    ["/register", "/authorize", "/token", "/revoke"],
+    (req, res, next) => {
+      res.on("finish", () => {
+        if (
+          res.statusCode < 400 &&
+          !(
+            res.statusCode === 302 &&
+            /[?&]error=/.test(res.get("location") || "")
+          )
+        )
+          return;
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const path = req.originalUrl.split("?")[0];
+        const location =
+          res.statusCode === 302
+            ? new URL(res.get("location"), config.baseUrl)
+            : null;
+        console.log(
+          JSON.stringify({
+            event: "mcp.oauth.failed",
+            path,
+            method: req.method,
+            status: res.statusCode,
+            error: location?.searchParams.get("error") || undefined,
+            errorDescription:
+              location?.searchParams.get("error_description") || undefined,
+            clientId:
+              String(req.query.client_id || body.client_id || "").slice(
+                0,
+                120,
+              ) || undefined,
+            clientName:
+              path === "/register"
+                ? String(body.client_name || "").slice(0, 100)
+                : undefined,
+            redirectUris:
+              path === "/register" && Array.isArray(body.redirect_uris)
+                ? body.redirect_uris.slice(0, 10).map(String)
+                : undefined,
+            redirectUri:
+              String(req.query.redirect_uri || body.redirect_uri || "").slice(
+                0,
+                300,
+              ) || undefined,
+            authMethod:
+              path === "/register"
+                ? body.token_endpoint_auth_method
+                : undefined,
+            grantType: path === "/token" ? body.grant_type : undefined,
+            userAgent: String(req.get("user-agent") || "").slice(0, 120),
+          }),
+        );
+      });
+      next();
+    },
+  );
   oauthRouter.use(
     mcpAuthRouter({
       provider,

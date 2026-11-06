@@ -95,6 +95,24 @@ the MCP SDK serves them relative to the issuer. The reverse proxy must forward
   issued or stored. The SDK would otherwise keep secrets in plaintext and
   expire them after 30 days.
 
+  - A `*` entry matches one or more URL-safe path segments, such as
+    ChatGPT's `connector/oauth/{callback_id}`. A query string or `..` never
+    matches.
+  - If a client offers several redirect URIs, only the allowlisted ones are
+    registered and the rest are dropped. Registration fails only when none
+    is allowed.
+  - **Troubleshooting:** every registration logs an `mcp.oauth.register`
+    JSON line (client name, offered and refused redirect URIs, requested
+    auth method). Every failed `/register`, `/authorize`, `/token` or
+    `/revoke` logs `mcp.oauth.failed` (status, error, client id, redirect
+    URI, user agent). Neither ever logs codes, tokens, secrets or PKCE
+    verifiers. Use `docker logs <container> 2>&1 | grep mcp.oauth`.
+  - **Manual fallback:** if automatic registration keeps failing, run
+    `npm run mcp:grants -- add-client "ChatGPT" <exact redirect URI>`. Put the
+    printed client id in the connector's "OAuth Client ID" field and leave
+    the secret empty. `npm run mcp:grants -- clients` lists the registered
+    clients. Both write to and read from the database in `.env`.
+
 - **Tokens:** opaque random values (`aqm_at_…` lasts 1 h; `aqm_rt_…` lasts 30
   days), stored only as SHA-256 hashes and bound to the MCP resource URL.
   - Authorization codes are single-use and last 5 minutes; reusing a code

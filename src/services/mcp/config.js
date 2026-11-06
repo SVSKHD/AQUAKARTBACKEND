@@ -256,6 +256,10 @@ export const loadInstagramConfig = (env = process.env) => {
 };
 
 // Exact match, or prefix match for entries ending in "*".
+// What a trailing * may match: one or more path segments of URL-safe
+// characters (e.g. ChatGPT's per-connector callback id). No query, no "..".
+const WILDCARD_TAIL = /^[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/;
+
 export const redirectUriAllowed = (uri, config) => {
   if (typeof uri !== "string") return false;
   let url;
@@ -275,7 +279,11 @@ export const redirectUriAllowed = (uri, config) => {
   return config.allowedRedirectUris.some((allowed) =>
     allowed.endsWith("*")
       ? uri.startsWith(allowed.slice(0, -1)) &&
-        /^[A-Za-z0-9._~-]+$/.test(uri.slice(allowed.length - 1))
+        WILDCARD_TAIL.test(uri.slice(allowed.length - 1)) &&
+        !uri
+          .slice(allowed.length - 1)
+          .split("/")
+          .includes("..")
       : uri === allowed,
   );
 };

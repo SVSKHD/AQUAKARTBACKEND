@@ -200,6 +200,48 @@ test/blogRoutesRegression.test.js`: 46/46 passed. The new file runs 9
   - **AI refresh:** the weekly AI SEO refresh can overwrite pages edited
     through MCP unless `aiLocked: true` is set.
 
+### MCP sign-in: tolerant client registration, OAuth failure logs, manual client fallback
+
+- Problem: a connector (the `ofid_…` reference format suggests ChatGPT)
+  reported "Couldn't register with Aquakart's sign-in service".
+  - **Live checks:** read-only probes of `api.aquakart.co.in` showed the
+    metadata returns 200 and lists all scopes, and `/register` answers. It
+    rejected a fake callback with a clear `invalid_client_metadata`, and the
+    rate limit (19/20 left) was not the cause.
+  - **Likely causes:** a registration was refused whenever the client
+    offered _any_ redirect URI not on the allowlist, and the `*` callback
+    match allowed only a single path segment.
+  - **Diagnosis gap:** rejected registrations left no log, so the exact
+    cause could not be seen.
+- Changes/result:
+  - **Redirect URIs:** registration keeps the allowlisted redirect URIs,
+    drops unlisted extras, and fails only when none is allowed.
+  - **Wildcard match:** `*` allowlist entries now match one or more
+    URL-safe path segments (never a query string or `..`).
+  - **Logging:** `mcp.oauth.register` is logged for every registration and
+    `mcp.oauth.failed` for every failed `/register`, `/authorize`, `/token`
+    or `/revoke`. No codes, tokens, secrets or PKCE verifiers are logged.
+  - **Manual fallback:** `npm run mcp:grants -- add-client <name>
+<redirectUri…>` pre-registers a public client for the connector's
+    "OAuth Client ID" field, and `npm run mcp:grants -- clients` lists the
+    registered clients.
+- Files: `src/services/mcp/oauthProvider.js`, `src/services/mcp/config.js`,
+  `src/routes/mcp.js`, `src/scripts/mcp-grants.js`,
+  `test/mcpOAuthRegister.test.js` (new), `docs/MCP_BLOG_PUBLISHING.md`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed on every changed file.
+  - The MCP suites plus the new `test/mcpOAuthRegister.test.js`: 55/55
+    passed.
+  - The live probes above were read-only, or rejected before anything was
+    saved.
+  - I did not register a real client or check ChatGPT end to end.
+- Limitations/follow-up:
+  - Not deployed.
+  - **Unconfirmed cause:** the root cause is not confirmed. After you
+    deploy, retry, then read the `mcp.oauth` log lines to see the exact
+    redirect URI and auth method the client sent.
+
 ## 2026-11-05
 
 ### Storefront voice questions: `POST /v1/ai/transcribe`
