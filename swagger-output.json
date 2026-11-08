@@ -738,7 +738,7 @@
       "post": {
         "tags": ["Categories"],
         "summary": "Create category",
-        "description": "Supply title and at least one photo file. Do not send photos as JSON or URL strings.",
+        "description": "Supply title and at least one photo: multipart photo files, or (as the CRM does) a JSON body whose photos array holds data URIs / image URLs / { id, secure_url } objects. New images are uploaded to categories/.",
         "produces": ["application/json"],
         "consumes": ["multipart/form-data"],
         "security": [
@@ -838,7 +838,7 @@
       "put": {
         "tags": ["Categories"],
         "summary": "Update category",
-        "description": "Partial update. Omitted fields remain unchanged. Uploading photos replaces the entire photo list and deletes previous Cloudinary photos; omit photos to keep them.",
+        "description": "Partial update. Omitted fields remain unchanged. Photos: multipart files replace the whole list; or a JSON photos array (the CRM) where existing { id, secure_url } entries are kept and data URIs / new URLs are uploaded. An empty or omitted list keeps the current photos. After saving, only photos no longer in the list are deleted from Cloudinary.",
         "produces": ["application/json"],
         "consumes": ["multipart/form-data"],
         "security": [
@@ -959,6 +959,111 @@
         "tags": ["Categories"],
         "summary": "Delete category",
         "description": "Returns the deleted document. Remove references before deleting.",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "CategoryAdminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "example": "507f1f77bcf86cd799439011"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "required": ["success", "data"],
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/Category"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid category ID",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Invalid category ID"
+              }
+            }
+          },
+          "401": {
+            "description": "No token provided, authorization denied",
+            "schema": {
+              "$ref": "#/definitions/CategoryAuthError"
+            },
+            "examples": {
+              "application/json": {
+                "message": "No token provided, authorization denied"
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "schema": {
+              "$ref": "#/definitions/CategoryAuthError"
+            },
+            "examples": {
+              "application/json": {
+                "message": "Admin access required"
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Category not found"
+              }
+            }
+          },
+          "409": {
+            "description": "Cannot delete category while subcategories or products reference it",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Cannot delete category while subcategories or products reference it"
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/category-delete/{id}": {
+      "delete": {
+        "tags": ["Categories"],
+        "summary": "Delete category",
+        "description": "Path used by the CRM; same behaviour as /v1/category/delete/{id}. Returns the deleted document. Remove references before deleting.",
         "produces": ["application/json"],
         "security": [
           {
@@ -1298,11 +1403,18 @@
                 },
                 "photos": {
                   "type": "array",
+                  "maxItems": 10,
                   "items": {
-                    "type": "string"
+                    "description": "Existing photo { id, secure_url } (kept as is), an image URL, or a data URI"
                   },
-                  "example": ["https://example.com/softener.jpg"],
-                  "description": "Cloudinary-compatible image URLs or data URIs. Optional; a non-empty array replaces existing photos on update. An empty array leaves existing photos unchanged."
+                  "example": [
+                    {
+                      "id": "subcategories/automatic",
+                      "secure_url": "https://res.cloudinary.com/aquakartproducts/image/upload/v1/subcategories/automatic.jpg"
+                    },
+                    "data:image/png;base64,iVBORw0KGgo..."
+                  ],
+                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary."
                 }
               }
             }
@@ -1368,11 +1480,168 @@
         }
       }
     },
+    "/v1/subcategory-update/{id}": {
+      "put": {
+        "tags": ["Subcategories"],
+        "summary": "Update subcategory",
+        "description": "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Replaced photos are not deleted from Cloudinary. The response includes the populated parent category.",
+        "produces": ["application/json"],
+        "consumes": ["application/json"],
+        "security": [
+          {
+            "CategoryAdminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "example": "507f1f77bcf86cd799439011"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$",
+                  "example": "507f1f77bcf86cd799439011",
+                  "description": "Required update target; _id is also accepted."
+                },
+                "_id": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$",
+                  "example": "507f1f77bcf86cd799439011",
+                  "description": "Alias for id; id takes precedence."
+                },
+                "title": {
+                  "type": "string",
+                  "example": "Domestic Softeners",
+                  "description": "Must be non-blank when supplied"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Softeners for homes"
+                },
+                "keywords": {
+                  "type": "string",
+                  "example": "home, softener"
+                },
+                "category": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$",
+                  "example": "507f1f77bcf86cd799439011",
+                  "description": "Existing parent category ID. Required on create unless category_id is supplied. Optional on update."
+                },
+                "category_id": {
+                  "type": "string",
+                  "pattern": "^[a-fA-F0-9]{24}$",
+                  "example": "507f1f77bcf86cd799439011",
+                  "description": "Alias for category; category takes precedence."
+                },
+                "photos": {
+                  "type": "array",
+                  "maxItems": 10,
+                  "items": {
+                    "description": "Existing photo { id, secure_url } (kept as is), an image URL, or a data URI"
+                  },
+                  "example": [
+                    {
+                      "id": "subcategories/automatic",
+                      "secure_url": "https://res.cloudinary.com/aquakartproducts/image/upload/v1/subcategories/automatic.jpg"
+                    },
+                    "data:image/png;base64,iVBORw0KGgo..."
+                  ],
+                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary."
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "required": ["success", "data"],
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/PopulatedSubcategory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid subcategory ID; A valid parent category is required; Parent category not found; or Title is required",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Invalid subcategory ID"
+              }
+            }
+          },
+          "401": {
+            "description": "No token provided, authorization denied",
+            "schema": {
+              "$ref": "#/definitions/CategoryAuthError"
+            },
+            "examples": {
+              "application/json": {
+                "message": "No token provided, authorization denied"
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "schema": {
+              "$ref": "#/definitions/CategoryAuthError"
+            },
+            "examples": {
+              "application/json": {
+                "message": "Admin access required"
+              }
+            }
+          },
+          "404": {
+            "description": "Subcategory not found",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Subcategory not found"
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            }
+          }
+        }
+      }
+    },
     "/v1/subcategory-update": {
       "post": {
         "tags": ["Subcategories"],
         "summary": "Update subcategory",
-        "description": "Supply id or _id in the JSON body. Omitted fields remain unchanged. The response includes the populated parent category.",
+        "description": "Legacy form: supply id or _id in the JSON body. Prefer PUT /v1/subcategory-update/{id}. Omitted fields remain unchanged. The response includes the populated parent category.",
         "produces": ["application/json"],
         "consumes": ["application/json"],
         "security": [
@@ -1428,11 +1697,18 @@
                 },
                 "photos": {
                   "type": "array",
+                  "maxItems": 10,
                   "items": {
-                    "type": "string"
+                    "description": "Existing photo { id, secure_url } (kept as is), an image URL, or a data URI"
                   },
-                  "example": ["https://example.com/softener.jpg"],
-                  "description": "Cloudinary-compatible image URLs or data URIs. Optional; a non-empty array replaces existing photos on update. An empty array leaves existing photos unchanged."
+                  "example": [
+                    {
+                      "id": "subcategories/automatic",
+                      "secure_url": "https://res.cloudinary.com/aquakartproducts/image/upload/v1/subcategories/automatic.jpg"
+                    },
+                    "data:image/png;base64,iVBORw0KGgo..."
+                  ],
+                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary."
                 }
               }
             }
@@ -1515,6 +1791,111 @@
         "tags": ["Subcategories"],
         "summary": "Delete subcategory",
         "description": "Returns the deleted document. Remove references before deleting.",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "CategoryAdminToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$",
+            "example": "507f1f77bcf86cd799439011"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "required": ["success", "data"],
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "$ref": "#/definitions/Subcategory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid subcategory ID",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Invalid subcategory ID"
+              }
+            }
+          },
+          "401": {
+            "description": "No token provided, authorization denied",
+            "schema": {
+              "$ref": "#/definitions/CategoryAuthError"
+            },
+            "examples": {
+              "application/json": {
+                "message": "No token provided, authorization denied"
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "schema": {
+              "$ref": "#/definitions/CategoryAuthError"
+            },
+            "examples": {
+              "application/json": {
+                "message": "Admin access required"
+              }
+            }
+          },
+          "404": {
+            "description": "Subcategory not found",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Subcategory not found"
+              }
+            }
+          },
+          "409": {
+            "description": "Cannot delete subcategory while products reference it",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Cannot delete subcategory while products reference it"
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            }
+          }
+        }
+      }
+    },
+    "/v1/subcategory-delete/{id}": {
+      "delete": {
+        "tags": ["Subcategories"],
+        "summary": "Delete subcategory",
+        "description": "Path used by the CRM; same behaviour as /v1/subcategory/delete/{id}. Returns the deleted document. Remove references before deleting.",
         "produces": ["application/json"],
         "security": [
           {

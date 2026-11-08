@@ -1,10 +1,19 @@
 import mongoose from "mongoose";
-import cloudinary from "cloudinary";
+import {
+  publicIdFromUrl,
+  resolveCatalogPhotos,
+} from "../utils/catalogPhotos.js";
 import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
 import AquaCategory from "../models/category.js";
 
 const resolveCategoryId = (body = {}) => body.category ?? body.category_id;
+
+// Photos follow the shared catalog rules (src/utils/catalogPhotos.js):
+// existing photos are kept, new data URIs / URLs are uploaded.
+export { publicIdFromUrl };
+export const resolveSubCategoryPhotos = (photos) =>
+  resolveCatalogPhotos(photos, { folder: "subcategories" });
 
 const validateCategoryId = async (categoryId) => {
   if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
@@ -23,17 +32,11 @@ const addSubCategory = async (req, res) => {
     if (categoryError) {
       return res.status(400).json({ success: false, message: categoryError });
     }
-    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
-    const uploadedPhotos = [];
-    for (const photo of photos || []) {
-      const result = await cloudinary.v2.uploader.upload(photo, {
-        folder: "subcategories", // You can specify the folder in Cloudinary
-      });
-      uploadedPhotos.push({
-        id: result.public_id,
-        secure_url: result.secure_url,
-      });
-    }
+    if (!String(title || "").trim())
+      return res
+        .status(400)
+        .json({ success: false, message: "Title is required" });
+    const uploadedPhotos = await resolveSubCategoryPhotos(photos);
     const newSubCategory = new AquaSubCategory({
       title,
       description,
@@ -44,6 +47,8 @@ const addSubCategory = async (req, res) => {
     await newSubCategory.save();
     return res.status(201).json({ success: true, data: newSubCategory });
   } catch (error) {
+    if (error?.statusCode === 400)
+      return res.status(400).json({ success: false, message: error.message });
     console.error("Error adding subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -62,7 +67,10 @@ const getAllSubCategories = async (req, res) => {
 const getSubCategory = async (req, res) => {
   const { id } = req.params;
   try {
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
+    if (!mongoose.isValidObjectId(id))
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid subcategory ID" });
     const subcategory = await AquaSubCategory.findById(id).populate("category");
     if (!subcategory) {
       return res
@@ -106,33 +114,36 @@ const updateSubCategory = async (req, res) => {
   const { title, description, photos, keywords } = req.body;
   const category = resolveCategoryId(req.body);
   try {
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
+    if (!mongoose.isValidObjectId(id))
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid subcategory ID" });
     const existing = await AquaSubCategory.findById(id);
-    if (!existing) return res.status(404).json({ success: false, message: "Subcategory not found" });
-    const categoryError = await validateCategoryId(category ?? existing.category);
+    if (!existing)
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
+    const categoryError = await validateCategoryId(
+      category ?? existing.category,
+    );
     if (categoryError) {
       return res.status(400).json({ success: false, message: categoryError });
     }
     const updatedData = {};
     if (title !== undefined) {
-      if (!String(title).trim()) return res.status(400).json({ success: false, message: "Title is required" });
+      if (!String(title).trim())
+        return res
+          .status(400)
+          .json({ success: false, message: "Title is required" });
       updatedData.title = title;
     }
     if (description !== undefined) updatedData.description = description;
     if (keywords !== undefined) updatedData.keywords = keywords;
     if (category !== undefined) updatedData.category = category;
-    if (photos && photos.length > 0) {
-      const uploadedPhotos = [];
-      for (const photo of photos) {
-        const result = await cloudinary.v2.uploader.upload(photo, {
-          folder: "subcategories",
-        });
-        uploadedPhotos.push({
-          id: result.public_id,
-          secure_url: result.secure_url,
-        });
-      }
-      updatedData.photos = uploadedPhotos;
+    // Omitted or [] keeps the current photos; otherwise the list replaces
+    // them (existing photos in the list are kept, new ones uploaded).
+    if (Array.isArray(photos) ? photos.length > 0 : photos != null) {
+      updatedData.photos = await resolveSubCategoryPhotos(photos);
     }
     const subcategory = await AquaSubCategory.findByIdAndUpdate(
       id,
@@ -146,6 +157,8 @@ const updateSubCategory = async (req, res) => {
     }
     return res.status(200).json({ success: true, data: subcategory });
   } catch (error) {
+    if (error?.statusCode === 400)
+      return res.status(400).json({ success: false, message: error.message });
     console.error("Error updating subcategory:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -154,9 +167,20 @@ const updateSubCategory = async (req, res) => {
 const deleteSubCategory = async (req, res) => {
   const { id } = req.params;
   try {
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid subcategory ID" });
-    const referencedProducts = await AquaProduct.countDocuments({ subCategory: id });
-    if (referencedProducts) return res.status(409).json({ success: false, message: "Cannot delete subcategory while products reference it" });
+    if (!mongoose.isValidObjectId(id))
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid subcategory ID" });
+    const referencedProducts = await AquaProduct.countDocuments({
+      subCategory: id,
+    });
+    if (referencedProducts)
+      return res
+        .status(409)
+        .json({
+          success: false,
+          message: "Cannot delete subcategory while products reference it",
+        });
     const subcategory = await AquaSubCategory.findByIdAndDelete(id);
     if (!subcategory) {
       return res

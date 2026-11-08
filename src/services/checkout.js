@@ -6,6 +6,27 @@ import { validateCoupon } from "./coupons.js";
 const money = (value) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
+const nonNegative = (value, fallback) => {
+  const number = Number(value);
+  return value !== undefined &&
+    value !== "" &&
+    Number.isFinite(number) &&
+    number >= 0
+    ? number
+    : fallback;
+};
+
+// Delivery: one flat charge per order (default ₹350), free when the order
+// value after the coupon discount is above the threshold (default ₹50,000).
+export const deliveryChargeFor = (
+  { subtotal, discount = 0 },
+  env = process.env,
+) => {
+  const charge = nonNegative(env.STANDARD_DELIVERY_CHARGE, 350);
+  const freeAbove = nonNegative(env.FREE_DELIVERY_ABOVE, 50000);
+  return money(Number(subtotal) - Number(discount) > freeAbove ? 0 : charge);
+};
+
 export const buildCheckout = async ({ userId, cart, couponCode }) => {
   if (!Array.isArray(cart) || !cart.length)
     throw Object.assign(new Error("Cart must contain at least one item"), {
@@ -68,9 +89,7 @@ export const buildCheckout = async ({ userId, cart, couponCode }) => {
     subtotal,
     items,
   });
-  const deliveryCharge = money(
-    Number(process.env.STANDARD_DELIVERY_CHARGE || 50),
-  );
+  const deliveryCharge = deliveryChargeFor({ subtotal, discount });
   const tax = 0;
   const payableAmount = money(
     Math.max(0, subtotal - discount + deliveryCharge + tax),

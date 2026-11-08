@@ -5,6 +5,7 @@ import AquaCategory from "../models/category.js";
 import AquaSubCategory from "../models/sub-category.js";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 import { cleanProductReference as cleanObjectIdField } from "../utils/productReferences.js";
+import { removedPhotos } from "../utils/catalogPhotos.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -374,28 +375,22 @@ const CreateProduct = async (req, res) => {
     const totalArPhotos = arPhotos.length + bodyArPhotos.length;
 
     if (totalPhotos === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "At least one product image is required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "At least one product image is required",
+      });
     }
     if (totalPhotos > 10) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "A maximum of 10 product images is allowed",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "A maximum of 10 product images is allowed",
+      });
     }
     if (totalArPhotos > 5) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "A maximum of 5 AR files is allowed",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "A maximum of 5 AR files is allowed",
+      });
     }
 
     const { isValid, errors } = validateProductPayload(req.body);
@@ -488,50 +483,39 @@ const updateProduct = async (req, res) => {
     const totalNewArPhotos = newArPhotos.length + bodyArPhotos.length;
 
     if (totalNewPhotos > 10) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "A maximum of 10 product images is allowed",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "A maximum of 10 product images is allowed",
+      });
     }
     if (totalNewArPhotos > 5) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "A maximum of 5 AR files is allowed",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "A maximum of 5 AR files is allowed",
+      });
     }
 
     let photosPayload = product.photos;
     let arPayload = product.arPhotos;
 
+    // The CRM sends the full list back: photos it keeps arrive as their
+    // existing { id, secure_url }. Only photos missing from the new list are
+    // deleted from Cloudinary, after the update is saved (see below).
+    let removedProductPhotos = [];
+    let removedArPhotos = [];
     if (totalNewPhotos > 0) {
       photosPayload = [
         ...bodyPhotos,
         ...(await uploadFiles(newPhotos, "products", "image")),
       ];
-      if (product.photos?.length) {
-        try {
-          await deleteMedia(product.photos);
-        } catch (cleanupError) {
-          console.error("Failed to remove old product photos:", cleanupError);
-        }
-      }
+      removedProductPhotos = removedPhotos(product.photos || [], photosPayload);
     }
     if (totalNewArPhotos > 0) {
       arPayload = [
         ...bodyArPhotos,
         ...(await uploadFiles(newArPhotos, "ar_products", "auto")),
       ];
-      if (product.arPhotos?.length) {
-        try {
-          await deleteMedia(product.arPhotos);
-        } catch (cleanupError) {
-          console.error("Failed to remove old AR photos:", cleanupError);
-        }
-      }
+      removedArPhotos = removedPhotos(product.arPhotos || [], arPayload);
     }
 
     const updatePayload = buildProductPayload(req.body, {
@@ -571,13 +555,23 @@ const updateProduct = async (req, res) => {
       { path: "subCategory", select: "_id title category" },
     ]);
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "Product updated successfully",
-        data: updated,
-      });
+    for (const [removed, label] of [
+      [removedProductPhotos, "product photos"],
+      [removedArPhotos, "AR photos"],
+    ]) {
+      if (!removed.length) continue;
+      try {
+        await deleteMedia(removed);
+      } catch (cleanupError) {
+        console.error(`Failed to remove old ${label}:`, cleanupError);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      data: updated,
+    });
   } catch (error) {
     if (error?.statusCode) {
       return res
@@ -738,12 +732,10 @@ const getProductByQuery = async (req, res) => {
     const { searchField, value } = req.query;
 
     if (!searchField || !value) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Both searchField and value are required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Both searchField and value are required",
+      });
     }
 
     const allowedFields = [
@@ -809,22 +801,18 @@ const addRatingsComments = async (req, res) => {
         .json({ success: false, message: "Comment is required" });
     }
     if (comment.length > 1000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Comment must not exceed 1000 characters",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Comment must not exceed 1000 characters",
+      });
     }
 
     const parsedRating = Number(rating);
     if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Rating must be a number between 1 and 5",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be a number between 1 and 5",
+      });
     }
 
     if (!req.user?._id) {
@@ -963,22 +951,18 @@ const updateRatingsComments = async (req, res) => {
         .json({ success: false, message: "Comment is required" });
     }
     if (comment.length > 1000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Comment must not exceed 1000 characters",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Comment must not exceed 1000 characters",
+      });
     }
 
     const parsedRating = Number(rating);
     if (Number.isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Rating must be a number between 1 and 5",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be a number between 1 and 5",
+      });
     }
 
     if (!req.user?._id) {
@@ -998,12 +982,10 @@ const updateRatingsComments = async (req, res) => {
       (r) => r.user.toString() === req.user._id.toString(),
     );
     if (!existingReview) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "You have not reviewed this product yet",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "You have not reviewed this product yet",
+      });
     }
 
     existingReview.rating = parsedRating;
@@ -1045,12 +1027,10 @@ const deleteReview = async (req, res) => {
         .json({ success: false, message: "Invalid product id" });
     }
     if (!reviewId) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "reviewId query parameter is required",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "reviewId query parameter is required",
+      });
     }
     if (!isValidObjectId(reviewId)) {
       return res

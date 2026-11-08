@@ -18,7 +18,6 @@ router.get("/allcategories", CategoryOperations.getAllCategories);
 router.get("/category/:id", CategoryOperations.getCategory);
 router.get("/category-title/:title", CategoryOperations.getCategoryByTitle);
 
-
 router.post(
   "/category-add",
   userAuth.checkAdmin,
@@ -26,14 +25,21 @@ router.post(
   CategoryOperations.addCategory,
 );
 
+// Photos: multipart files ("photos") or a JSON photos array (the CRM).
 router.put(
   "/category-update/:id",
-  upload.array("photos"),
   userAuth.checkAdmin,
+  upload.array("photos"),
   CategoryOperations.updateCategory,
 );
 router.delete(
   "/category/delete/:id",
+  userAuth.checkAdmin,
+  CategoryOperations.deleteCategory,
+);
+// Path the CRM calls.
+router.delete(
+  "/category-delete/:id",
   userAuth.checkAdmin,
   CategoryOperations.deleteCategory,
 );

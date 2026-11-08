@@ -18,6 +18,94 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-08
+
+### Storefront AI: recommend softeners by home type, not the whole category
+
+- Request/problem: for a question like "I live in a villa", the storefront
+  assistant named every softener (8L, Bathroom 5.5L, washing-machine unit and
+  more) instead of the Auto 25 and Auto 40. The app shows a card for every
+  bold product name, and the prompt even told the model to mention
+  one-bathroom units when ruling them out. Softeners without "Resin Volume" in
+  the description (for example Auto 25, 100L) got no size or home type.
+- Changes/result:
+  - Softener size now comes from the description's resin volume, or from the
+    title when that is missing ("Automatic 8L", "Water Softener 40", "Auto 25").
+  - Every softener is put in exactly one group: washing machine only; one
+    bathroom (flat or apartment, washing/bathroom titles or ≤12 L); whole home
+    (villa, duplex or independent house, 13–60 L); large building (apartment
+    block, hostel, hotel or commercial, >60 L). Catalogue lines show
+    `for <group>`, and a "Softeners by the home they suit" list is added to the
+    prompt. On the live lineup the villa group is the 25 and the 40.
+  - Prompt rules: bold only recommended products, never the ones being ruled
+    out; name one or two fitting products and none from other groups; villas
+    and homes with 2+ bathrooms get only the whole-home group; ask one short
+    question when the home type is unclear.
+  - Catalogue prices now treat a string `discountPrice` as a number, because
+    one live softener stores it that way.
+  - This entry also covers the earlier uncommitted villa wording in the same
+    file, which this change replaces.
+- Files: `src/services/aiCatalogue.js`, `test/aiCatalogue.test.js`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check src/services/aiCatalogue.js` passed;
+  `node --test test/aiCatalogue.test.js` 4/4 passed;
+  `node --test test/gemini.test.js test/aiQuota.test.js` 13/13 passed. ESLint
+  reports quote/linebreak errors that the committed file already has (the repo
+  uses Prettier formatting), so lint was not a gate. Product titles came from a
+  read-only MCP listing of the live Softeners category. No live chat was run,
+  so the model's answers have not been checked against the new prompt.
+- Limitations/follow-up: the grouping is a prompt guide, so the model can
+  still stray. The storefront decides which bold names become cards, and its
+  matching was not reviewed (separate repo). The catalogue is cached for
+  10 minutes after deploy. `aquakart_list_products` (MCP) fails when a product
+  has a string `discountPrice`: its output schema expects a number. "Kent
+  Automatic Water Softener 40" is filed under the subcategory
+  "Wall-Mount-Ro-Purifiers". Neither was changed here.
+
+### Storefront AI: softener installation spot (terrace or ground floor)
+
+- Request/problem: for "where can we fix it, terrace or ground floor?", the
+  assistant should give what each spot needs for regeneration.
+- Changes/result: a new rule for automatic (whole-home and large-building)
+  softeners in the catalogue prompt. Either spot is possible. Terrace: the
+  overhead-tank pressure is too low for regeneration, so a pressure booster
+  pump is needed, and the assistant recommends a listed pressure booster (live:
+  "Grundfos 0.7hp Pressure Booster With 24Ltr Air tank", in Pressure Pumps).
+  Ground level: fit a non-return valve (NRV) so water doesn't
+  flow back and regeneration isn't interrupted. The assistant also suggests an
+  AquaKart site visit. One-bathroom softeners fit at that bathroom's inlet.
+- Files: `src/services/aiCatalogue.js`, `test/aiCatalogue.test.js`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check src/services/aiCatalogue.js` passed;
+  `node --test test/aiCatalogue.test.js` 4/4 passed (now also checks both
+  installation requirements are in the prompt). No live chat was run.
+- Limitations/follow-up: the rule only adds wording to the prompt. A read-only
+  MCP search of the live catalogue found no NRV product ("nrv", "valve"), so the
+  NRV is described but gets no product card. Whether the 0.7hp booster suits
+  every terrace install was not checked.
+
+### Storefront AI: show all pressure boosters and on-demand 0.7–0.9 hp pumps
+
+- Request/problem: when a booster is needed, show the pressure boosters and
+  offer customised 0.7 to 0.9 hp pumps that are ordered on demand.
+- Changes/result: the prompt gets a "Pressure boosters (listed): ..." line
+  built from products in the Pressure Pumps category or with booster in the
+  title. The category match is needed because one live title is spelled "Kent
+  Pressure Bootser". A new rule: whenever a booster or pump comes up (terrace
+  softener install, low pressure, or a direct question), bold every listed
+  booster so each shows as a card. The assistant adds that customised 0.7 to
+  0.9 hp pumps can be ordered on demand, with size and price confirmed by
+  AquaKart after a site visit. The terrace rule now points to this one instead
+  of recommending a single booster. Live boosters (read-only MCP listing):
+  Kent Pressure Bootser, Grundfos 0.7hp Pressure Booster With 24Ltr Air tank.
+- Files: `src/services/aiCatalogue.js`, `test/aiCatalogue.test.js`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check src/services/aiCatalogue.js` passed;
+  `node --test test/aiCatalogue.test.js` 5/5 passed. No live chat was run.
+- Limitations/follow-up: on-demand pumps are not catalogue products, so they
+  get no card or price in the app. The "Bootser" typo in the live product title
+  was not corrected.
+
 ## 2026-11-06
 
 ### MCP: product and coupon tools; error results without structuredContent
@@ -241,6 +329,174 @@ test/blogRoutesRegression.test.js`: 46/46 passed. The new file runs 9
   - **Unconfirmed cause:** the root cause is not confirmed. After you
     deploy, retry, then read the `mcp.oauth` log lines to see the exact
     redirect URI and auth method the client sent.
+
+### Docs: MCP walkthrough with the Aquakart logos
+
+- Request: a Markdown walkthrough of the MCP server, with the white and
+  original logos.
+- Changes/result: new step-by-step guide `docs/MCP_WALKTHROUGH.md`. It
+  covers:
+  - both logos (badge images, plus the clean files to use as references)
+  - permissions
+  - connecting Claude, Claude Code and ChatGPT
+  - the consent page and its scopes
+  - example requests for blogs, products, coupons, categories, SEO and
+    Instagram
+  - safety rules, troubleshooting, admin commands and what is still
+    unverified
+
+  It is linked from `docs/README.md`. The technical reference stays in
+  `docs/MCP_BLOG_PUBLISHING.md`.
+
+- Files: `docs/MCP_WALKTHROUGH.md` (new), `docs/README.md`,
+  `docs/CHANGELOG.md`.
+- Validation: docs only. I checked the content against the current source
+  (`src/services/mcp/config.js`, `consentPage.js`, `server.js`,
+  `taxonomySeoSchemas.js`, `src/scripts/mcp-grants.js`); I did not run any
+  code.
+- Limitations/follow-up: the guide describes the code in this repo. The
+  registration fix and failure logs work only once deployed.
+
+### Fix CRM subcategory edit: add `PUT /v1/subcategory-update/:id`
+
+- Problem: editing a subcategory in the CRM did nothing.
+  - **Cause:** the CRM sends `PUT /v1/subcategory-update/<id>`, but the
+    backend only had `POST /v1/subcategory-update` with the id in the body.
+  - **Live check:** a request with no token, so nothing could be written,
+    returned 404 for the PUT route and 401 for the POST route.
+- Changes/result:
+  - Added `PUT /v1/subcategory-update/:id` (admin-only, same controller).
+    The controller already reads the id from the path first, then from
+    `id`/`_id` in the body.
+  - The legacy POST route still works.
+  - Swagger documents the new operation, and the POST description points
+    to it.
+- Files: `src/routes/sub-category.js`, `src/docs/categories.js`,
+  `swagger-output.json`, `test/subcategoryRoutes.test.js` (new),
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed on the changed files.
+  - `node --test test/subcategoryRoutes.test.js`: 3/3 passed with mocked
+    models. They cover the CRM payload, the legacy POST, 401 without a
+    token, 400 for a bad id and 404 for a missing subcategory.
+  - `npm run swagger` succeeded; `/v1/subcategory-update/{id}` (put) is
+    added under Subcategories with admin auth.
+  - Full `node --test`: 233/234 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` test.
+  - I did not replay the CRM request against production.
+- Limitations/follow-up:
+  - Not deployed.
+  - Photos sent as `{ id, secure_url }` objects (rather than data URIs
+    or URLs) are still passed to Cloudinary upload by the existing
+    controller. The CRM sent `photos: []` here, which keeps the existing
+    photos.
+
+### Fix subcategory photos: keep existing photos instead of re-uploading
+
+- Problem: the subcategory create and update controller passed every
+  `photos` entry to `cloudinary.uploader.upload`. Existing photos sent
+  back by the CRM as `{ id, secure_url }` objects made the request fail
+  with a 500. URLs already in Cloudinary were uploaded again as
+  duplicates.
+- Changes/result: new `resolveSubCategoryPhotos` in
+  `src/controllers/sub-category.js`, used by create and update.
+  - `{ id, secure_url }` entries are kept as they are.
+  - `https://res.cloudinary.com/<own cloud>/…` URLs are kept, with the
+    public id derived by `publicIdFromUrl` (transformations and version
+    ignored).
+  - Data URIs and other http(s) URLs are uploaded to `subcategories/` as
+    before.
+  - At most 10 photos. A non-array or unrecognised entry returns 400
+    instead of 500.
+  - On update, an omitted or empty `photos` still keeps the current
+    photos. Replaced photos are still not deleted from Cloudinary (no
+    change).
+  - Swagger now describes the accepted photo forms.
+- Files: `src/controllers/sub-category.js`, `src/docs/categories.js`,
+  `swagger-output.json`, `test/subcategoryRoutes.test.js`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed.
+  - `node --test test/subcategoryRoutes.test.js`: 6/6 passed with
+    Cloudinary and models mocked. Coverage: mixed existing, own-URL and
+    data-URI photos (one upload only), public-id parsing, and 400s for
+    invalid entries.
+  - Full `node --test`: 236/237 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` test.
+  - `npm run swagger` succeeded.
+  - No production calls.
+- Limitations/follow-up: not deployed. Category photo updates use
+  multipart uploads and were not changed.
+
+### CRM ↔ backend catalog CRUD audit: category photos, delete paths, product photo deletion
+
+- Request: check the CRM ↔ backend connection for full CRUD on products,
+  categories and subcategories.
+- Method:
+  - Read the CRM calls in `AQUACRM25DEV/src/services/apiService.ts`,
+    `src/services/api.ts` (always JSON) and `ProductsTab.tsx` /
+    `PhotoUploader.tsx` (photos are `{ id, secure_url }`; new picks carry a
+    random id and a data: URI).
+  - Compared them with the routes and controllers here.
+  - The CRM repo was read only and not changed.
+- Findings and fixes:
+  - **Category create always failed from the CRM:** "No photos provided",
+    because the backend read only multipart files and the CRM sends JSON.
+    Create now also accepts a JSON `photos` array; multipart still
+    works.
+  - **Category update ignored JSON photos:** text saved, photo changes were
+    lost. A JSON `photos` list now replaces the list. Existing entries are
+    kept, new ones are uploaded to `categories/`, and only photos no longer
+    in the list are deleted, after the save. Multipart behaviour is
+    unchanged. `checkAdmin` now runs before multer on this route.
+  - **Category and subcategory delete returned 404:** the CRM calls
+    `DELETE category-delete/:id` and `subcategory-delete/:id`. Added both
+    paths, with the same controller and the same in-use checks; the old
+    paths stay.
+  - **Product update deleted the photos it kept:** with a non-empty
+    `photos` list it deleted _all_ previous Cloudinary photos, including
+    the ones the CRM sent back to keep. It now deletes only removed photos
+    (photos and AR photos), after the update is saved.
+  - **Subcategory photos (correcting the earlier fix today):** a new CRM
+    pick `{ id: <random>, secure_url: "data:…" }` was treated as an
+    existing photo, which would have stored base64 in MongoDB. Shared rules
+    now live in the new `src/utils/catalogPhotos.js`:
+    - data URIs are always uploaded
+    - URLs in our Cloudinary account are kept, with the public id read
+      from the URL
+    - other https entries with an id are kept
+    - other URLs are uploaded
+    - invalid entries return 400, with at most 10 photos
+  - **Already matching:** products list/create/delete, categories list,
+    subcategories list/create, and subcategory update (fixed earlier today).
+- Files: `src/utils/catalogPhotos.js` (new),
+  `src/controllers/category.js`, `src/controllers/sub-category.js`,
+  `src/controllers/product.js`, `src/routes/category.js`,
+  `src/routes/sub-category.js`, `src/docs/categories.js`,
+  `swagger-output.json`, `test/catalogCrmContract.test.js` (new),
+  `docs/PROJECT_MAP.md`, `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed on the changed files.
+  - `node --test test/catalogCrmContract.test.js
+test/subcategoryRoutes.test.js`: 12/12 passed, replaying the CRM's
+    payload shapes with models and Cloudinary mocked.
+  - Full `node --test`: 242/243 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` test.
+  - `npm run swagger` succeeded; the new delete paths and updated
+    descriptions are present.
+  - No production requests and no CRM UI run.
+- Limitations/follow-up:
+  - Not deployed.
+  - **Cloudinary deletes:** `deleteMedia` in `src/controllers/product.js`
+    calls `destroy` with `resource_type: "auto"`, which Cloudinary's
+    destroy API may not accept. Removed product photos may therefore stay
+    in Cloudinary; deletion errors are only logged. Not changed.
+  - **Category photos:** category photos removed through the CRM are now
+    deleted, as the multipart path already did. Subcategory photos are
+    never deleted (unchanged).
+  - **CRM payload:** the CRM still sends `user_id` and duplicate
+    `category_id`/`category` fields; the backend ignores `user_id` for
+    categories.
 
 ## 2026-11-05
 

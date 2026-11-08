@@ -214,10 +214,21 @@ export const applyCategoryDocs = (doc) => {
         },
         photos: {
           type: "array",
-          items: { type: "string" },
-          example: ["https://example.com/softener.jpg"],
+          maxItems: 10,
+          items: {
+            description:
+              "Existing photo { id, secure_url } (kept as is), an image URL, or a data URI",
+          },
+          example: [
+            {
+              id: "subcategories/automatic",
+              secure_url:
+                "https://res.cloudinary.com/aquakartproducts/image/upload/v1/subcategories/automatic.jpg",
+            },
+            "data:image/png;base64,iVBORw0KGgo...",
+          ],
           description:
-            "Cloudinary-compatible image URLs or data URIs. Optional; a non-empty array replaces existing photos on update. An empty array leaves existing photos unchanged.",
+            "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary.",
         },
       },
     },
@@ -323,7 +334,7 @@ export const applyCategoryDocs = (doc) => {
       },
       description: sub
         ? "Supply title and either category or category_id. Photos are optional. The returned parent category is an ID."
-        : "Supply title and at least one photo file. Do not send photos as JSON or URL strings.",
+        : "Supply title and at least one photo: multipart photo files, or (as the CRM does) a JSON body whose photos array holds data URIs / image URLs / { id, secure_url } objects. New images are uploaded to categories/.",
     });
     operation(
       sub ? "/v1/subcategory-update" : "/v1/category-update/{id}",
@@ -344,25 +355,45 @@ export const applyCategoryDocs = (doc) => {
           404: `${label} not found`,
         },
         description: sub
-          ? "Supply id or _id in the JSON body. Omitted fields remain unchanged. The response includes the populated parent category."
-          : "Partial update. Omitted fields remain unchanged. Uploading photos replaces the entire photo list and deletes previous Cloudinary photos; omit photos to keep them.",
+          ? "Legacy form: supply id or _id in the JSON body. Prefer PUT /v1/subcategory-update/{id}. Omitted fields remain unchanged. The response includes the populated parent category."
+          : "Partial update. Omitted fields remain unchanged. Photos: multipart files replace the whole list; or a JSON photos array (the CRM) where existing { id, secure_url } entries are kept and data URIs / new URLs are uploaded. An empty or omitted list keeps the current photos. After saving, only photos no longer in the list are deleted from Cloudinary.",
       },
     );
-    operation(`/v1/${key}/delete/{id}`, "delete", `Delete ${key}`, {
-      sub,
-      admin: true,
-      parameters: [pathParam("id")],
-      schema: success(sub ? "Subcategory" : model),
-      errors: {
-        400: `Invalid ${key} ID`,
-        404: `${label} not found`,
-        409: sub
-          ? "Cannot delete subcategory while products reference it"
-          : "Cannot delete category while subcategories or products reference it",
-      },
-      description:
-        "Returns the deleted document. Remove references before deleting.",
-    });
+    if (sub) {
+      operation("/v1/subcategory-update/{id}", "put", "Update subcategory", {
+        sub,
+        admin: true,
+        consumes: ["application/json"],
+        parameters: [pathParam("id"), subBody(false)],
+        schema: success(model),
+        errors: {
+          400: "Invalid subcategory ID; A valid parent category is required; Parent category not found; or Title is required",
+          404: `${label} not found`,
+        },
+        description:
+          "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Replaced photos are not deleted from Cloudinary. The response includes the populated parent category.",
+      });
+    }
+    for (const path of [`/v1/${key}/delete/{id}`, `/v1/${key}-delete/{id}`]) {
+      operation(path, "delete", `Delete ${key}`, {
+        sub,
+        admin: true,
+        parameters: [pathParam("id")],
+        schema: success(sub ? "Subcategory" : model),
+        errors: {
+          400: `Invalid ${key} ID`,
+          404: `${label} not found`,
+          409: sub
+            ? "Cannot delete subcategory while products reference it"
+            : "Cannot delete category while subcategories or products reference it",
+        },
+        description: path.includes("-delete/")
+          ? "Path used by the CRM; same behaviour as /v1/" +
+            key +
+            "/delete/{id}. Returns the deleted document. Remove references before deleting."
+          : "Returns the deleted document. Remove references before deleting.",
+      });
+    }
   }
   return doc;
 };

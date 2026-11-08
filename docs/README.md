@@ -19,6 +19,7 @@ first. Read only the sections relevant to the task.
 | CRM AI chat history, pinning, archive, generation and streaming | [CRM_AI_CHATS.md](CRM_AI_CHATS.md)                                                        |
 | CRM customer users, their AI questions/answers, and blog drafts | [CRM_CUSTOMER_AI.md](CRM_CUSTOMER_AI.md)                                                  |
 | MCP server (ChatGPT/Claude): OAuth, blog and Instagram tools    | [MCP_BLOG_PUBLISHING.md](MCP_BLOG_PUBLISHING.md)                                          |
+| MCP walkthrough: logos, connecting Claude/ChatGPT, examples     | [MCP_WALKTHROUGH.md](MCP_WALKTHROUGH.md)                                                  |
 | Products, category contracts, Swagger, CRM, AI, scheduling      | Start with the relevant row in [PROJECT_MAP.md](PROJECT_MAP.md); verify details in source |
 
 `docs/` contains human/agent guides. `src/docs/` contains executable Swagger

@@ -18,6 +18,13 @@ router.post(
   userAuth.checkAdmin,
   SubCategoryOperations.addSubCategory,
 );
+// The CRM sends PUT /subcategory-update/:id (like /category-update/:id).
+router.put(
+  "/subcategory-update/:id",
+  userAuth.checkAdmin,
+  SubCategoryOperations.updateSubCategory,
+);
+// Legacy: id or _id in the JSON body.
 router.post(
   "/subcategory-update",
   userAuth.checkAdmin,
@@ -25,6 +32,12 @@ router.post(
 );
 router.delete(
   "/subcategory/delete/:id",
+  userAuth.checkAdmin,
+  SubCategoryOperations.deleteSubCategory,
+);
+// Path the CRM calls.
+router.delete(
+  "/subcategory-delete/:id",
   userAuth.checkAdmin,
   SubCategoryOperations.deleteSubCategory,
 );

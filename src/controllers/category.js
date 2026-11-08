@@ -4,6 +4,7 @@ import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
 import mongoose from "mongoose";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
+import { removedPhotos, resolveCatalogPhotos } from "../utils/catalogPhotos.js";
 
 const streamUpload = (buffer) =>
   new Promise((resolve, reject) => {
@@ -34,17 +35,24 @@ const deletePhoto = async (publicId) => {
 const addCategory = async (req, res) => {
   try {
     const { title, description, keywords } = req.body;
-    if (!String(title || "").trim()) return res.status(400).json({ success: false, message: "Title is required" });
-    const photos = req.files;
+    if (!String(title || "").trim())
+      return res
+        .status(400)
+        .json({ success: false, message: "Title is required" });
+    const files = req.files || [];
+    // Multipart file uploads, or JSON photos (what the CRM sends).
+    const bodyPhotos = files.length
+      ? []
+      : await resolveCatalogPhotos(req.body.photos, { folder: "categories" });
 
-    if (!photos || photos.length === 0) {
+    if (!files.length && !bodyPhotos.length) {
       return res
         .status(400)
         .json({ success: false, message: "No photos provided" });
     }
 
-    const uploadedPhotos = [];
-    for (const photo of photos) {
+    const uploadedPhotos = [...bodyPhotos];
+    for (const photo of files) {
       const result = await streamUpload(photo.buffer);
       uploadedPhotos.push({
         id: result.public_id,
@@ -62,6 +70,8 @@ const addCategory = async (req, res) => {
     await newCategory.save();
     return res.status(201).json({ success: true, data: newCategory });
   } catch (error) {
+    if (error?.statusCode === 400)
+      return res.status(400).json({ success: false, message: error.message });
     console.error("Error adding category:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -89,7 +99,10 @@ const getAllCategories = async (req, res) => {
 const getCategory = async (req, res) => {
   const { id } = req.params;
   try {
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
+    if (!mongoose.isValidObjectId(id))
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid category ID" });
     const category = await AquaCategory.findById(id);
     if (!category) {
       return res
@@ -97,7 +110,9 @@ const getCategory = async (req, res) => {
         .json({ success: false, message: "Category not found" });
     }
     const products = await AquaProduct.find({ category: id });
-    return res.status(200).json({ success: true, data: category, relatedProducts: products });
+    return res
+      .status(200)
+      .json({ success: true, data: category, relatedProducts: products });
   } catch (error) {
     console.error("Error getting category:", error);
     return res.status(500).json({ success: false, message: error.message });
@@ -127,16 +142,24 @@ const getCategoryByTitle = async (req, res) => {
 
 const updateCategory = async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
+  if (!mongoose.isValidObjectId(id))
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid category ID" });
   try {
     const category = await AquaCategory.findById(id);
-    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    if (!category)
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     const changes = {};
     for (const field of ["title", "description", "keywords"]) {
       if (req.body[field] !== undefined) changes[field] = req.body[field];
     }
     if (changes.title !== undefined && !String(changes.title).trim()) {
-      return res.status(400).json({ success: false, message: "Title is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Title is required" });
     }
     const uploaded = [];
     try {
@@ -144,19 +167,46 @@ const updateCategory = async (req, res) => {
         const result = await streamUpload(photo.buffer);
         uploaded.push({ id: result.public_id, secure_url: result.secure_url });
       }
-      if (uploaded.length) changes.photos = uploaded;
-      const updated = await AquaCategory.findByIdAndUpdate(id, changes, { new: true, runValidators: true });
       if (uploaded.length) {
-        for (const photo of category.photos || []) {
-          if (photo.id) await deletePhoto(photo.id).catch(console.error);
+        // Multipart: the uploaded files replace the whole list.
+        changes.photos = uploaded;
+      } else if (Array.isArray(req.body.photos) && req.body.photos.length) {
+        // JSON (CRM): existing photos in the list are kept, new ones uploaded.
+        // An empty or omitted list keeps the current photos.
+        changes.photos = await resolveCatalogPhotos(req.body.photos, {
+          folder: "categories",
+          upload: async (value, options) => {
+            const result = await cloudinary.v2.uploader.upload(value, options);
+            uploaded.push({
+              id: result.public_id,
+              secure_url: result.secure_url,
+            });
+            return result;
+          },
+        });
+      }
+      const updated = await AquaCategory.findByIdAndUpdate(id, changes, {
+        new: true,
+        runValidators: true,
+      });
+      // Delete only photos that are no longer in the list.
+      if (changes.photos) {
+        for (const photo of removedPhotos(
+          category.photos || [],
+          changes.photos,
+        )) {
+          await deletePhoto(photo.id).catch(console.error);
         }
       }
       return res.status(200).json({ success: true, data: updated });
     } catch (error) {
-      for (const photo of uploaded) await deletePhoto(photo.id).catch(console.error);
+      for (const photo of uploaded)
+        await deletePhoto(photo.id).catch(console.error);
       throw error;
     }
   } catch (error) {
+    if (error?.statusCode === 400)
+      return res.status(400).json({ success: false, message: error.message });
     console.error("Error updating category:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -164,18 +214,26 @@ const updateCategory = async (req, res) => {
 
 const deleteCategory = async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: "Invalid category ID" });
+  if (!mongoose.isValidObjectId(id))
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid category ID" });
   try {
     const category = await AquaCategory.findById(id);
-    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    if (!category)
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     const [subcategories, products] = await Promise.all([
       AquaSubCategory.countDocuments({ category: id }),
       AquaProduct.countDocuments({ category: id }),
     ]);
-    if (subcategories || products) return res.status(409).json({
-      success: false,
-      message: "Cannot delete category while subcategories or products reference it",
-    });
+    if (subcategories || products)
+      return res.status(409).json({
+        success: false,
+        message:
+          "Cannot delete category while subcategories or products reference it",
+      });
     await AquaCategory.findByIdAndDelete(id);
     return res.status(200).json({ success: true, data: category });
   } catch (error) {
