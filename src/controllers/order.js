@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import moment from "moment";
 import AquaOrder from "../models/orders.js";
-import AquaEcomUser from "../models/user.js";
 import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import sendEmail from "../notifications/email/send-email.js";
 import orderEmail from "../utils/emailTemplates/orderEmail.js";
@@ -9,6 +8,7 @@ import {
   buildOrderCreatedNotification,
   publishCrmNotificationSafely,
 } from "../services/crmNotifications.js";
+import { buildCheckout, installationFrom } from "../services/checkout.js";
 
 const ADMIN_PHONE = process.env.ADMIN_PHONE || "9014774667";
 
@@ -21,10 +21,97 @@ const formatCurrencyINR = (amount) =>
 
 const formattedDeliveryDate = (date) => moment(date).format("DD-MM-YYYY");
 
+const sameId = (a, b) => Boolean(a) && Boolean(b) && String(a) === String(b);
+// Customers see only their own orders; admins see any.
+const canSeeOrder = (order, req) =>
+  Boolean(order) &&
+  (req.isAdmin || sameId(order.user?._id ?? order.user, req.user?._id));
+
+const httpError = (status, message) =>
+  Object.assign(new Error(message), { status });
+
+const plainObject = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+// Address maps hold strings only (schema: Map of String).
+const addressFrom = (value, label) => {
+  if (value === undefined || value === null) return undefined;
+  if (!plainObject(value)) throw httpError(400, `${label} must be an object`);
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([key, item]) =>
+          !key.startsWith("$") &&
+          !key.includes(".") &&
+          item !== null &&
+          item !== undefined &&
+          typeof item !== "object",
+      )
+      .map(([key, item]) => [key, String(item).slice(0, 300)]),
+  );
+};
+
+const notesFrom = (value) =>
+  value === undefined || value === null
+    ? undefined
+    : String(value).slice(0, 1000);
+
+// Order fields for the legacy storefront routes (POST /v1/order/cod and
+// /v1/order/pay). Only the product ids and quantities, addresses,
+// installation slot, notes and order number come from the client; prices,
+// totals and every status are computed here. Coupons are not applied on
+// these routes (use /v1/checkout, which records redemptions).
+export const legacyOrderFields = async (req, extra) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  const quote = await buildCheckout({
+    userId: req.user._id,
+    cart: items.map((item) => ({
+      productId: item?.productId?._id ?? item?.productId,
+      quantity: item?.quantity ?? 1,
+    })),
+  });
+  const requestedOrderId = String(req.body?.orderId || "");
+  const shippingAddress = addressFrom(
+    req.body?.shippingAddress,
+    "shippingAddress",
+  );
+  return {
+    user: req.user._id,
+    orderId: /^[A-Za-z0-9_-]{4,40}$/.test(requestedOrderId)
+      ? requestedOrderId
+      : `AQOD-${Date.now()}`,
+    items: quote.items.map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      price: item.unitPrice,
+      quantity: item.quantity,
+    })),
+    totalAmount: quote.payableAmount,
+    discounts: quote.discount,
+    taxes: quote.tax,
+    shippingCost: quote.deliveryCharge,
+    currency: quote.currency,
+    shippingAddress,
+    billingAddress:
+      addressFrom(req.body?.billingAddress, "billingAddress") ||
+      shippingAddress,
+    shippingMethod: "Standard",
+    estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    installation: installationFrom(req.body?.installation),
+    notes: notesFrom(req.body?.notes),
+    orderStatus: "Processing",
+    ...extra,
+  };
+};
+
 const getOrdersByUserId = async (req, res) => {
   const { id } = req.params;
+  if (!sameId(id, req.user?._id))
+    return res
+      .status(403)
+      .json({ success: false, message: "You can only view your own orders" });
   try {
-    const orders = await AquaOrder.find({ user: id });
+    const orders = await AquaOrder.find({ user: req.user._id });
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     return res.status(400).json({ success: false, message: "No orders found" });
@@ -34,7 +121,11 @@ const getOrdersByUserId = async (req, res) => {
 const getOrderByTransactionId = async (req, res) => {
   const { id } = req.params;
   try {
-    const orders = await AquaOrder.findOne({ transactionId: id });
+    // Only the caller's own order (null otherwise, as for an unknown id).
+    const orders = await AquaOrder.findOne({
+      transactionId: String(id),
+      user: req.user._id,
+    });
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     return res.status(400).json({ success: false, message: "No orders found" });
@@ -43,8 +134,17 @@ const getOrderByTransactionId = async (req, res) => {
 
 const getOrdersById = async (req, res) => {
   const { id } = req.params;
+  if (!mongoose.isValidObjectId(id))
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid order id" });
   try {
     const orders = await AquaOrder.findById(id);
+    // Someone else's order looks the same as a missing one.
+    if (!canSeeOrder(orders, req))
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     return res.status(400).json({ success: false, message: "No orders found" });
@@ -118,6 +218,87 @@ const updateOrder = async (req, res) => {
   }
 };
 
+// PUT /v1/order/user/:id (customer). Own orders only; only cancelling and
+// delivery details (shippingAddress, installation, notes), and only while the
+// order is Pending or Processing. Other fields in the body (payment, totals,
+// refund, invoice, items...) are ignored.
+const CUSTOMER_EDITABLE_STATUSES = new Set(["Pending", "Processing"]);
+const updateOwnOrder = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id))
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid order id" });
+  try {
+    const order = await AquaOrder.findById(id);
+    if (!canSeeOrder(order, { user: req.user, isAdmin: false }))
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    const body = plainObject(req.body) ? req.body : {};
+    const changes = {};
+    const cancel =
+      body.orderStatus === "Cancelled" ||
+      body.orderCancelled === true ||
+      body.orderCancelled === "true";
+    if (cancel) {
+      changes.orderStatus = "Cancelled";
+      changes.orderCancelled = true;
+      changes.orderCancelledDate = new Date().toISOString();
+    }
+    const shippingAddress = addressFrom(
+      body.shippingAddress,
+      "shippingAddress",
+    );
+    if (shippingAddress) changes.shippingAddress = shippingAddress;
+    if (body.installation !== undefined) {
+      const installation = installationFrom(body.installation);
+      if (!installation)
+        return res.status(400).json({
+          success: false,
+          message: "installation needs day (YYYY-MM-DD) and slot",
+        });
+      changes.installation = installation;
+    }
+    const notes = notesFrom(body.notes);
+    if (notes !== undefined) changes.notes = notes;
+    if (!Object.keys(changes).length)
+      return res.status(400).json({
+        success: false,
+        message:
+          "Nothing to update. Customers can cancel an order or change shippingAddress, installation or notes.",
+      });
+    if (!CUSTOMER_EDITABLE_STATUSES.has(order.orderStatus))
+      return res.status(409).json({
+        success: false,
+        message: `This order is ${order.orderStatus} and can no longer be changed`,
+      });
+    // Conditional on the status, so a concurrent ship/cancel wins.
+    const updatedOrder = await AquaOrder.findOneAndUpdate(
+      {
+        _id: id,
+        user: req.user._id,
+        orderStatus: { $in: [...CUSTOMER_EDITABLE_STATUSES] },
+      },
+      { $set: changes },
+      { new: true, runValidators: true },
+    );
+    if (!updatedOrder)
+      return res.status(409).json({
+        success: false,
+        message: "The order changed meanwhile; reload and try again",
+      });
+    return res.status(200).json({ success: true, data: updatedOrder });
+  } catch (error) {
+    if (error?.status === 400)
+      return res.status(400).json({ success: false, message: error.message });
+    console.error("Error updating own order:", error?.message || error);
+    return res
+      .status(400)
+      .json({ success: false, message: "Error updating order" });
+  }
+};
+
 const deleteOrder = async (req, res) => {
   const { id } = req.params;
   try {
@@ -137,21 +318,22 @@ const deleteOrder = async (req, res) => {
 
 const createCodOrder = async (req, res) => {
   try {
-    const { user: userId } = req.body;
-    if (!userId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User id is required" });
-    }
+    // The customer comes from the login token, not the body.
+    const user = req.user;
+    if (req.body?.user && !sameId(req.body.user, user._id))
+      return res.status(403).json({
+        success: false,
+        message: "Orders can only be placed for your own account",
+      });
 
-    const user = await AquaEcomUser.findById(userId);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    const orderCreated = await new AquaOrder(req.body).save();
+    const orderCreated = await new AquaOrder(
+      await legacyOrderFields(req, {
+        orderType: "Cash On Delivery",
+        paymentMethod: "Cash On Delivery",
+        paymentStatus: "Pending",
+        transactionId: `AQTR-COD-${Date.now()}`,
+      }),
+    ).save();
 
     void publishCrmNotificationSafely(
       buildOrderCreatedNotification({
@@ -230,12 +412,16 @@ const createCodOrder = async (req, res) => {
       notificationsPlanned,
     });
   } catch (error) {
+    // Cart/stock/address problems are the client's to fix.
+    if (error?.status >= 400 && error?.status < 500)
+      return res
+        .status(error.status)
+        .json({ success: false, message: error.message });
     console.error("Error creating COD order:", error);
     return res.status(500).json({
       success: false,
       message:
         "There was a problem creating the order, please try again later.",
-      error: error.message,
     });
   }
 };
@@ -325,6 +511,7 @@ const OrderOperations = {
   updateOrder,
   deleteOrder,
   createCodOrder,
+  updateOwnOrder,
   // admin routes
   AdminGetOrders,
   updateOrderByAdmin,

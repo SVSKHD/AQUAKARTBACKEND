@@ -588,7 +588,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -663,7 +663,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -726,7 +726,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -771,7 +771,7 @@
             "in": "formData",
             "type": "file",
             "required": true,
-            "description": "Repeat the photos field for multiple files (10 MiB maximum per file). Swagger 2 UI supports one file here; use repeated multipart fields for multiple files."
+            "description": "Repeat the photos field for multiple files (10 MiB maximum per file, at most 10 files). Swagger 2 UI supports one file here; use repeated multipart fields for multiple files. Preferred over base64 data URIs in JSON: smaller requests and no JSON size limits."
           }
         ],
         "responses": {
@@ -838,7 +838,7 @@
             }
           },
           "413": {
-            "description": "Each image must be 10 MB or smaller",
+            "description": "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -850,9 +850,21 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
+            }
+          },
+          "502": {
+            "description": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT); nothing was saved",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT)"
+              }
             }
           }
         }
@@ -903,7 +915,13 @@
             "in": "formData",
             "type": "file",
             "required": false,
-            "description": "Repeat the photos field for multiple files (10 MiB maximum per file). Swagger 2 UI supports one file here; use repeated multipart fields for multiple files."
+            "description": "Repeat the photos field for multiple files (10 MiB maximum per file, at most 10 files). Swagger 2 UI supports one file here; use repeated multipart fields for multiple files. Preferred over base64 data URIs in JSON: smaller requests and no JSON size limits."
+          },
+          {
+            "name": "keepPhotos",
+            "in": "formData",
+            "type": "string",
+            "description": "Update only, with photos files. JSON array of existing photos to keep, in order, e.g. [{\"id\":\"categories/a\",\"secure_url\":\"https://res.cloudinary.com/...\"}]. The uploaded files are added after them. Without keepPhotos the files replace the whole photo list."
           }
         ],
         "responses": {
@@ -982,7 +1000,7 @@
             }
           },
           "413": {
-            "description": "Each image must be 10 MB or smaller",
+            "description": "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -994,9 +1012,21 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
+            }
+          },
+          "502": {
+            "description": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT); nothing was saved and existing photos are unchanged",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT)"
+              }
             }
           }
         }
@@ -1099,7 +1129,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1204,7 +1234,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1265,7 +1295,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1332,7 +1362,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1395,7 +1425,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1537,7 +1567,7 @@
             }
           },
           "413": {
-            "description": "Each image must be 10 MB or smaller",
+            "description": "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -1549,9 +1579,21 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
+            }
+          },
+          "502": {
+            "description": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT); nothing was saved",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT)"
+              }
             }
           }
         }
@@ -1723,7 +1765,7 @@
             }
           },
           "413": {
-            "description": "Each image must be 10 MB or smaller",
+            "description": "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -1735,9 +1777,21 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
+            }
+          },
+          "502": {
+            "description": "Image upload to Cloudinary failed or timed out; nothing was saved",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Image upload to Cloudinary failed or timed out"
+              }
             }
           }
         }
@@ -1901,7 +1955,7 @@
             }
           },
           "413": {
-            "description": "Each image must be 10 MB or smaller",
+            "description": "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -1913,9 +1967,21 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
+            }
+          },
+          "502": {
+            "description": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT); nothing was saved and existing photos are unchanged",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT)"
+              }
             }
           }
         }
@@ -2018,7 +2084,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -2123,7 +2189,7 @@
             }
           },
           "500": {
-            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -2208,9 +2274,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -2485,9 +2548,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["Products"]
@@ -2534,9 +2594,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -2569,9 +2626,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -2710,9 +2764,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["Blog"]
@@ -2744,9 +2795,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -2777,9 +2825,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -2806,9 +2851,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["Blog"]
@@ -2840,9 +2882,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -2873,9 +2912,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -2899,6 +2935,11 @@
         "description": "",
         "parameters": [
           {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "schema": {
@@ -2915,11 +2956,11 @@
           "201": {
             "description": "Created"
           },
-          "400": {
-            "description": "Bad Request"
+          "401": {
+            "description": "Unauthorized"
           },
-          "404": {
-            "description": "Not Found"
+          "403": {
+            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -2932,6 +2973,11 @@
       "post": {
         "description": "",
         "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string"
+          },
           {
             "name": "body",
             "in": "body",
@@ -2957,6 +3003,9 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "404": {
             "description": "Not Found"
@@ -3002,6 +3051,11 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
@@ -3010,6 +3064,12 @@
           },
           "400": {
             "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "tags": ["Orders"]
@@ -3040,6 +3100,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           }
         },
         "tags": ["Orders"]
@@ -3103,6 +3166,9 @@
           },
           "404": {
             "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
           }
         },
         "tags": ["Orders"]
@@ -3124,9 +3190,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -3161,9 +3224,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -3194,9 +3254,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -3674,9 +3731,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["Softeners Hyd"]
@@ -3710,9 +3764,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["Send Whatspp Message"]
@@ -3734,9 +3785,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "502": {
             "description": "Bad Gateway"
@@ -3764,9 +3812,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "405": {
             "description": "Method Not Allowed"
@@ -3807,9 +3852,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "502": {
             "description": "Bad Gateway"
           }
@@ -3830,9 +3872,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["Send Email"]
@@ -3993,9 +4032,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -4044,9 +4080,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           }
@@ -4076,9 +4109,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -5062,9 +5092,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Invoices"]
@@ -5112,9 +5139,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -5159,9 +5183,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -5194,9 +5215,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -5234,9 +5252,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -5272,9 +5287,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -5312,9 +5324,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -5348,9 +5357,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -5381,9 +5387,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -5410,9 +5413,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -5483,9 +5483,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -5519,9 +5516,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -5549,9 +5543,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -5578,9 +5569,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -5627,9 +5615,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -5659,9 +5644,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -5695,9 +5677,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -6102,9 +6081,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -6139,9 +6115,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -6184,9 +6157,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -6239,9 +6209,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -6277,9 +6244,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -6395,9 +6359,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "410": {
             "description": "Gone"
           }
@@ -6424,9 +6385,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -6463,9 +6421,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -6490,9 +6445,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "409": {
             "description": "Conflict"
@@ -6530,9 +6482,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -6566,9 +6515,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -6606,9 +6552,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -6656,9 +6599,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -6697,9 +6637,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -6741,9 +6678,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -6784,9 +6718,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -6822,9 +6753,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -6886,9 +6814,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -6935,9 +6860,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -6972,9 +6894,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7000,9 +6919,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "409": {
             "description": "Conflict"
           },
@@ -7026,9 +6942,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7053,9 +6966,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7078,9 +6988,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7103,9 +7010,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7128,9 +7032,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7155,9 +7056,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7188,9 +7086,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7219,9 +7114,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7250,9 +7142,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7277,9 +7166,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7308,9 +7194,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -7349,9 +7232,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -7382,9 +7262,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7409,9 +7286,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7434,9 +7308,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7467,9 +7338,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7498,9 +7366,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7529,9 +7394,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7556,9 +7418,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7589,9 +7448,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7620,9 +7476,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7651,9 +7504,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Customer Profiles"]
@@ -7722,9 +7572,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -7749,9 +7596,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "409": {
             "description": "Conflict"
@@ -7785,9 +7629,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -7824,9 +7665,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -7879,9 +7717,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -7932,9 +7767,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8003,9 +7835,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -8052,9 +7881,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -8091,9 +7917,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8146,9 +7969,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -8179,9 +7999,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "501": {
             "description": "Not Implemented"
           }
@@ -8208,9 +8025,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "501": {
             "description": "Not Implemented"
@@ -8256,9 +8070,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -8327,9 +8138,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -8355,9 +8163,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Orders"]
@@ -8381,9 +8186,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Orders"]
@@ -8419,9 +8221,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -8454,9 +8253,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8491,9 +8287,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8545,9 +8338,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8601,9 +8391,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -8628,9 +8415,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -8654,9 +8438,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Notifications"]
@@ -8678,9 +8459,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -8714,9 +8492,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8766,9 +8541,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -8794,9 +8566,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Ecommerce Orders"]
@@ -8820,9 +8589,6 @@
         "responses": {
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Ecommerce Orders"]
@@ -8853,9 +8619,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -8903,9 +8666,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -8944,9 +8704,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9005,9 +8762,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9063,9 +8817,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9092,9 +8843,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Leads"]
@@ -9116,9 +8864,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -9219,9 +8964,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -9259,9 +9001,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -9294,9 +9033,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9344,9 +9080,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9380,9 +9113,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9431,9 +9161,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9488,9 +9215,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9558,9 +9282,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9597,9 +9318,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9626,9 +9344,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Activities"]
@@ -9676,9 +9391,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -9703,9 +9415,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -9739,9 +9448,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9777,9 +9483,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9814,9 +9517,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -9843,9 +9543,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Deals"]
@@ -9893,9 +9590,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -9920,9 +9614,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -9956,9 +9647,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -9994,9 +9682,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -10031,9 +9716,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -10060,9 +9742,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "tags": ["CRM / Whatsapp"]
@@ -10120,9 +9799,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "500": {
             "description": "Internal Server Error"
           }
@@ -10155,9 +9831,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -10211,9 +9884,6 @@
           "401": {
             "description": "Unauthorized"
           },
-          "403": {
-            "description": "Forbidden"
-          },
           "404": {
             "description": "Not Found"
           },
@@ -10259,9 +9929,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "500": {
             "description": "Internal Server Error"
@@ -10310,9 +9977,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           },
           "404": {
             "description": "Not Found"
@@ -13287,6 +12951,25 @@
         },
         "message": {
           "type": "string"
+        },
+        "code": {
+          "type": "string",
+          "description": "Create/update/delete errors. validation: INVALID_PHOTO, INVALID_FIELD, IMAGE_TOO_LARGE, VALIDATION_FAILED; cloudinary_upload: IMAGE_TOO_LARGE_FOR_CLOUDINARY (413), IMAGE_REJECTED_BY_CLOUDINARY (400), CLOUDINARY_TIMEOUT / CLOUDINARY_UPLOAD_FAILED (502); database: DATABASE_ERROR (500); request: REQUEST_TOO_LARGE, FILE_TOO_LARGE, INVALID_JSON, INVALID_UPLOAD; server: SERVER_ERROR.",
+          "example": "CLOUDINARY_TIMEOUT"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "request",
+            "validation",
+            "cloudinary_upload",
+            "database",
+            "server"
+          ]
+        },
+        "photoIndex": {
+          "type": "integer",
+          "description": "Position of the failing photo in the final list (kept photos first, then new files)."
         }
       }
     },

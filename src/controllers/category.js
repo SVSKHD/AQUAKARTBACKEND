@@ -5,12 +5,17 @@ import AquaSubCategory from "../models/sub-category.js";
 import mongoose from "mongoose";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 import {
+  MAX_CATALOG_PHOTOS,
   assertImageBuffer,
   exactTitleFilter,
+  parseJsonArrayField,
+  photoInputError,
   removedPhotos,
   resolveCatalogPhotos,
   scheduleMediaCleanup,
   scheduleUploadCleanup,
+  sendCatalogError,
+  uploadToCloudinary,
 } from "../utils/catalogPhotos.js";
 
 const streamUpload = (buffer) =>
@@ -28,17 +33,9 @@ const streamUpload = (buffer) =>
     stream.end(buffer);
   });
 
-const SERVER_ERROR = "Something went wrong, please try again";
-
-// 400/413 from photo checks keep their message; anything else is generic.
-const sendError = (res, error, label) => {
-  if (error?.statusCode === 400 || error?.statusCode === 413)
-    return res
-      .status(error.statusCode)
-      .json({ success: false, message: error.message });
-  console.error(`Error ${label}:`, error);
-  return res.status(500).json({ success: false, message: SERVER_ERROR });
-};
+// Errors: { success: false, message, code, stage, photoIndex? } with
+// 400/413 (bad image), 502 (Cloudinary), 500 (database/unexpected).
+const sendError = sendCatalogError;
 
 const DUPLICATE_TITLE = "A category with this title already exists";
 const titleTaken = (title, exceptId) =>
@@ -48,13 +45,28 @@ const titleTaken = (title, exceptId) =>
   });
 
 // Multipart files: every file is checked before any is uploaded.
-const uploadFiles = async (files, uploaded) => {
-  for (const file of files) assertImageBuffer(file.buffer, file.mimetype);
-  for (const file of files) {
-    const result = await streamUpload(file.buffer);
-    uploaded.push({ id: result.public_id, secure_url: result.secure_url });
+// photoIndex in errors counts from indexOffset (after kept photos).
+const uploadFiles = async (files, uploaded, indexOffset = 0) => {
+  files.forEach((file, index) => {
+    try {
+      assertImageBuffer(file.buffer, file.mimetype);
+    } catch (error) {
+      throw Object.assign(error, { photoIndex: indexOffset + index });
+    }
+  });
+  const results = [];
+  for (const [index, file] of files.entries()) {
+    const result = await uploadToCloudinary(
+      streamUpload,
+      file.buffer,
+      { folder: "categories" },
+      { index: indexOffset + index },
+    );
+    const photo = { id: result.public_id, secure_url: result.secure_url };
+    uploaded.push(photo);
+    results.push(photo);
   }
-  return uploaded;
+  return results;
 };
 
 const addCategory = async (req, res) => {
@@ -70,7 +82,7 @@ const addCategory = async (req, res) => {
     const files = req.files || [];
     // Multipart file uploads, or JSON photos (what the CRM sends).
     const photos = files.length
-      ? await uploadFiles(files, uploaded)
+      ? await uploadFiles(files, uploaded, 0)
       : await resolveCatalogPhotos(req.body.photos, {
           folder: "categories",
           uploaded,
@@ -195,8 +207,27 @@ const updateCategory = async (req, res) => {
     try {
       const files = req.files || [];
       if (files.length) {
-        // Multipart: the uploaded files replace the whole list.
-        changes.photos = await uploadFiles(files, uploaded);
+        // Multipart. With keepPhotos (a JSON array of existing
+        // { id, secure_url } to keep, in order) the files are added after
+        // them; without it the files replace the whole list (old behaviour).
+        const keepInput = parseJsonArrayField(
+          req.body.keepPhotos,
+          "keepPhotos",
+        );
+        const kept = keepInput
+          ? await resolveCatalogPhotos(keepInput, {
+              folder: "categories",
+              uploaded,
+            })
+          : [];
+        if (kept.length + files.length > MAX_CATALOG_PHOTOS)
+          throw photoInputError(
+            `A maximum of ${MAX_CATALOG_PHOTOS} photos is allowed`,
+          );
+        changes.photos = [
+          ...kept,
+          ...(await uploadFiles(files, uploaded, kept.length)),
+        ];
       } else if (Array.isArray(req.body.photos) && req.body.photos.length) {
         // JSON (CRM): existing photos in the list are kept, new ones uploaded.
         // An empty or omitted list keeps the current photos.

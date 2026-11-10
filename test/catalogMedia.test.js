@@ -204,6 +204,8 @@ test("oversized and malformed bodies get JSON errors, not Express HTML", async (
   assert.deepEqual(await bad.json(), {
     success: false,
     message: "Invalid request body",
+    code: "INVALID_JSON",
+    stage: "request",
   });
 });
 

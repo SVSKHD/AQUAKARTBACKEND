@@ -19,8 +19,12 @@ import AquaSubCategory from "../models/sub-category.js";
 export const MAX_CATALOG_PHOTOS = 10;
 const DATA_URI = /^data:image\/[\w.+-]+;base64,/i;
 
-export const photoInputError = (message) =>
-  Object.assign(new Error(message), { statusCode: 400 });
+export const photoInputError = (message, code = "INVALID_PHOTO") =>
+  Object.assign(new Error(message), {
+    statusCode: 400,
+    code,
+    stage: "validation",
+  });
 
 // ── Image input checks ─────────────────────────────────────────────────────
 // Cloudinary's per-image limit (free plan) is 10 MB; reject before uploading.
@@ -62,8 +66,119 @@ export const photoTooLargeError = () =>
     new Error(
       `Each image must be ${Math.floor(maxImageBytes() / 1048576)} MB or smaller`,
     ),
-    { statusCode: 413 },
+    { statusCode: 413, code: "IMAGE_TOO_LARGE", stage: "validation" },
   );
+
+// ── Cloudinary upload failures ─────────────────────────────────────────────
+// The SDK rejects with a plain object { message, http_code } (not an Error),
+// which used to fall through to a generic 500. Classify it so the CRM can
+// tell a rejected image (400/413) from an upstream failure (502). Raw
+// Cloudinary text is only returned for image rejections; other messages
+// (e.g. signature errors) stay in the server log.
+const TIMEOUT =
+  /timeout|timed out|ETIMEDOUT|ESOCKETTIMEDOUT|ECONNRESET|socket hang up/i;
+export const cloudinaryUploadError = (error, { index, folder } = {}) => {
+  const httpCode = Number(error?.http_code ?? error?.error?.http_code) || null;
+  const raw = String(
+    error?.message ?? error?.error?.message ?? "Cloudinary upload failed",
+  ).slice(0, 300);
+  const timeout =
+    httpCode === 499 || error?.name === "TimeoutError" || TIMEOUT.test(raw);
+  let statusCode = 502;
+  let code = timeout ? "CLOUDINARY_TIMEOUT" : "CLOUDINARY_UPLOAD_FAILED";
+  let message = timeout
+    ? "Image upload to Cloudinary timed out. Please try again."
+    : "Image upload to Cloudinary failed. Please try again.";
+  if (!timeout && httpCode === 400 && /too large/i.test(raw)) {
+    statusCode = 413;
+    code = "IMAGE_TOO_LARGE_FOR_CLOUDINARY";
+    message = `Cloudinary rejected the image as too large: ${raw}`;
+  } else if (
+    !timeout &&
+    httpCode === 400 &&
+    /invalid image|unsupported|corrupt|could not|invalid file|not a valid/i.test(
+      raw,
+    )
+  ) {
+    statusCode = 400;
+    code = "IMAGE_REJECTED_BY_CLOUDINARY";
+    message = `Cloudinary rejected the image: ${raw}`;
+  }
+  console.error("Cloudinary upload failed", {
+    folder,
+    photoIndex: index,
+    httpCode,
+    name: error?.name,
+    message: raw,
+  });
+  return Object.assign(new Error(message), {
+    statusCode,
+    code,
+    stage: "cloudinary_upload",
+    ...(Number.isInteger(index) ? { photoIndex: index } : {}),
+  });
+};
+
+// Uploads one image, turning a Cloudinary failure into a classified error.
+export const uploadToCloudinary = async (
+  upload,
+  value,
+  options,
+  { index } = {},
+) => {
+  try {
+    return await upload(value, options);
+  } catch (error) {
+    throw cloudinaryUploadError(error, { index, folder: options?.folder });
+  }
+};
+
+// One JSON error shape for catalog create/update/delete:
+// { success: false, message, code, stage, photoIndex? }. 400/413/502 keep
+// their message; database and unexpected errors are 500 with a generic
+// message and the details only in the server log.
+const MONGO = /^Mongo|^Mongoose|DocumentNotFoundError|VersionError/;
+export const sendCatalogError = (res, error, label) => {
+  if ([400, 413, 502].includes(error?.statusCode))
+    return res.status(error.statusCode).json({
+      success: false,
+      message: error.message,
+      code: error.code || "BAD_REQUEST",
+      stage: error.stage || "validation",
+      ...(Number.isInteger(error.photoIndex)
+        ? { photoIndex: error.photoIndex }
+        : {}),
+    });
+  if (error?.name === "ValidationError")
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      code: "VALIDATION_FAILED",
+      stage: "database",
+      fields: Object.keys(error.errors || {}),
+    });
+  const database = MONGO.test(String(error?.name || ""));
+  console.error(`Error ${label}:`, error);
+  return res.status(500).json({
+    success: false,
+    message: "Something went wrong, please try again",
+    code: database ? "DATABASE_ERROR" : "SERVER_ERROR",
+    stage: database ? "database" : "server",
+  });
+};
+
+// A JSON array sent as a multipart text field (or already parsed).
+export const parseJsonArrayField = (value, field) => {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // fall through
+  }
+  throw photoInputError(`${field} must be a JSON array`, "INVALID_FIELD");
+};
 
 const UNSUPPORTED =
   "Unsupported image. Use a JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF file";
@@ -163,13 +278,13 @@ export const resolveCatalogPhotos = async (
     if (typeof raw === "string" && DATA_URI.test(raw.trim()))
       assertImageDataUri(raw.trim());
   }
-  const track = async (value, options) => {
-    const result = await upload(value, options);
+  const track = async (value, options, index) => {
+    const result = await uploadToCloudinary(upload, value, options, { index });
     uploaded.push({ id: result.public_id, secure_url: result.secure_url });
     return result;
   };
   const resolved = [];
-  for (const photo of photos) {
+  for (const [index, photo] of photos.entries()) {
     const isObject = photo && typeof photo === "object";
     const raw =
       typeof photo === "string"
@@ -180,7 +295,11 @@ export const resolveCatalogPhotos = async (
     if (typeof raw !== "string" || !raw.trim()) throw photoInputError(INVALID);
     const value = raw.trim();
     if (DATA_URI.test(value)) {
-      const result = await track(value, { folder, resource_type: "image" });
+      const result = await track(
+        value,
+        { folder, resource_type: "image" },
+        index,
+      );
       resolved.push({ id: result.public_id, secure_url: result.secure_url });
     } else if (isOwnCloudinaryUrl(value)) {
       // The URL is authoritative: the CRM may attach a made-up id.
@@ -188,7 +307,11 @@ export const resolveCatalogPhotos = async (
     } else if (/^https:\/\//i.test(value) && isObject && photo.id) {
       resolved.push({ id: String(photo.id), secure_url: value });
     } else if (/^https?:\/\//i.test(value)) {
-      const result = await track(value, { folder, resource_type: "image" });
+      const result = await track(
+        value,
+        { folder, resource_type: "image" },
+        index,
+      );
       resolved.push({ id: result.public_id, secure_url: result.secure_url });
     } else {
       throw photoInputError(INVALID);

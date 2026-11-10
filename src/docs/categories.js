@@ -70,6 +70,27 @@ export const applyCategoryDocs = (doc) => {
       properties: {
         success: { type: "boolean", example: false },
         message: { type: "string" },
+        code: {
+          type: "string",
+          description:
+            "Create/update/delete errors. validation: INVALID_PHOTO, INVALID_FIELD, IMAGE_TOO_LARGE, VALIDATION_FAILED; cloudinary_upload: IMAGE_TOO_LARGE_FOR_CLOUDINARY (413), IMAGE_REJECTED_BY_CLOUDINARY (400), CLOUDINARY_TIMEOUT / CLOUDINARY_UPLOAD_FAILED (502); database: DATABASE_ERROR (500); request: REQUEST_TOO_LARGE, FILE_TOO_LARGE, INVALID_JSON, INVALID_UPLOAD; server: SERVER_ERROR.",
+          example: "CLOUDINARY_TIMEOUT",
+        },
+        stage: {
+          type: "string",
+          enum: [
+            "request",
+            "validation",
+            "cloudinary_upload",
+            "database",
+            "server",
+          ],
+        },
+        photoIndex: {
+          type: "integer",
+          description:
+            "Position of the failing photo in the final list (kept photos first, then new files).",
+        },
       },
     },
     CategoryAuthError: {
@@ -173,8 +194,19 @@ export const applyCategoryDocs = (doc) => {
       type: "file",
       required: create,
       description:
-        "Repeat the photos field for multiple files (10 MiB maximum per file). Swagger 2 UI supports one file here; use repeated multipart fields for multiple files.",
+        "Repeat the photos field for multiple files (10 MiB maximum per file, at most 10 files). Swagger 2 UI supports one file here; use repeated multipart fields for multiple files. Preferred over base64 data URIs in JSON: smaller requests and no JSON size limits.",
     },
+    ...(create
+      ? []
+      : [
+          {
+            name: "keepPhotos",
+            in: "formData",
+            type: "string",
+            description:
+              'Update only, with photos files. JSON array of existing photos to keep, in order, e.g. [{"id":"categories/a","secure_url":"https://res.cloudinary.com/..."}]. The uploaded files are added after them. Without keepPhotos the files replace the whole photo list.',
+          },
+        ]),
   ];
   const subBody = (create) => ({
     name: "body",
@@ -281,7 +313,7 @@ export const applyCategoryDocs = (doc) => {
           ...(schema && !path.endsWith("-status")
             ? {
                 500: response(
-                  "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
+                  "Server error. Create, update and delete return a generic message with code DATABASE_ERROR or SERVER_ERROR; the read endpoints may include the error message (the category title lookup returns 'Server error').",
                   ref("CategoryError"),
                 ),
               }
@@ -338,7 +370,8 @@ export const applyCategoryDocs = (doc) => {
           ? "A valid parent category is required; Parent category not found; or Title is required"
           : "Title is required; No photos provided; or an invalid image",
         409: `A ${key} with this title already exists`,
-        413: "Each image must be 10 MB or smaller",
+        413: "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
+        502: "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT); nothing was saved",
       },
       description: sub
         ? "Supply title and either category or category_id. Photos are optional. Titles are unique across subcategories (case-insensitive, trimmed); a duplicate returns 409. The returned parent category is an ID. New uploads are removed again if saving fails."
@@ -363,7 +396,8 @@ export const applyCategoryDocs = (doc) => {
             : "Invalid category ID; Title is required; or an invalid image",
           404: `${label} not found`,
           409: `A ${key} with this title already exists`,
-          413: "Each image must be 10 MB or smaller",
+          413: "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
+          502: "Image upload to Cloudinary failed or timed out (code CLOUDINARY_UPLOAD_FAILED or CLOUDINARY_TIMEOUT); nothing was saved and existing photos are unchanged",
         },
         description: sub
           ? "Legacy form: supply id or _id in the JSON body. Prefer PUT /v1/subcategory-update/{id}. Omitted fields remain unchanged. The response includes the populated parent category."
@@ -381,7 +415,8 @@ export const applyCategoryDocs = (doc) => {
           400: "Invalid subcategory ID; A valid parent category is required; Parent category not found; Title is required; an invalid image; or Send either photos or clearPhotos, not both",
           404: `${label} not found`,
           409: "A subcategory with this title already exists",
-          413: "Each image must be 10 MB or smaller",
+          413: "Each image must be 10 MB or smaller; or Cloudinary rejected the image as too large",
+          502: "Image upload to Cloudinary failed or timed out; nothing was saved",
         },
         description:
           "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. clearPhotos: true removes all photos. Replaced photos are deleted from Cloudinary after saving unless another record uses them; if saving fails, new uploads are removed. Changing the title to one another subcategory uses returns 409. The response includes the populated parent category.",

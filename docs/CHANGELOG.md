@@ -217,6 +217,109 @@ test/mcpCatalogTools.test.js test/mcpTaxonomySeo.test.js` passed
 - Limitations/follow-up: The skill itself is still installed in the user's
   Claude account (synced skills); only this repo's setup was removed.
 
+### Category image upload: classified errors (400/413/502/500) and multipart keepPhotos
+
+- Request/problem:
+  - **Report.** `PUT /v1/category-update/:id` failed in the CRM for a valid
+    1254x1254 PNG of about 2 MiB, sent as a base64 data URI.
+  - **Local reproduction.** Real `express.json` (50mb), the real category
+    route, image checks and error handler; models and Cloudinary mocked.
+    - Generated PNGs at 1254x1254, with and without tEXt/pHYs/iTXt
+      metadata. The fixtures were 3.8 MiB, which is larger than reported.
+    - Both passed `assertImageDataUri` and were uploaded once, with the data
+      URI intact. Both were saved after the kept existing photo and
+      returned 200 in about 150 ms.
+    - **The backend code path does not fail for this image.**
+  - **Confirmed defect.** A Cloudinary rejection or timeout reached the CRM
+    as a generic `500 "Something went wrong"`. The SDK rejects with a plain
+    `{ message, http_code }` object, not an Error, so it fell through to the
+    generic 500. The Cloudinary reason was only in the server log, which
+    made the production failure undiagnosable from the CRM.
+  - **Root cause in production: not confirmed.** It is one of two:
+    - Cloudinary rejected the upload or timed out (a JSON 500 before this
+      change).
+    - A proxy or hosting body-size limit in front of `api.aquakart.co.in`
+      blocked the roughly 2.8 MB JSON body before Express (HTML 413 or a
+      network/CORS error). No proxy config is in this repo.
+  - **Also found.** Multipart updates replaced the whole photo list, so
+    multipart could not add a photo while keeping the others.
+- Changes/result:
+  - **Classified upload errors (`src/utils/catalogPhotos.js`).**
+    - `uploadToCloudinary` and `cloudinaryUploadError` classify upload
+      failures. Cloudinary 400 "too large" → **413**
+      `IMAGE_TOO_LARGE_FOR_CLOUDINARY`. Cloudinary invalid image → **400**
+      `IMAGE_REJECTED_BY_CLOUDINARY`. Timeouts → **502**
+      `CLOUDINARY_TIMEOUT`. Anything else → **502**
+      `CLOUDINARY_UPLOAD_FAILED`.
+    - 502 responses don't include Cloudinary's raw text (signature
+      messages stay in the log).
+    - A structured, token-free log line records folder, `photoIndex`,
+      `http_code` and the message.
+  - **One error response shape.** `sendCatalogError` returns
+    `{ success: false, message, code, stage, photoIndex? }`.
+    - Stages are request, validation, cloudinary_upload, database and
+      server.
+    - Mongo/Mongoose failures → 500 `DATABASE_ERROR`; ValidationError → 400
+      `VALIDATION_FAILED`.
+    - Category and subcategory create/update/delete use it.
+    - `photoInputError` and `photoTooLargeError` carry `INVALID_PHOTO` and
+      `IMAGE_TOO_LARGE`. `src/middleware/jsonErrors.js` adds
+      `REQUEST_TOO_LARGE`, `FILE_TOO_LARGE`, `INVALID_JSON`,
+      `INVALID_UPLOAD` and `SERVER_ERROR`.
+  - **Multipart category update: optional `keepPhotos`.** A JSON array of
+    existing `{ id, secure_url }` objects, kept in order, with the uploaded
+    files added after them. This lets the CRM upload multipart files
+    instead of base64 JSON. Without `keepPhotos` the old replace behaviour
+    is unchanged.
+  - **Upload limits.** Multipart uploads are limited to 10 files
+    (`upload.array("photos", 10)`). A failing file's `photoIndex` counts
+    after the kept photos.
+  - **Existing references are preserved.** On any failure nothing is
+    written, existing photos are untouched, and only this request's new
+    uploads are removed.
+  - **Swagger.** `CategoryError` documents `code`, `stage` and
+    `photoIndex`; add/update list 502; update lists `keepPhotos`.
+- Files: `src/utils/catalogPhotos.js`, `src/controllers/category.js`,
+  `src/controllers/sub-category.js`, `src/routes/category.js`,
+  `src/middleware/jsonErrors.js`, `src/docs/categories.js`,
+  `swagger-output.json`, `test/categoryImageUpload.test.js` (new),
+  `test/catalogMedia.test.js` (expects `code`/`stage` on the 400 body),
+  `docs/PROJECT_MAP.md`, `docs/CHANGELOG.md`.
+- Validation:
+  - Reproduction script (scratchpad, not committed), run before the fix:
+    PNG with and without metadata → 200. Simulated Cloudinary size
+    rejection and timeout → generic 500.
+  - `node --test test/categoryImageUpload.test.js`: 11/11 passed. Coverage:
+    - a 1.5–2.6 MiB 1254x1254 PNG, with and without metadata, as a JSON
+      data URI
+    - JPEG and WebP data URIs
+    - multipart PNG, JPEG and WebP with `keepPhotos`
+    - four Cloudinary rejection shapes, plus a multipart upload failure
+    - a database failure, and validation failures with codes
+  - Catalog/MCP focused suites pass.
+  - Full `node --test`: 273/274. The failure is the pre-existing
+    `test/invoiceViews.test.js`.
+  - `npm run swagger` succeeded.
+  - Not run: no request to production, Cloudinary or MongoDB.
+- Limitations/follow-up:
+  - **Find the production cause.** Get the CRM's status code and
+    content-type for the failing request, or the server log line
+    `Error updating category:` / `Cloudinary upload failed`. An HTML 413 or
+    a CORS error points to a proxy limit; a JSON response now names the
+    stage.
+  - **CRM change needed.** The CRM (separate repo) must send multipart with
+    `keepPhotos` to stop embedding base64.
+  - **Product uploads are unchanged.** They already returned 502 with
+    Cloudinary's message.
+  - **Paused work.** The order security work for the 2026-11-10 scan is
+    paused and uncommitted: route auth, ownership checks and
+    `updateOwnOrder` are in `src/routes/orders.js`,
+    `src/controllers/order.js` and `src/middleware/user.js`. The legacy
+    PhonePe pay/verify changes and its tests are not done yet.
+  - **Leaked key.** `src/utils/sendWhatsApp.js` contains a hardcoded
+    fallback WhatsApp API key. It needs rotation and removal (not changed
+    here).
+
 ## 2026-11-09
 
 ### Storefront AI: filters by water problem, products up front, one-reply questionnaire

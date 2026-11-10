@@ -5,10 +5,17 @@ import paymentOperations from "../controllers/phonepeGateway.js";
 
 const router = express.Router();
 
-router.post("/order/cod", OrderOperations.createCodOrder);
-router.post("/order/pay", paymentOperations.payPhonepe);
+// Legacy storefront order routes (kept until the storefront uses
+// /v1/checkout). Prices and totals are computed on the server.
+router.post("/order/cod", userAuth.isLoggedIn, OrderOperations.createCodOrder);
+router.post("/order/pay", userAuth.isLoggedIn, paymentOperations.payPhonepe);
+// PhonePe's callback: public, but the handler re-checks status with PhonePe.
 router.post("/phonepe-verify/:id", paymentOperations.handlePhoneOrderCheck);
-router.get("/order/:id", OrderOperations.getOrdersById);
+router.get(
+  "/order/:id",
+  userAuth.customerOrAdmin,
+  OrderOperations.getOrdersById,
+);
 router.get(
   "/orders/user/:id",
   userAuth.isLoggedIn,
@@ -19,7 +26,12 @@ router.get(
   userAuth.isLoggedIn,
   OrderOperations.getOrderByTransactionId,
 );
-router.put("/order/user/:id", userAuth.isLoggedIn, OrderOperations.updateOrder);
+// Customers may cancel or change delivery details of their own order only.
+router.put(
+  "/order/user/:id",
+  userAuth.isLoggedIn,
+  OrderOperations.updateOwnOrder,
+);
 
 // admin routes
 router.get(

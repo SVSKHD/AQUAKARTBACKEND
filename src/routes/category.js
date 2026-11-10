@@ -21,7 +21,7 @@ router.get("/category-title/:title", CategoryOperations.getCategoryByTitle);
 router.post(
   "/category-add",
   userAuth.checkAdmin,
-  upload.array("photos"),
+  upload.array("photos", 10),
   CategoryOperations.addCategory,
 );
 
@@ -29,7 +29,7 @@ router.post(
 router.put(
   "/category-update/:id",
   userAuth.checkAdmin,
-  upload.array("photos"),
+  upload.array("photos", 10),
   CategoryOperations.updateCategory,
 );
 router.delete(

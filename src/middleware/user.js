@@ -33,6 +33,49 @@ const isLoggedIn = async (req, res, next) => {
   }
 };
 
+// Why a staff account may not use admin routes, or null when it may.
+const adminRejection = (user) => {
+  if (user.status === "disabled")
+    return { status: 403, message: "Staff account is disabled" };
+  if (user.role !== 1 && user.roleRef?.slug !== "super-admin")
+    return { status: 403, message: "Admin access required" };
+  return null;
+};
+
+// A customer token (req.isAdmin = false) or an admin token (req.isAdmin =
+// true). Controllers must still check that a customer owns the record.
+const customerOrAdmin = async (req, res, next) => {
+  const token = req.header("Authorization")?.replace("Bearer ", "");
+  if (!token)
+    return res
+      .status(401)
+      .json({ message: "No token provided, authorization denied" });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded?._id)
+      return res.status(401).json({ message: "Token is not valid" });
+    const customer = await AquaEcomUser.findById(decoded._id).populate(
+      "roleRef",
+    );
+    if (customer) {
+      req.user = customer;
+      req.isAdmin = false;
+      return next();
+    }
+    const staff = await AquaAdminUser.findById(decoded._id).populate("roleRef");
+    if (!staff) return res.status(401).json({ message: "User not found" });
+    const rejection = adminRejection(staff);
+    if (rejection)
+      return res.status(rejection.status).json({ message: rejection.message });
+    req.user = staff;
+    req.isAdmin = true;
+    return next();
+  } catch (err) {
+    console.error("Token verification error:", err?.message || err);
+    return res.status(401).json({ message: "Token is not valid" });
+  }
+};
+
 const checkAdmin = async (req, res, next) => {
   try {
     const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -55,12 +98,9 @@ const checkAdmin = async (req, res, next) => {
       return res.status(401).json({ message: "User not found" });
     }
 
-    if (user.status === "disabled") {
-      return res.status(403).json({ message: "Staff account is disabled" });
-    }
-
-    if (user.role !== 1 && user.roleRef?.slug !== "super-admin") {
-      return res.status(403).json({ message: "Admin access required" });
+    const rejection = adminRejection(user);
+    if (rejection) {
+      return res.status(rejection.status).json({ message: rejection.message });
     }
 
     req.user = user; // Attach user to request
@@ -74,6 +114,7 @@ const checkAdmin = async (req, res, next) => {
 const userAuth = {
   isLoggedIn,
   checkAdmin,
+  customerOrAdmin,
 };
 
 export default userAuth;

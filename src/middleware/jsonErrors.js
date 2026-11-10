@@ -34,5 +34,19 @@ export const jsonErrorHandler = (error, req, res, next) => {
           : status < 500
             ? "Bad request"
             : "Something went wrong, please try again";
-  return res.status(status).json({ success: false, message });
+  const code =
+    error?.type === "entity.too.large"
+      ? "REQUEST_TOO_LARGE"
+      : MULTER_413.has(error?.code)
+        ? "FILE_TOO_LARGE"
+        : error?.type === "entity.parse.failed"
+          ? "INVALID_JSON"
+          : error?.name === "MulterError"
+            ? "INVALID_UPLOAD"
+            : status < 500
+              ? "BAD_REQUEST"
+              : "SERVER_ERROR";
+  return res
+    .status(status)
+    .json({ success: false, message, code, stage: "request" });
 };

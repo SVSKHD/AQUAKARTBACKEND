@@ -6,6 +6,7 @@ import {
   resolveCatalogPhotos,
   scheduleMediaCleanup,
   scheduleUploadCleanup,
+  sendCatalogError,
 } from "../utils/catalogPhotos.js";
 import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
@@ -19,17 +20,8 @@ export { publicIdFromUrl };
 export const resolveSubCategoryPhotos = (photos, uploaded = []) =>
   resolveCatalogPhotos(photos, { folder: "subcategories", uploaded });
 
-const SERVER_ERROR = "Something went wrong, please try again";
-
-// 400/413 from photo checks keep their message; anything else is generic.
-const sendError = (res, error, label) => {
-  if (error?.statusCode === 400 || error?.statusCode === 413)
-    return res
-      .status(error.statusCode)
-      .json({ success: false, message: error.message });
-  console.error(`Error ${label}:`, error);
-  return res.status(500).json({ success: false, message: SERVER_ERROR });
-};
+// Same error shape as categories (400/413/502/500 with code and stage).
+const sendError = sendCatalogError;
 
 // Titles are unique across all subcategories (GET /subcategory-title/:title
 // looks them up globally), matching the MCP taxonomy tools.
