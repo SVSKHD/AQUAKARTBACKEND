@@ -94,9 +94,9 @@ const listedPrice = (p) =>
 export const catalogueLine = (p) => {
   const title = cleanTitle(p.title);
   const category = p.category?.title || "";
-  const facts = isSoftener(p)
-    ? softenerFacts(title, stripHtml(p.description))
-    : [];
+  let facts = [];
+  if (isSoftener(p)) facts = softenerFacts(title, stripHtml(p.description));
+  else if (isFilter(p)) facts = filterFacts(title, stripHtml(p.description));
   const stock = p.stock === 0 ? "out of stock" : "in stock";
   return `- ${[title, category, inr(listedPrice(p)), ...facts, stock].filter(Boolean).join(" | ")}`;
 };
@@ -116,6 +116,56 @@ export const softenerGuide = (products) => {
   return lines.length
     ? [
         "Softeners by the home they suit (recommend only from the matching group):",
+        ...lines,
+      ]
+    : [];
+};
+
+// Sand and iron filters, grouped by the water problem they solve.
+export const FILTER_PROBLEMS = {
+  sediment: "mud, sand, silt or cloudy water",
+  iron: "iron (orange or brown stains, metallic taste or smell)",
+};
+
+const isFilter = (p) =>
+  /\bfilter|sandfilter/i.test(`${p.category?.title || ""} ${p.title || ""}`) &&
+  !isSoftener(p);
+
+export const filterProblem = (title) => {
+  if (/iron/i.test(title)) return "iron";
+  if (/sand|sediment|silt|mud/i.test(title)) return "sediment";
+  return null;
+};
+
+export const filterFacts = (title, text) => {
+  const all = `${title} ${text}`;
+  const backwash = /automatic|auto[- ]?backwash/i.test(all)
+    ? "automatic backwash"
+    : /manual|multiport/i.test(all)
+      ? "manual backwash (multiport valve)"
+      : "";
+  const problem = filterProblem(title);
+  return [backwash, problem && `for ${FILTER_PROBLEMS[problem]}`].filter(
+    Boolean,
+  );
+};
+
+export const filterGuide = (products) => {
+  const groups = {};
+  products.filter(isFilter).forEach((p) => {
+    const title = cleanTitle(p.title);
+    const problem = filterProblem(title);
+    if (problem) (groups[problem] ||= []).push(title);
+  });
+  const lines = Object.keys(FILTER_PROBLEMS)
+    .filter((problem) => groups[problem])
+    .map(
+      (problem) =>
+        `- ${FILTER_PROBLEMS[problem]}: ${groups[problem].join("; ")}`,
+    );
+  return lines.length
+    ? [
+        "Filters by the water problem they solve (recommend only from the matching group):",
         ...lines,
       ]
     : [];
@@ -145,14 +195,18 @@ export const catalogueInstruction = (products) => {
     "AquaKart catalogue (name | category | listed price | details | stock):",
     ...listed.map(catalogueLine),
     ...softenerGuide(listed),
+    ...filterGuide(listed),
     ...boosterGuide(listed),
+    "Answer layout, keep it short and clean: 1) one line naming the likely problem; 2) the recommended products up front, one line each: **exact name**, what it does, automatic or manual, which home or problem it suits; 3) at most three short bullets on why, the treatment order and installation; 4) the questionnaire below when details are missing. No long paragraphs, no repeated prices.",
+    'Questionnaire: when you need more details, ask them all at once in one compact numbered block the customer can answer in a single reply. Start the block with the line "Quick questions:", then put each question on its own line exactly as `N. Label: option / option / option` (options separated by " / ", no bold), for example:\nQuick questions:\n1. Water source: borewell / tanker / municipal\n2. Home: flat / villa / independent house\n3. Bathrooms: 1 / 2 / 3 / 4+\n4. What you see: mud or sand / orange or brown stains / white scale / salty taste\n5. Install spot: terrace / ground level\nAsk only the questions still unanswered, never one question per message, and end the block with the line: "Reply in one message, e.g. 1 borewell, 2 villa, 3 4+". Still show the best-fitting products first when the problem is already clear.',
+    "Mud, sand, silt or cloudy water: recommend from the mud/sediment filter group. Iron, orange or brown stains, or a metallic taste: recommend from the iron filter group. If both, the sand filter goes first, then the iron filter. If the water is also hard, the filter goes before the softener so the softener resin doesn't clog. Filters are usually installed at the borewell outlet or before the overhead tank. Suggest a water test and an AquaKart site visit to confirm.",
     "Recommend only products from this catalogue and write each recommended product's name in bold exactly as listed.",
     "Prices are the listed prices. The app shows a product card, with current prices and offers, for every bold name in your answer: bold only the products you recommend, never a product you are ruling out, and don't send the customer to the website or product pages.",
     "Name only the products that fit what the customer described, usually one or two, not every product in a category. Don't name products from other groups, even to compare or rule them out.",
     "For softeners always say whether each is automatic or manual and which home it suits.",
     "For a villa, duplex, independent house or any home with two or more bathrooms, recommend only from the whole-home (villa, duplex or independent house) group: the size that fits all bathrooms running together (a shower uses about 600 L/hr) and, if listed, the next size up for headroom. Never recommend one-bathroom, washing-machine or large-building softeners for these homes. Suggest a hardness test and an AquaKart site visit to confirm the size.",
     "For a flat or a single bathroom, recommend from the one-bathroom group; for only a washing machine, the washing-machine group; for an apartment block, hostel, hotel or commercial site, the large-building group.",
-    "If the home type or number of bathrooms is unclear, ask one short question before naming softeners.",
+    "If the home type or number of bathrooms is unclear, ask it in the questionnaire before naming softeners.",
     "Where to install an automatic (whole-home or large-building) softener: it can go on the terrace or at ground level, and the answer must give the requirement for each. Terrace: the overhead-tank pressure is too low for the softener to regenerate, so a pressure booster pump is needed (see the pressure booster rule). Ground level: fit a non-return valve (NRV) on the line so water doesn't flow back and regeneration isn't interrupted. Suggest an AquaKart site visit to pick the spot. One-bathroom softeners fit at that bathroom's inlet.",
     "Pressure booster rule: whenever a pressure booster or pump comes up (a terrace softener install, low water pressure, or the customer asks), show every listed pressure booster in bold, and add that customised pumps from 0.7 to 0.9 hp can also be ordered on demand; they have no listed price, so AquaKart confirms the size and price after a site visit.",
   ].join("\n");

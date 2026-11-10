@@ -10,10 +10,12 @@ import AquaCategory from "../src/models/category.js";
 import AquaSubCategory from "../src/models/sub-category.js";
 import AquaProduct from "../src/models/product.js";
 import AquaAdminUser from "../src/models/crm/adminUser.js";
+import AquaBlog from "../src/models/blog.js";
 import {
   publicIdFromUrl,
   removedPhotos,
   resolveCatalogPhotos,
+  settleMediaCleanup,
 } from "../src/utils/catalogPhotos.js";
 
 // The CRM (AQUACRM25DEV, src/services/apiService.ts + ProductsTab.tsx) sends
@@ -42,6 +44,10 @@ const startApp = async (t) => {
   t.mock.method(AquaAdminUser, "findById", () => ({
     populate: async () => ({ _id: adminId, role: 1, status: "active" }),
   }));
+  // Duplicate-title and image-in-use checks: nothing found unless a test
+  // mocks exists() again.
+  for (const Model of [AquaCategory, AquaSubCategory, AquaProduct, AquaBlog])
+    t.mock.method(Model, "exists", async () => null);
   const token = jwt.sign({ _id: adminId }, process.env.JWT_SECRET);
   const call = (method, path, body) =>
     fetch(`http://127.0.0.1:${server.address().port}/v1/${path}`, {
@@ -174,6 +180,7 @@ test("CRM category update keeps existing photos, uploads new ones, deletes only 
     { id: "categories/new_1", secure_url: `${OWN}/v2/categories/new_1.png` },
   ]);
   assert.equal(uploads.length, 1);
+  await settleMediaCleanup();
   assert.deepEqual(destroyed, ["categories/drop"]);
 
   // Text-only edit with the same photo list: nothing uploaded or deleted.
@@ -190,6 +197,7 @@ test("CRM category update keeps existing photos, uploads new ones, deletes only 
     200,
   );
   assert.equal(uploads.length, 0);
+  await settleMediaCleanup();
   assert.deepEqual(destroyed, []);
 });
 
@@ -285,5 +293,6 @@ test("CRM product update keeps the photos it sends back and deletes only removed
   assert.equal(update.photos.length, 2);
   assert.equal(update.photos[0].id, "products/keep");
   assert.equal(uploads.length, 1);
+  await settleMediaCleanup();
   assert.deepEqual(destroyed, ["products/drop"]);
 });

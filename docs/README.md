@@ -16,6 +16,7 @@ first. Read only the sections relevant to the task.
 | Invoice reporting/export                                        | [INVOICE_REPORTS.md](INVOICE_REPORTS.md)                                                  |
 | Product maintenance reminders                                   | [PRODUCT_SERVICE_REMINDERS.md](PRODUCT_SERVICE_REMINDERS.md)                              |
 | Fast2SMS/WhatsApp configuration                                 | [FAST2SMS_WHATSAPP.md](FAST2SMS_WHATSAPP.md)                                              |
+| Storefront AI chat: product cards, questionnaire (frontend)     | [STOREFRONT_AI_CHAT.md](STOREFRONT_AI_CHAT.md)                                            |
 | CRM AI chat history, pinning, archive, generation and streaming | [CRM_AI_CHATS.md](CRM_AI_CHATS.md)                                                        |
 | CRM customer users, their AI questions/answers, and blog drafts | [CRM_CUSTOMER_AI.md](CRM_CUSTOMER_AI.md)                                                  |
 | MCP server (ChatGPT/Claude): OAuth, blog and Instagram tools    | [MCP_BLOG_PUBLISHING.md](MCP_BLOG_PUBLISHING.md)                                          |

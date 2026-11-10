@@ -228,7 +228,13 @@ export const applyCategoryDocs = (doc) => {
             "data:image/png;base64,iVBORw0KGgo...",
           ],
           description:
-            "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary.",
+            "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. After saving, replaced photos are deleted from Cloudinary unless another category, subcategory, product or blog uses them.",
+        },
+        clearPhotos: {
+          type: "boolean",
+          example: false,
+          description:
+            "Update only. true removes all photos (send without photos, or with an empty array). Combining it with a non-empty photos array returns 400.",
         },
       },
     },
@@ -275,7 +281,7 @@ export const applyCategoryDocs = (doc) => {
           ...(schema && !path.endsWith("-status")
             ? {
                 500: response(
-                  "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+                  "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
                   ref("CategoryError"),
                 ),
               }
@@ -330,11 +336,14 @@ export const applyCategoryDocs = (doc) => {
       errors: {
         400: sub
           ? "A valid parent category is required; Parent category not found; or Title is required"
-          : "Title is required; or No photos provided",
+          : "Title is required; No photos provided; or an invalid image",
+        409: `A ${key} with this title already exists`,
+        413: "Each image must be 10 MB or smaller",
       },
       description: sub
-        ? "Supply title and either category or category_id. Photos are optional. The returned parent category is an ID."
-        : "Supply title and at least one photo: multipart photo files, or (as the CRM does) a JSON body whose photos array holds data URIs / image URLs / { id, secure_url } objects. New images are uploaded to categories/.",
+        ? "Supply title and either category or category_id. Photos are optional. Titles are unique across subcategories (case-insensitive, trimmed); a duplicate returns 409. The returned parent category is an ID. New uploads are removed again if saving fails."
+        : "Supply title and at least one photo: multipart photo files, or (as the CRM does) a JSON body whose photos array holds data URIs / image URLs / { id, secure_url } objects. New images are uploaded to categories/. " +
+          "Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. Titles are unique (case-insensitive, trimmed); a duplicate returns 409. New uploads are removed again if saving fails.",
     });
     operation(
       sub ? "/v1/subcategory-update" : "/v1/category-update/{id}",
@@ -351,12 +360,14 @@ export const applyCategoryDocs = (doc) => {
         errors: {
           400: sub
             ? "Invalid subcategory ID; A valid parent category is required; Parent category not found; or Title is required"
-            : "Invalid category ID; or Title is required",
+            : "Invalid category ID; Title is required; or an invalid image",
           404: `${label} not found`,
+          409: `A ${key} with this title already exists`,
+          413: "Each image must be 10 MB or smaller",
         },
         description: sub
           ? "Legacy form: supply id or _id in the JSON body. Prefer PUT /v1/subcategory-update/{id}. Omitted fields remain unchanged. The response includes the populated parent category."
-          : "Partial update. Omitted fields remain unchanged. Photos: multipart files replace the whole list; or a JSON photos array (the CRM) where existing { id, secure_url } entries are kept and data URIs / new URLs are uploaded. An empty or omitted list keeps the current photos. After saving, only photos no longer in the list are deleted from Cloudinary.",
+          : "Partial update. Omitted fields remain unchanged. Photos: multipart files replace the whole list; or a JSON photos array (the CRM) where existing { id, secure_url } entries are kept and data URIs / new URLs are uploaded. An empty or omitted list keeps the current photos. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. Changing the title to one another category uses returns 409. After saving, photos no longer in the list are deleted from Cloudinary unless another category, subcategory, product or blog uses them; if saving fails, new uploads are removed.",
       },
     );
     if (sub) {
@@ -367,11 +378,13 @@ export const applyCategoryDocs = (doc) => {
         parameters: [pathParam("id"), subBody(false)],
         schema: success(model),
         errors: {
-          400: "Invalid subcategory ID; A valid parent category is required; Parent category not found; or Title is required",
+          400: "Invalid subcategory ID; A valid parent category is required; Parent category not found; Title is required; an invalid image; or Send either photos or clearPhotos, not both",
           404: `${label} not found`,
+          409: "A subcategory with this title already exists",
+          413: "Each image must be 10 MB or smaller",
         },
         description:
-          "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Replaced photos are not deleted from Cloudinary. The response includes the populated parent category.",
+          "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. clearPhotos: true removes all photos. Replaced photos are deleted from Cloudinary after saving unless another record uses them; if saving fails, new uploads are removed. Changing the title to one another subcategory uses returns 409. The response includes the populated parent category.",
       });
     }
     for (const path of [`/v1/${key}/delete/{id}`, `/v1/${key}-delete/{id}`]) {
@@ -390,8 +403,8 @@ export const applyCategoryDocs = (doc) => {
         description: path.includes("-delete/")
           ? "Path used by the CRM; same behaviour as /v1/" +
             key +
-            "/delete/{id}. Returns the deleted document. Remove references before deleting."
-          : "Returns the deleted document. Remove references before deleting.",
+            "/delete/{id}. Returns the deleted document. Remove references before deleting. After the delete, its photos are removed from Cloudinary unless another record uses them."
+          : "Returns the deleted document. Remove references before deleting. After the delete, its photos are removed from Cloudinary unless another record uses them.",
       });
     }
   }

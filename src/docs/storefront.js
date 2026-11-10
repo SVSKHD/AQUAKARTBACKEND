@@ -112,5 +112,78 @@ export const applyStorefrontDocs = (doc) => {
       },
     },
   };
+
+  const areasPath = "/v1/storefront/demand-areas";
+  doc.paths[areasPath] = {
+    ...doc.paths[areasPath],
+    get: {
+      ...doc.paths[areasPath]?.get,
+      tags: doc.paths[areasPath]?.get?.tags || ["Storefront"],
+      summary: "Orders per locality with each one's most-bought products",
+      description:
+        "Public, anonymous demand by area for the store's hot-picks map. Counts invoices (quotations excluded) per locality picked from the address; invoices that only name the city are left out. Returns locality names, counts and product details only; never names, phones, emails, invoice numbers or addresses. Up to 40 areas, 3 products each. Cached for 300s (CDN 900s).",
+      produces: ["application/json"],
+      parameters: [
+        {
+          name: "days",
+          in: "query",
+          type: "integer",
+          minimum: 1,
+          maximum: 90,
+          default: 90,
+          description:
+            "Look-back window in days; out-of-range values are clamped",
+        },
+      ],
+      responses: {
+        200: {
+          description: "OK",
+          schema: {
+            type: "object",
+            properties: {
+              success: { type: "boolean", example: true },
+              data: {
+                type: "object",
+                properties: {
+                  days: { type: "integer", example: 90 },
+                  areas: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        area: { type: "string", example: "Kondapur" },
+                        orders: { type: "integer", example: 12 },
+                        lastPurchasedAt: hour,
+                        top: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              ...product,
+                              orders: { type: "integer", example: 5 },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        500: {
+          description: "Database failure",
+          schema: {
+            type: "object",
+            properties: {
+              success: { type: "boolean", example: false },
+              message: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+  };
   return doc;
 };

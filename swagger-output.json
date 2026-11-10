@@ -588,7 +588,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -663,7 +663,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -726,7 +726,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -738,7 +738,7 @@
       "post": {
         "tags": ["Categories"],
         "summary": "Create category",
-        "description": "Supply title and at least one photo: multipart photo files, or (as the CRM does) a JSON body whose photos array holds data URIs / image URLs / { id, secure_url } objects. New images are uploaded to categories/.",
+        "description": "Supply title and at least one photo: multipart photo files, or (as the CRM does) a JSON body whose photos array holds data URIs / image URLs / { id, secure_url } objects. New images are uploaded to categories/. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. Titles are unique (case-insensitive, trimmed); a duplicate returns 409. New uploads are removed again if saving fails.",
         "produces": ["application/json"],
         "consumes": ["multipart/form-data"],
         "security": [
@@ -792,7 +792,7 @@
             }
           },
           "400": {
-            "description": "Title is required; or No photos provided",
+            "description": "Title is required; No photos provided; or an invalid image",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -825,8 +825,32 @@
               }
             }
           },
+          "409": {
+            "description": "A category with this title already exists",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "A category with this title already exists"
+              }
+            }
+          },
+          "413": {
+            "description": "Each image must be 10 MB or smaller",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Each image must be 10 MB or smaller"
+              }
+            }
+          },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -838,7 +862,7 @@
       "put": {
         "tags": ["Categories"],
         "summary": "Update category",
-        "description": "Partial update. Omitted fields remain unchanged. Photos: multipart files replace the whole list; or a JSON photos array (the CRM) where existing { id, secure_url } entries are kept and data URIs / new URLs are uploaded. An empty or omitted list keeps the current photos. After saving, only photos no longer in the list are deleted from Cloudinary.",
+        "description": "Partial update. Omitted fields remain unchanged. Photos: multipart files replace the whole list; or a JSON photos array (the CRM) where existing { id, secure_url } entries are kept and data URIs / new URLs are uploaded. An empty or omitted list keeps the current photos. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. Changing the title to one another category uses returns 409. After saving, photos no longer in the list are deleted from Cloudinary unless another category, subcategory, product or blog uses them; if saving fails, new uploads are removed.",
         "produces": ["application/json"],
         "consumes": ["multipart/form-data"],
         "security": [
@@ -900,7 +924,7 @@
             }
           },
           "400": {
-            "description": "Invalid category ID; or Title is required",
+            "description": "Invalid category ID; Title is required; or an invalid image",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -945,8 +969,32 @@
               }
             }
           },
+          "409": {
+            "description": "A category with this title already exists",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "A category with this title already exists"
+              }
+            }
+          },
+          "413": {
+            "description": "Each image must be 10 MB or smaller",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Each image must be 10 MB or smaller"
+              }
+            }
+          },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -958,7 +1006,7 @@
       "delete": {
         "tags": ["Categories"],
         "summary": "Delete category",
-        "description": "Returns the deleted document. Remove references before deleting.",
+        "description": "Returns the deleted document. Remove references before deleting. After the delete, its photos are removed from Cloudinary unless another record uses them.",
         "produces": ["application/json"],
         "security": [
           {
@@ -1051,7 +1099,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1063,7 +1111,7 @@
       "delete": {
         "tags": ["Categories"],
         "summary": "Delete category",
-        "description": "Path used by the CRM; same behaviour as /v1/category/delete/{id}. Returns the deleted document. Remove references before deleting.",
+        "description": "Path used by the CRM; same behaviour as /v1/category/delete/{id}. Returns the deleted document. Remove references before deleting. After the delete, its photos are removed from Cloudinary unless another record uses them.",
         "produces": ["application/json"],
         "security": [
           {
@@ -1156,7 +1204,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1217,7 +1265,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1284,7 +1332,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1347,7 +1395,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1359,7 +1407,7 @@
       "post": {
         "tags": ["Subcategories"],
         "summary": "Create subcategory",
-        "description": "Supply title and either category or category_id. Photos are optional. The returned parent category is an ID.",
+        "description": "Supply title and either category or category_id. Photos are optional. Titles are unique across subcategories (case-insensitive, trimmed); a duplicate returns 409. The returned parent category is an ID. New uploads are removed again if saving fails.",
         "produces": ["application/json"],
         "consumes": ["application/json"],
         "security": [
@@ -1414,7 +1462,12 @@
                     },
                     "data:image/png;base64,iVBORw0KGgo..."
                   ],
-                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary."
+                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. After saving, replaced photos are deleted from Cloudinary unless another category, subcategory, product or blog uses them."
+                },
+                "clearPhotos": {
+                  "type": "boolean",
+                  "example": false,
+                  "description": "Update only. true removes all photos (send without photos, or with an empty array). Combining it with a non-empty photos array returns 400."
                 }
               }
             }
@@ -1471,8 +1524,32 @@
               }
             }
           },
+          "409": {
+            "description": "A subcategory with this title already exists",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "A subcategory with this title already exists"
+              }
+            }
+          },
+          "413": {
+            "description": "Each image must be 10 MB or smaller",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Each image must be 10 MB or smaller"
+              }
+            }
+          },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1484,7 +1561,7 @@
       "put": {
         "tags": ["Subcategories"],
         "summary": "Update subcategory",
-        "description": "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Replaced photos are not deleted from Cloudinary. The response includes the populated parent category.",
+        "description": "Used by the CRM. The id comes from the path. Supply category or category_id to move it; omitted fields remain unchanged. photos (max 10) replaces the photo list; send [] or omit to keep it. Data URIs are always uploaded to subcategories/ (even with an id); URLs in Aquakart's Cloudinary account are kept with the public id read from the URL; other https entries with an id are kept; other URLs are uploaded. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. clearPhotos: true removes all photos. Replaced photos are deleted from Cloudinary after saving unless another record uses them; if saving fails, new uploads are removed. Changing the title to one another subcategory uses returns 409. The response includes the populated parent category.",
         "produces": ["application/json"],
         "consumes": ["application/json"],
         "security": [
@@ -1559,7 +1636,12 @@
                     },
                     "data:image/png;base64,iVBORw0KGgo..."
                   ],
-                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary."
+                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. After saving, replaced photos are deleted from Cloudinary unless another category, subcategory, product or blog uses them."
+                },
+                "clearPhotos": {
+                  "type": "boolean",
+                  "example": false,
+                  "description": "Update only. true removes all photos (send without photos, or with an empty array). Combining it with a non-empty photos array returns 400."
                 }
               }
             }
@@ -1583,7 +1665,7 @@
             }
           },
           "400": {
-            "description": "Invalid subcategory ID; A valid parent category is required; Parent category not found; or Title is required",
+            "description": "Invalid subcategory ID; A valid parent category is required; Parent category not found; Title is required; an invalid image; or Send either photos or clearPhotos, not both",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             },
@@ -1628,8 +1710,32 @@
               }
             }
           },
+          "409": {
+            "description": "A subcategory with this title already exists",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "A subcategory with this title already exists"
+              }
+            }
+          },
+          "413": {
+            "description": "Each image must be 10 MB or smaller",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Each image must be 10 MB or smaller"
+              }
+            }
+          },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1708,7 +1814,12 @@
                     },
                     "data:image/png;base64,iVBORw0KGgo..."
                   ],
-                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Replaced photos are not deleted from Cloudinary."
+                  "description": "Optional. A non-empty array replaces the photo list on update; an empty array leaves existing photos unchanged. Existing { id, secure_url } objects and URLs already in Aquakart's Cloudinary account are kept without re-uploading; data URIs and other URLs are uploaded to subcategories/. Invalid entries return 400. Data URIs and multipart files must really be images (checked by content: JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF; SVG is refused) and at most 10 MB each (413 otherwise); nothing is uploaded if any entry is invalid. After saving, replaced photos are deleted from Cloudinary unless another category, subcategory, product or blog uses them."
+                },
+                "clearPhotos": {
+                  "type": "boolean",
+                  "example": false,
+                  "description": "Update only. true removes all photos (send without photos, or with an empty array). Combining it with a non-empty photos array returns 400."
                 }
               }
             }
@@ -1777,8 +1888,32 @@
               }
             }
           },
+          "409": {
+            "description": "A subcategory with this title already exists",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "A subcategory with this title already exists"
+              }
+            }
+          },
+          "413": {
+            "description": "Each image must be 10 MB or smaller",
+            "schema": {
+              "$ref": "#/definitions/CategoryError"
+            },
+            "examples": {
+              "application/json": {
+                "success": false,
+                "message": "Each image must be 10 MB or smaller"
+              }
+            }
+          },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1790,7 +1925,7 @@
       "delete": {
         "tags": ["Subcategories"],
         "summary": "Delete subcategory",
-        "description": "Returns the deleted document. Remove references before deleting.",
+        "description": "Returns the deleted document. Remove references before deleting. After the delete, its photos are removed from Cloudinary unless another record uses them.",
         "produces": ["application/json"],
         "security": [
           {
@@ -1883,7 +2018,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -1895,7 +2030,7 @@
       "delete": {
         "tags": ["Subcategories"],
         "summary": "Delete subcategory",
-        "description": "Path used by the CRM; same behaviour as /v1/subcategory/delete/{id}. Returns the deleted document. Remove references before deleting.",
+        "description": "Path used by the CRM; same behaviour as /v1/subcategory/delete/{id}. Returns the deleted document. Remove references before deleting. After the delete, its photos are removed from Cloudinary unless another record uses them.",
         "produces": ["application/json"],
         "security": [
           {
@@ -1988,7 +2123,7 @@
             }
           },
           "500": {
-            "description": "Server error; message contains the controller error details (the category title lookup returns 'Server error').",
+            "description": "Server error. Create, update and delete return a generic message; the read endpoints may include the error message (the category title lookup returns 'Server error').",
             "schema": {
               "$ref": "#/definitions/CategoryError"
             }
@@ -2348,9 +2483,6 @@
           "201": {
             "description": "Created"
           },
-          "400": {
-            "description": "Bad Request"
-          },
           "401": {
             "description": "Unauthorized"
           },
@@ -2398,9 +2530,6 @@
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -4366,6 +4495,109 @@
             "minimum": 1,
             "maximum": 90,
             "default": 30,
+            "description": "Look-back window in days; out-of-range values are clamped"
+          }
+        ]
+      }
+    },
+    "/v1/storefront/demand-areas": {
+      "get": {
+        "description": "Public, anonymous demand by area for the store's hot-picks map. Counts invoices (quotations excluded) per locality picked from the address; invoices that only name the city are left out. Returns locality names, counts and product details only; never names, phones, emails, invoice numbers or addresses. Up to 40 areas, 3 products each. Cached for 300s (CDN 900s).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "integer",
+                      "example": 90
+                    },
+                    "areas": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "area": {
+                            "type": "string",
+                            "example": "Kondapur"
+                          },
+                          "orders": {
+                            "type": "integer",
+                            "example": 12
+                          },
+                          "lastPurchasedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "x-nullable": true,
+                            "description": "Rounded down to the hour"
+                          },
+                          "top": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "productName": {
+                                  "type": "string",
+                                  "example": "Kent Automatic Softener 8L"
+                                },
+                                "productSlug": {
+                                  "type": "string",
+                                  "x-nullable": true
+                                },
+                                "productId": {
+                                  "type": "string",
+                                  "x-nullable": true
+                                },
+                                "orders": {
+                                  "type": "integer",
+                                  "example": 5
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database failure",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["Storefront"],
+        "summary": "Orders per locality with each one's most-bought products",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90,
+            "default": 90,
             "description": "Look-back window in days; out-of-range values are clamped"
           }
         ]

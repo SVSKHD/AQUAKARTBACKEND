@@ -1,6 +1,8 @@
 import AquaInvoice from "../models/crm/invoice.js";
 import {
+  getDemandByArea,
   getRecentDemand,
+  parseAreaQuery,
   parseDemandQuery,
 } from "../services/storefrontDemand.js";
 
@@ -125,4 +127,23 @@ const getRecentPurchases = async (req, res) => {
   }
 };
 
-export default { getStorefrontStats, getRecentPurchases };
+// Anonymous orders per locality, with each one's most-bought products (the
+// storefront's hot-picks map).
+const getDemandAreas = async (req, res) => {
+  try {
+    const data = await getDemandByArea(parseAreaQuery(req.query));
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=300, s-maxage=900, stale-while-revalidate=3600",
+    );
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Failed to build demand by area:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load demand by area",
+    });
+  }
+};
+
+export default { getStorefrontStats, getRecentPurchases, getDemandAreas };

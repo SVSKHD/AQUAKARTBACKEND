@@ -5,7 +5,13 @@ import AquaCategory from "../models/category.js";
 import AquaSubCategory from "../models/sub-category.js";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
 import { cleanProductReference as cleanObjectIdField } from "../utils/productReferences.js";
-import { removedPhotos } from "../utils/catalogPhotos.js";
+import {
+  assertImageBuffer,
+  assertImageDataUri,
+  removedPhotos,
+  scheduleMediaCleanup,
+  scheduleUploadCleanup,
+} from "../utils/catalogPhotos.js";
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -68,12 +74,14 @@ const uploadDataUrl = async (
   dataUrl,
   folder = "products",
   resourceType = "image",
+  uploaded = [],
 ) => {
   try {
     const result = await cloudinary.v2.uploader.upload(dataUrl, {
       folder,
       resource_type: resourceType,
     });
+    uploaded.push({ id: result.public_id, secure_url: result.secure_url });
 
     return {
       id: result.public_id,
@@ -89,14 +97,16 @@ const uploadDataUrl = async (
   }
 };
 
-const deleteMedia = async (mediaArray = []) => {
-  for (const media of mediaArray) {
-    if (!media?.id) continue;
-    await cloudinary.v2.uploader.destroy(media.id, { resource_type: "auto" });
-  }
-};
+// Removed or deleted media is cleaned up by scheduleMediaCleanup (after the
+// DB write, skipping media another record uses, with the correct
+// resource_type: Cloudinary's destroy does not accept "auto").
 
-const uploadFiles = async (files = [], folder, resourceType = "auto") => {
+const uploadFiles = async (
+  files = [],
+  folder,
+  resourceType = "auto",
+  tracker = [],
+) => {
   const uploaded = [];
   for (const file of files) {
     if (!file?.buffer) {
@@ -104,8 +114,13 @@ const uploadFiles = async (files = [], folder, resourceType = "auto") => {
       err.statusCode = 400;
       throw err;
     }
+    // Product photos must be real images within the size limit.
+    if (resourceType === "image") assertImageBuffer(file.buffer, file.mimetype);
+  }
+  for (const file of files) {
     try {
       const result = await streamUpload(file.buffer, folder, resourceType);
+      tracker.push({ id: result.public_id, secure_url: result.secure_url });
       uploaded.push({
         id: result.public_id,
         secure_url: result.secure_url,
@@ -145,15 +160,33 @@ const normalizeBodyMedia = async (
   mediaInput,
   folder,
   resourceType = "image",
+  uploaded = [],
 ) => {
   const mediaItems = toArray(mediaInput);
   const normalized = [];
+  const dataUrlOf = (item) =>
+    isDataUrl(item)
+      ? item
+      : item && typeof item === "object"
+        ? [item.secure_url, item.url, item.src, item.dataUrl, item.base64].find(
+            Boolean,
+          )
+        : null;
+  // Check every image data URI before uploading any of them.
+  if (resourceType === "image") {
+    for (const item of mediaItems) {
+      const value = dataUrlOf(item);
+      if (isDataUrl(value)) assertImageDataUri(value);
+    }
+  }
 
   for (const item of mediaItems) {
     if (!item) continue;
 
     if (isDataUrl(item)) {
-      normalized.push(await uploadDataUrl(item, folder, resourceType));
+      normalized.push(
+        await uploadDataUrl(item, folder, resourceType, uploaded),
+      );
       continue;
     }
 
@@ -170,7 +203,7 @@ const normalizeBodyMedia = async (
       item.secure_url || item.url || item.src || item.dataUrl || item.base64;
 
     if (isDataUrl(url)) {
-      normalized.push(await uploadDataUrl(url, folder, resourceType));
+      normalized.push(await uploadDataUrl(url, folder, resourceType, uploaded));
       continue;
     }
 
@@ -357,6 +390,12 @@ const populateProductTaxonomy = (query) =>
 // ─────────────────────────────── CRUD ────────────────────────────────────
 
 const CreateProduct = async (req, res) => {
+  // New Cloudinary uploads of this request; removed if it fails.
+  const uploaded = [];
+  const reject = (status, body) => {
+    scheduleUploadCleanup(uploaded);
+    return res.status(status).json(body);
+  };
   try {
     const photos = req.files?.photos || [];
     const arPhotos = req.files?.ar || [];
@@ -364,30 +403,32 @@ const CreateProduct = async (req, res) => {
       req.body.photos,
       "products",
       "image",
+      uploaded,
     );
     const bodyArPhotos = await normalizeBodyMedia(
       req.body.arPhotos || req.body.ar,
       "ar_products",
       "auto",
+      uploaded,
     );
 
     const totalPhotos = photos.length + bodyPhotos.length;
     const totalArPhotos = arPhotos.length + bodyArPhotos.length;
 
     if (totalPhotos === 0) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "At least one product image is required",
       });
     }
     if (totalPhotos > 10) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "A maximum of 10 product images is allowed",
       });
     }
     if (totalArPhotos > 5) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "A maximum of 5 AR files is allowed",
       });
@@ -395,18 +436,20 @@ const CreateProduct = async (req, res) => {
 
     const { isValid, errors } = validateProductPayload(req.body);
     if (!isValid) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Validation failed", errors });
+      return reject(400, {
+        success: false,
+        message: "Validation failed",
+        errors,
+      });
     }
 
     const uploadedPhotos = [
       ...bodyPhotos,
-      ...(await uploadFiles(photos, "products", "image")),
+      ...(await uploadFiles(photos, "products", "image", uploaded)),
     ];
     const uploadedArPhotos = [
       ...bodyArPhotos,
-      ...(await uploadFiles(arPhotos, "ar_products", "auto")),
+      ...(await uploadFiles(arPhotos, "ar_products", "auto", uploaded)),
     ];
 
     const payload = buildProductPayload(req.body, {
@@ -417,7 +460,7 @@ const CreateProduct = async (req, res) => {
 
     const taxonomyErrors = await validateProductTaxonomy(payload);
     if (Object.keys(taxonomyErrors).length) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "Invalid product category mapping",
         errors: taxonomyErrors,
@@ -431,6 +474,7 @@ const CreateProduct = async (req, res) => {
     ]);
     return res.status(201).json({ success: true, data: product });
   } catch (error) {
+    scheduleUploadCleanup(uploaded);
     if (error?.statusCode) {
       return res
         .status(error.statusCode)
@@ -441,12 +485,16 @@ const CreateProduct = async (req, res) => {
 };
 
 const updateProduct = async (req, res) => {
+  // New Cloudinary uploads of this request; removed if it fails.
+  const uploaded = [];
+  const reject = (status, body) => {
+    scheduleUploadCleanup(uploaded);
+    return res.status(status).json(body);
+  };
   try {
     const { id } = req.params;
     if (!isValidObjectId(id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid product id" });
+      return reject(400, { success: false, message: "Invalid product id" });
     }
 
     const product = await AquaProduct.findById(id);
@@ -460,9 +508,11 @@ const updateProduct = async (req, res) => {
       partial: true,
     });
     if (!isValid) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Validation failed", errors });
+      return reject(400, {
+        success: false,
+        message: "Validation failed",
+        errors,
+      });
     }
 
     const files = req.files || {};
@@ -472,24 +522,26 @@ const updateProduct = async (req, res) => {
       req.body.photos,
       "products",
       "image",
+      uploaded,
     );
     const bodyArPhotos = await normalizeBodyMedia(
       req.body.arPhotos || req.body.ar,
       "ar_products",
       "auto",
+      uploaded,
     );
 
     const totalNewPhotos = newPhotos.length + bodyPhotos.length;
     const totalNewArPhotos = newArPhotos.length + bodyArPhotos.length;
 
     if (totalNewPhotos > 10) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "A maximum of 10 product images is allowed",
       });
     }
     if (totalNewArPhotos > 5) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "A maximum of 5 AR files is allowed",
       });
@@ -506,14 +558,14 @@ const updateProduct = async (req, res) => {
     if (totalNewPhotos > 0) {
       photosPayload = [
         ...bodyPhotos,
-        ...(await uploadFiles(newPhotos, "products", "image")),
+        ...(await uploadFiles(newPhotos, "products", "image", uploaded)),
       ];
       removedProductPhotos = removedPhotos(product.photos || [], photosPayload);
     }
     if (totalNewArPhotos > 0) {
       arPayload = [
         ...bodyArPhotos,
-        ...(await uploadFiles(newArPhotos, "ar_products", "auto")),
+        ...(await uploadFiles(newArPhotos, "ar_products", "auto", uploaded)),
       ];
       removedArPhotos = removedPhotos(product.arPhotos || [], arPayload);
     }
@@ -538,7 +590,7 @@ const updateProduct = async (req, res) => {
           : updatePayload.subCategory,
     });
     if (Object.keys(taxonomyErrors).length) {
-      return res.status(400).json({
+      return reject(400, {
         success: false,
         message: "Invalid product category mapping",
         errors: taxonomyErrors,
@@ -549,23 +601,21 @@ const updateProduct = async (req, res) => {
       new: true,
       runValidators: true,
     });
+    if (!updated) {
+      // Deleted while this update was running.
+      scheduleUploadCleanup(uploaded);
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
 
     await updated.populate([
       { path: "category", select: "_id title" },
       { path: "subCategory", select: "_id title category" },
     ]);
 
-    for (const [removed, label] of [
-      [removedProductPhotos, "product photos"],
-      [removedArPhotos, "AR photos"],
-    ]) {
-      if (!removed.length) continue;
-      try {
-        await deleteMedia(removed);
-      } catch (cleanupError) {
-        console.error(`Failed to remove old ${label}:`, cleanupError);
-      }
-    }
+    // After the update is saved; media another record uses is kept.
+    scheduleMediaCleanup([...removedProductPhotos, ...removedArPhotos]);
 
     return res.status(200).json({
       success: true,
@@ -573,6 +623,7 @@ const updateProduct = async (req, res) => {
       data: updated,
     });
   } catch (error) {
+    scheduleUploadCleanup(uploaded);
     if (error?.statusCode) {
       return res
         .status(error.statusCode)
@@ -598,14 +649,13 @@ const deleteProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    try {
-      if (product.photos?.length) await deleteMedia(product.photos);
-      if (product.arPhotos?.length) await deleteMedia(product.arPhotos);
-    } catch (cleanupError) {
-      console.error("Failed to remove product media:", cleanupError);
-    }
-
     await AquaProduct.findByIdAndDelete(id);
+    // Only after the record is gone, so a failed delete keeps its images;
+    // media another record uses is kept.
+    scheduleMediaCleanup([
+      ...(product.photos || []),
+      ...(product.arPhotos || []),
+    ]);
 
     return res
       .status(200)

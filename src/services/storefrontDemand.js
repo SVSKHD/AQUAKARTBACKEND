@@ -193,3 +193,73 @@ export const getRecentDemand = async (options, now = new Date()) => {
 
   return { area: area ? titleCase(area) : null, days, recent, trending };
 };
+
+// ---------- demand by area (the storefront's hot-picks heatmap) ----------
+
+export const AREA_DEFAULTS = { days: 90, areas: 40, top: 3 };
+// Invoices read per request; a bigger window still answers from the newest.
+const AREA_SCAN = 3000;
+
+export const parseAreaQuery = (query = {}) => ({
+  days: clampInt(query.days, AREA_DEFAULTS.days, 1, MAX_DAYS),
+});
+
+// Orders per locality over the window, with each locality's most-bought
+// products. Only the locality name, counts and product details leave here:
+// no addresses, customers or invoice numbers. Invoices whose address only
+// names the city are left out (they can't be placed on a map).
+export const getDemandByArea = async ({ days }, now = new Date()) => {
+  const invoices = await AquaInvoice.find(buildMatch({ area: "", days }, now))
+    .select("createdAt customerDetails.address products")
+    .sort({ createdAt: -1 })
+    .limit(AREA_SCAN)
+    .maxTimeMS(5000)
+    .lean();
+
+  const areas = new Map();
+  for (const inv of invoices) {
+    const area = areaFromAddress(inv.customerDetails?.address);
+    if (!area || CITIES.includes(area)) continue;
+    const row = areas.get(area) || {
+      area,
+      orders: 0,
+      lastPurchasedAt: null,
+      products: new Map(),
+    };
+    row.orders += 1;
+    const at = toHour(inv.createdAt);
+    if (at && (!row.lastPurchasedAt || at > row.lastPurchasedAt))
+      row.lastPurchasedAt = at;
+    const seen = new Set();
+    for (const p of inv.products || []) {
+      const name = cleanName(p.productName);
+      const key = productKey(p);
+      if (!name || seen.has(key)) continue;
+      seen.add(key);
+      const prod = row.products.get(key) || {
+        productName: name,
+        productSlug: p.productSlug || null,
+        productId: p.productId ? String(p.productId) : null,
+        orders: 0,
+      };
+      prod.orders += 1;
+      row.products.set(key, prod);
+    }
+    areas.set(area, row);
+  }
+
+  const list = [...areas.values()]
+    .sort(
+      (a, b) =>
+        b.orders - a.orders ||
+        String(b.lastPurchasedAt).localeCompare(String(a.lastPurchasedAt)),
+    )
+    .slice(0, AREA_DEFAULTS.areas)
+    .map(({ products, ...row }) => ({
+      ...row,
+      top: [...products.values()]
+        .sort((a, b) => b.orders - a.orders)
+        .slice(0, AREA_DEFAULTS.top),
+    }));
+  return { days, areas: list };
+};

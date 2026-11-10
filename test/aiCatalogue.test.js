@@ -4,6 +4,8 @@ import {
   catalogueInstruction,
   catalogueLine,
   boosterGuide,
+  filterFacts,
+  filterGuide,
   softenerFit,
   softenerGuide,
 } from "../src/services/aiCatalogue.js";
@@ -153,4 +155,57 @@ test("every pressure booster is listed, matched by category even with a misspell
     /Pressure boosters \(listed\): Kent Pressure Bootser/,
   );
   assert.deepEqual(boosterGuide([products[2]]), []);
+});
+
+test("filters are grouped by problem: mud to sand filters, stains to the iron filter", () => {
+  const filters = { title: "Filters" };
+  const products = [
+    {
+      title: "kent Automatic Sandfilter 100L | Aquakart",
+      category: filters,
+      price: 65000,
+    },
+    {
+      title: "Kent Iron Filter | Aquakart",
+      category: filters,
+      price: 32400,
+      description: "Multiport valve for backwash",
+    },
+    { title: "Kent Sandfilter | Aquakart", category: filters, price: 24500 },
+  ];
+  assert.deepEqual(filterGuide(products), [
+    "Filters by the water problem they solve (recommend only from the matching group):",
+    "- mud, sand, silt or cloudy water: kent Automatic Sandfilter 100L; Kent Sandfilter",
+    "- iron (orange or brown stains, metallic taste or smell): Kent Iron Filter",
+  ]);
+  assert.deepEqual(filterFacts("Kent Iron Filter", "Multiport valve"), [
+    "manual backwash (multiport valve)",
+    "for iron (orange or brown stains, metallic taste or smell)",
+  ]);
+  assert.match(
+    catalogueLine(products[0]),
+    /Filters \| ₹65,000 \| automatic backwash \| for mud, sand, silt or cloudy water \| in stock/,
+  );
+  const text = catalogueInstruction(products);
+  assert.match(text, /recommended products up front, one line each/);
+  assert.match(
+    text,
+    /all at once in one compact numbered block .* single reply/,
+  );
+  assert.match(
+    text,
+    /\nQuick questions:\n1\. Water source: borewell \/ tanker \/ municipal\n/,
+  );
+  assert.match(text, /sand filter goes first, then the iron filter/);
+  // A softener is never treated as a filter.
+  assert.deepEqual(
+    filterGuide([
+      {
+        title: "Kent Automatic 8L",
+        category: { title: "Softeners" },
+        price: 1,
+      },
+    ]),
+    [],
+  );
 });

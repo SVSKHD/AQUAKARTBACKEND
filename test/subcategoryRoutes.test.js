@@ -38,6 +38,8 @@ const mockModels = (t) => {
   t.mock.method(AquaCategory, "exists", async ({ _id }) =>
     _id === CATEGORY_ID ? { _id } : null,
   );
+  // Duplicate-title check: no other subcategory has the title.
+  t.mock.method(AquaSubCategory, "exists", async () => null);
   const updates = [];
   t.mock.method(AquaSubCategory, "findByIdAndUpdate", (id, data) => {
     updates.push({ id, data });

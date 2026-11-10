@@ -62,6 +62,7 @@ import AIRoutes from "./src/routes/ai.js";
 import CRMAIRoutes from "./src/routes/crm/ai.js";
 import CRMScheduledJobRoutes from "./src/routes/crm/scheduledJobs.js";
 import McpRoutes, { mcpOAuthRouter } from "./src/routes/mcp.js";
+import { jsonErrorHandler } from "./src/middleware/jsonErrors.js";
 
 const app = express();
 
@@ -193,6 +194,9 @@ app.post(
   "/v1/notify/send-whatsappp",
   WhatsappOperations.sendWhatsAppPostMethod,
 );
+
+// JSON instead of Express's HTML page for body-parser/multer/other errors.
+app.use(jsonErrorHandler);
 
 const swaggerSetup = async () => {
   try {

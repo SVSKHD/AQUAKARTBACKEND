@@ -18,7 +18,277 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
-## 2026-11-08
+## 2026-11-10
+
+### Agent tooling: project-memory map, CLAUDE.md and Stop hook
+
+- Request/problem: Set up the `project-memory` workflow (component map, plan scope,
+  Stop hook) without creating a second change log next to this one.
+- Changes/result: Added `CLAUDE.md`, which imports `AGENTS.md` and points to this
+  log and `docs/PROJECT_MAP.md`. Added `.claude/map.md`, a generated component map
+  with component purposes and 7 problem-routing rows; file-level descriptions are
+  still `TODO`. Added `.claude/hooks/` (`build_map.py`, `review_changes.py`,
+  `check_memory.py`). `check_memory.py` was changed so its change-log check reads
+  `docs/CHANGELOG.md` instead of `.claude/changes.md`. Registered a Stop hook in
+  `.claude/settings.json`. No application code changed.
+- Files: `CLAUDE.md`, `.claude/map.md`, `.claude/settings.json`,
+  `.claude/hooks/build_map.py`, `.claude/hooks/review_changes.py`,
+  `.claude/hooks/check_memory.py`, `docs/CHANGELOG.md`.
+- Validation: `python .claude/hooks/build_map.py .` regenerated the map
+  (30 components, 305 files). The Stop hook was dry-run locally with an empty payload.
+  The application test suite was not run because only tooling and docs changed.
+- Limitations/follow-up: Re-running the skill's `init_memory.py` overwrites
+  `.claude/hooks/check_memory.py` and undoes the `docs/CHANGELOG.md` change. 305
+  file descriptions in `.claude/map.md` are still `TODO` and get filled in as files
+  are touched. The hook needs `python` on PATH.
+
+### Catalog CRUD: JSON errors for large uploads, image checks, safe Cloudinary cleanup
+
+- Request/problem: Phase 1 of the CRUD fix plan (`.claude/plan.md`):
+  category update failed on large images, and Cloudinary images leaked or
+  could be deleted while still in use. The live CRM error was not replayed
+  against production. These causes were found in the code:
+  - **No JSON error handler.** A multipart file over the multer limit
+    returned an HTML 500, and a body over 50 MB or malformed JSON returned an
+    Express HTML 413/400. The CRM expects `{ success, message }`.
+  - **No image checks.** Base64 images of any size or content went straight
+    to Cloudinary. Failures came back as a 500 that included Cloudinary's
+    raw error message.
+  - **Unsafe deletes.** The category update deleted removed photos even when
+    another record used them.
+  - **Product media deletes failed silently.** `deleteMedia` called
+    `destroy` with `resource_type: "auto"`. The Cloudinary SDK puts this
+    straight into the URL (`/auto/destroy`), and per Cloudinary's API
+    destroy takes image, video or raw. The failure was caught and only
+    logged.
+  - **Product delete order.** Product delete removed media before the
+    database delete.
+  - **Orphaned uploads.** Product create/update and subcategory create/update
+    didn't remove new uploads when the write failed. Subcategory and
+    category deletes and subcategory photo replacement left images in
+    Cloudinary.
+  - **Internal errors exposed.** Category/subcategory 500s returned
+    `error.message`.
+  - **Duplicate titles.** Duplicate category/subcategory titles were allowed
+    through the CRM routes, though the MCP tools already refused them.
+- Changes/result:
+  - **New `src/middleware/jsonErrors.js`, mounted last in `app.js`.** It
+    returns a JSON 413 for oversized bodies and multer size limits, a JSON
+    400 for malformed JSON, and otherwise a 4xx/500 with a generic message
+    and no stack trace.
+  - **Image checks in `src/utils/catalogPhotos.js`.**
+    - `assertImageDataUri` and `assertImageBuffer` check that the content
+      really is a JPEG, PNG, WebP, GIF, AVIF, HEIC, BMP or TIFF, by magic
+      bytes. A mislabelled real image is still accepted. SVG is refused.
+    - Size limit is `CATALOG_MAX_IMAGE_BYTES` (default 10 MB). Over the limit
+      returns 413, a non-image returns 400.
+    - Every image is checked before any is uploaded.
+  - **Cleanup helpers in `src/utils/catalogPhotos.js`.**
+    - `scheduleMediaCleanup` runs after the response. It skips any public id
+      or URL still used by a category, subcategory, product (photos/arPhotos)
+      or blog (titleImages/photos).
+    - It takes the resource type from the URL, skips external URLs and
+      made-up ids, retries once, and then logs the failure.
+    - `scheduleUploadCleanup` removes a failed request's new uploads.
+    - `resolveCatalogPhotos` now records its uploads.
+  - **Category and subcategory.**
+    - Duplicate titles return 409 (case-insensitive, trimmed; subcategories
+      global, matching MCP and `/subcategory-title/:title`). Only a changed
+      title is checked.
+    - New uploads are removed if the write fails.
+    - Replaced and deleted photos are cleaned up when nothing else uses them.
+      Subcategory replacements used to stay in Cloudinary.
+    - Subcategory update accepts `clearPhotos: true`; combined with a
+      non-empty `photos` it returns 400. An omitted list or `photos: []`
+      still keeps the current photos (CRM contract unchanged).
+    - Create/update/delete 500s return a generic message.
+    - The category update returns 404 if the record disappears during the
+      update.
+  - **Product.**
+    - Photo data URIs and files are checked. AR files are not.
+    - New uploads are removed when validation, the taxonomy check or the
+      write fails.
+    - A product deleted during an update returns 404 instead of a 500.
+    - Media is deleted only after the database delete or update, with the
+      correct resource type and the reference check.
+    - The broken `deleteMedia` was removed.
+  - **Swagger.** It documents 409/413, `clearPhotos`, the image rules and the
+    cleanup behaviour.
+- Files: `app.js`, `src/middleware/jsonErrors.js` (new),
+  `src/utils/catalogPhotos.js`, `src/controllers/category.js`,
+  `src/controllers/sub-category.js`, `src/controllers/product.js`,
+  `src/docs/categories.js`, `swagger-output.json` (regenerated; it also picks
+  up the uncommitted storefront docs already in the working tree),
+  `test/catalogMedia.test.js` (new), `test/catalogCrmContract.test.js` and
+  `test/subcategoryRoutes.test.js` (mock `exists()`, await cleanup),
+  `docs/PROJECT_MAP.md`, `docs/CHANGELOG.md`, `.claude/map.md`,
+  `.claude/plan.md`.
+- Validation:
+  - `node --check` passed on every changed JS file.
+  - Focused tests:
+    `node --test test/catalogMedia.test.js test/catalogCrmContract.test.js
+test/subcategoryRoutes.test.js test/productReferences.test.js
+test/mcpCatalogTools.test.js test/mcpTaxonomySeo.test.js` passed
+    45/45. These are unit/route tests with models and Cloudinary mocked,
+    including a real 10 MB+ multipart upload against the category route.
+  - Full `node --test`: 262/263 passed. The failure is the pre-existing
+    `test/invoiceViews.test.js` test ("builds separate admin and customer
+    invoice destinations from one id").
+  - `npm run swagger` succeeded. The category/subcategory add/update
+    operations list 409 and 413 under Categories/Subcategories.
+  - ESLint:
+    - Fixed the `no-use-before-define` and `import/no-named-as-default`
+      errors it reported on the new code.
+    - The remaining errors are rules that already fail repo-wide (quotes,
+      curly, operator-linebreak) and the 4 `no-unused-vars` that were
+      already in `app.js`.
+  - Not run:
+    - The new tests were not run against the old code, because the new
+      helpers they import don't exist there.
+    - No live, production or Cloudinary requests were made.
+    - Not deployed.
+- Limitations/follow-up:
+  - **Possible new rejections.**
+    - Images over 10 MB, and non-images, are now refused before upload.
+    - The duplicate-title 409 could block a CRM create if production already
+      holds a duplicate title.
+    - The 413/400 bodies are now JSON instead of HTML.
+  - **Route not changed.** `src/routes/product.js` still answers multer size
+    errors with its own 400 (it was not in scope).
+  - **Cleanup limits.**
+    - Cleanup has one retry and no persistent queue.
+    - Each removed image costs up to 4 `exists` queries, run after the
+      response.
+  - **Not covered.**
+    - The MCP tools keep their own media logic.
+    - Remote image URLs are still fetched by Cloudinary, not by this server.
+  - **Undocumented env var.** `CATALOG_MAX_IMAGE_BYTES` is not yet listed in
+    `.env.example`.
+  - **Later phases.** Phases 2–5 (security, orders/payments, dead code,
+    performance) are listed in `.claude/plan.md` and are not started.
+
+### Agent tooling: removed the project-memory setup
+
+- Request/problem: The user asked to remove the project-memory skill setup
+  from this repo.
+- Changes/result:
+  - Deleted `CLAUDE.md`, `.claude/map.md`, `.claude/plan.md`,
+    `.claude/hooks/` and `.claude/settings.json`. That file only registered
+    the Stop hook, so the Stop hook is gone too.
+  - Kept `.claude/settings.local.json`, which existed before the setup.
+  - None of the deleted files were committed.
+  - `AGENTS.md`, `docs/PROJECT_MAP.md` and this log stay the source of
+    truth. The two entries above that mention `.claude/plan.md` and
+    `.claude/map.md` now refer to deleted files.
+- Open follow-ups from the deleted plan (not started):
+  - **Phase 2, security.** Each needs proof that no consumer still calls
+    it before it is removed or locked down:
+    - `POST /v1` echoes and logs any body (`app.js`)
+    - `POST /v1/notify/send-whatsappp` sends WhatsApp messages without
+      auth (`app.js`)
+    - `GET /v1/product-delete/:id` and `GET /v1/notify/send-whatsapp/:no`
+      do writes through GET
+    - `POST /v1/order/cod`, `POST /v1/order/pay`,
+      `POST /v1/phonepe-verify/:id` and `GET /v1/order/:id` have no auth
+      (`src/routes/orders.js`)
+    - the 50 MB JSON body limit
+    - rate limits are applied unevenly
+  - **Phase 3, orders/payments.** Orders can be edited through three
+    routes, and the legacy PhonePe flow sits next to `/v1/checkout`.
+  - **Phase 4, dead code.**
+    - `src/routes/crm/category.js` is imported but not mounted, and broken
+    - `src/routes/crm/product.js` and `src/routes/crm/subCategory.js` are
+      empty
+    - `GET /blog/:title` can't be reached
+    - `router.get("invoice-status")` has no leading slash
+    - `app.js` has unused `AdminCategoryRoutes`, `upload`, `BASE` and `KEY`
+    - `escapeRegex` is duplicated 8 times
+  - **Phase 5, performance.** Use `.lean()` and pagination for unbounded
+    lists (`/allcategories`, `/all-products`, `relatedProducts`).
+  - **Also open.** The `checkAdmin` and `requirePermission` auth models are
+    mixed, and title uniqueness is only enforced in the application (no
+    unique index).
+- Files: `CLAUDE.md`, `.claude/map.md`, `.claude/plan.md`,
+  `.claude/hooks/`, `.claude/settings.json` (all deleted),
+  `docs/CHANGELOG.md`.
+- Validation: `ls .claude` shows only `settings.local.json`; `git status`
+  shows no `CLAUDE.md` or `.claude/` changes. No code changed and no tests
+  were needed.
+- Limitations/follow-up: The skill itself is still installed in the user's
+  Claude account (synced skills); only this repo's setup was removed.
+
+## 2026-11-09
+
+### Storefront AI: filters by water problem, products up front, one-reply questionnaire
+
+- Request/problem: questions like "I see a lot of mud in the water" or about
+  iron filters should get the right filter, with products shown cleanly and up
+  front. Missing details should be gathered in one questionnaire the customer
+  answers in a single reply.
+- Changes/result:
+  - Filters (category or title with "filter"/"sandfilter", softeners excluded)
+    are grouped by problem. Titles with sand/sediment/silt/mud go to the mud,
+    sand, silt or cloudy water group; titles with iron go to the iron (orange or
+    brown stains, metallic taste or smell) group. Catalogue lines show
+    automatic or manual backwash when the title or description says so, plus
+    the problem. A "Filters by the water problem they solve" list is added to
+    the prompt. Live lineup (read-only MCP listing): mud group: Kent
+    Sandfilter, kent Automatic Sandfilter 100L; iron group: Kent Iron Filter.
+  - Filter rule: sand filter first, then the iron filter, if the water has
+    both. The filter goes before a softener on hard water. Filters are
+    installed at the borewell outlet or before the overhead tank. The
+    assistant suggests a water test and a site visit.
+  - Answer layout: one line naming the problem, then the recommended products
+    one line each (bold exact name, what it does, automatic or manual, what it
+    suits), then at most three short bullets, then the questionnaire.
+  - Questionnaire: every missing detail is asked at once in one numbered block
+    with inline options (water source, home and bathrooms, what you see,
+    install spot), with a one-message reply example. This replaces the earlier
+    one-question-at-a-time rule for unclear softener home types. When the
+    problem is already clear, the best-fitting products are still shown first.
+- Files: `src/services/aiCatalogue.js`, `test/aiCatalogue.test.js`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check src/services/aiCatalogue.js` passed;
+  `node --test test/aiCatalogue.test.js` 6/6 passed;
+  `node --test test/gemini.test.js test/aiQuota.test.js` 13/13 passed. No live
+  chat was run.
+- Limitations/follow-up: the layout and questionnaire are prompt rules, not a
+  structured response, so the storefront renders them as normal text. Guest
+  replies are capped at 600 output tokens, so long answers may be cut. The
+  "Softener-&-Sand-Filter-Combos" category has no products, so combos are
+  described as a sand filter plus a softener rather than shown as one product.
+
+### Storefront AI: frontend contract for product cards and the questionnaire
+
+- Request/problem: write down what the storefront must do with the AI answer
+  (the frontend handshake).
+- Changes/result:
+  - New guide `docs/STOREFRONT_AI_CHAT.md` covers the chat endpoints, request
+    body and limits, and the SSE events. Bold-name product cards: match
+    normalised titles against `GET /v1/all-products?query=ecom` (strip
+    `| Aquakart`), keep reply order, convert a string `discountPrice` with
+    `Number()`. Non-product items (NRV, on-demand pumps) get no card. The guide
+    also gives the questionnaire block format and parsing rules (chips, one
+    composed reply), errors and quota, expected cards per question, and an
+    acceptance checklist.
+  - The questionnaire prompt rule now fixes a parseable format: a
+    `Quick questions:` line, then one `N. Label: option / option` line per
+    question, ending with `Reply in one message, e.g. ...`. Previously the
+    example put every question on one line.
+  - `docs/README.md` links the new guide.
+- Files: `docs/STOREFRONT_AI_CHAT.md` (new), `docs/README.md`,
+  `src/services/aiCatalogue.js`, `test/aiCatalogue.test.js`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check src/services/aiCatalogue.js` passed;
+  `node --test test/aiCatalogue.test.js` 6/6 passed (now checks the
+  questionnaire header and line format). The contract was checked against
+  source (`src/routes/ai.js`, `src/controllers/ai.js`,
+  `src/controllers/product.js`). No storefront code was changed or tested, and
+  no live chat was run.
+- Limitations/follow-up: the bold names and questionnaire are text conventions
+  the model is told to follow, not a structured response field, so the
+  frontend needs the plain-markdown fallback. Structured `products` and
+  `questionnaire` fields in `done` / `data` would make this reliable.
 
 ### Storefront AI: recommend softeners by home type, not the whole category
 

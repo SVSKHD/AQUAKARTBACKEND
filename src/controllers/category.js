@@ -4,7 +4,14 @@ import AquaProduct from "../models/product.js";
 import AquaSubCategory from "../models/sub-category.js";
 import mongoose from "mongoose";
 import { CloudinaryUtils } from "../utils/cloudinaryUtils/crud.js";
-import { removedPhotos, resolveCatalogPhotos } from "../utils/catalogPhotos.js";
+import {
+  assertImageBuffer,
+  exactTitleFilter,
+  removedPhotos,
+  resolveCatalogPhotos,
+  scheduleMediaCleanup,
+  scheduleUploadCleanup,
+} from "../utils/catalogPhotos.js";
 
 const streamUpload = (buffer) =>
   new Promise((resolve, reject) => {
@@ -21,59 +28,72 @@ const streamUpload = (buffer) =>
     stream.end(buffer);
   });
 
-const deletePhoto = async (publicId) => {
-  try {
-    const result = await cloudinary.v2.uploader.destroy(publicId);
-    console.log("Deleted photo:", result);
-    return result;
-  } catch (error) {
-    console.error("Error deleting photo:", error);
-    throw error;
+const SERVER_ERROR = "Something went wrong, please try again";
+
+// 400/413 from photo checks keep their message; anything else is generic.
+const sendError = (res, error, label) => {
+  if (error?.statusCode === 400 || error?.statusCode === 413)
+    return res
+      .status(error.statusCode)
+      .json({ success: false, message: error.message });
+  console.error(`Error ${label}:`, error);
+  return res.status(500).json({ success: false, message: SERVER_ERROR });
+};
+
+const DUPLICATE_TITLE = "A category with this title already exists";
+const titleTaken = (title, exceptId) =>
+  AquaCategory.exists({
+    title: exactTitleFilter(title),
+    ...(exceptId ? { _id: { $ne: exceptId } } : {}),
+  });
+
+// Multipart files: every file is checked before any is uploaded.
+const uploadFiles = async (files, uploaded) => {
+  for (const file of files) assertImageBuffer(file.buffer, file.mimetype);
+  for (const file of files) {
+    const result = await streamUpload(file.buffer);
+    uploaded.push({ id: result.public_id, secure_url: result.secure_url });
   }
+  return uploaded;
 };
 
 const addCategory = async (req, res) => {
+  const uploaded = [];
   try {
     const { title, description, keywords } = req.body;
     if (!String(title || "").trim())
       return res
         .status(400)
         .json({ success: false, message: "Title is required" });
+    if (await titleTaken(title))
+      return res.status(409).json({ success: false, message: DUPLICATE_TITLE });
     const files = req.files || [];
     // Multipart file uploads, or JSON photos (what the CRM sends).
-    const bodyPhotos = files.length
-      ? []
-      : await resolveCatalogPhotos(req.body.photos, { folder: "categories" });
+    const photos = files.length
+      ? await uploadFiles(files, uploaded)
+      : await resolveCatalogPhotos(req.body.photos, {
+          folder: "categories",
+          uploaded,
+        });
 
-    if (!files.length && !bodyPhotos.length) {
+    if (!photos.length) {
       return res
         .status(400)
         .json({ success: false, message: "No photos provided" });
     }
 
-    const uploadedPhotos = [...bodyPhotos];
-    for (const photo of files) {
-      const result = await streamUpload(photo.buffer);
-      uploadedPhotos.push({
-        id: result.public_id,
-        secure_url: result.secure_url,
-      });
-    }
-
     const newCategory = new AquaCategory({
       title,
       description,
-      photos: uploadedPhotos,
+      photos,
       keywords,
     });
 
     await newCategory.save();
     return res.status(201).json({ success: true, data: newCategory });
   } catch (error) {
-    if (error?.statusCode === 400)
-      return res.status(400).json({ success: false, message: error.message });
-    console.error("Error adding category:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    scheduleUploadCleanup(uploaded);
+    return sendError(res, error, "adding category");
   }
 };
 
@@ -161,54 +181,52 @@ const updateCategory = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Title is required" });
     }
+    // Only a changed title is checked, so re-saving an existing record works.
+    if (
+      changes.title !== undefined &&
+      String(changes.title).trim().toLowerCase() !==
+        String(category.title || "")
+          .trim()
+          .toLowerCase() &&
+      (await titleTaken(changes.title, id))
+    )
+      return res.status(409).json({ success: false, message: DUPLICATE_TITLE });
     const uploaded = [];
     try {
-      for (const photo of req.files || []) {
-        const result = await streamUpload(photo.buffer);
-        uploaded.push({ id: result.public_id, secure_url: result.secure_url });
-      }
-      if (uploaded.length) {
+      const files = req.files || [];
+      if (files.length) {
         // Multipart: the uploaded files replace the whole list.
-        changes.photos = uploaded;
+        changes.photos = await uploadFiles(files, uploaded);
       } else if (Array.isArray(req.body.photos) && req.body.photos.length) {
         // JSON (CRM): existing photos in the list are kept, new ones uploaded.
         // An empty or omitted list keeps the current photos.
         changes.photos = await resolveCatalogPhotos(req.body.photos, {
           folder: "categories",
-          upload: async (value, options) => {
-            const result = await cloudinary.v2.uploader.upload(value, options);
-            uploaded.push({
-              id: result.public_id,
-              secure_url: result.secure_url,
-            });
-            return result;
-          },
+          uploaded,
         });
       }
       const updated = await AquaCategory.findByIdAndUpdate(id, changes, {
         new: true,
         runValidators: true,
       });
-      // Delete only photos that are no longer in the list.
-      if (changes.photos) {
-        for (const photo of removedPhotos(
-          category.photos || [],
-          changes.photos,
-        )) {
-          await deletePhoto(photo.id).catch(console.error);
-        }
+      if (!updated) {
+        scheduleUploadCleanup(uploaded);
+        return res
+          .status(404)
+          .json({ success: false, message: "Category not found" });
       }
+      // Only photos no longer in the list, and only if nothing else uses them.
+      if (changes.photos)
+        scheduleMediaCleanup(
+          removedPhotos(category.photos || [], changes.photos),
+        );
       return res.status(200).json({ success: true, data: updated });
     } catch (error) {
-      for (const photo of uploaded)
-        await deletePhoto(photo.id).catch(console.error);
+      scheduleUploadCleanup(uploaded);
       throw error;
     }
   } catch (error) {
-    if (error?.statusCode === 400)
-      return res.status(400).json({ success: false, message: error.message });
-    console.error("Error updating category:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return sendError(res, error, "updating category");
   }
 };
 
@@ -235,10 +253,11 @@ const deleteCategory = async (req, res) => {
           "Cannot delete category while subcategories or products reference it",
       });
     await AquaCategory.findByIdAndDelete(id);
+    // After the record is gone; photos another record uses are kept.
+    scheduleMediaCleanup(category.photos || []);
     return res.status(200).json({ success: true, data: category });
   } catch (error) {
-    console.error("Error deleting category:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return sendError(res, error, "deleting category");
   }
 };
 
