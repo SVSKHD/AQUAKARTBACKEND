@@ -1,5 +1,5 @@
-// Explicit contract for the CRM GSTIN lookup (GST portal record via Masters
-// India). swagger-autogen only infers 200/401/500 for this route.
+// Explicit contract for the CRM GSTIN lookup (GST record via GSTIN API,
+// gstinapi.in). swagger-autogen only infers 200/401/500 for this route.
 export const applyGstinLookupDocs = (doc) => {
   const path = "/v1/crm/admin/gstin/{gstin}";
   const error = (code, description) => ({
@@ -21,7 +21,7 @@ export const applyGstinLookupDocs = (doc) => {
       tags: existing.tags || ["CRM / Invoices"],
       summary: "Look up a GSTIN on the GST portal",
       description:
-        "Staff only (admin JWT). Validates the GSTIN (format + check digit), then reads the taxpayer record from the government GST system through Masters India (a licensed GSP). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because provider lookups are billed. Disabled with 503 until MASTERS_INDIA_USERNAME, MASTERS_INDIA_PASSWORD, MASTERS_INDIA_CLIENT_ID and MASTERS_INDIA_CLIENT_SECRET are set.",
+        "Staff only (admin JWT). Validates the GSTIN (format + check digit; the provider's sandbox GSTIN 00AAAAA0000A1ZT is also accepted), then reads the taxpayer record from the GST network through GSTIN API (gstinapi.in). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because each provider lookup uses a credit. Disabled with 503 until GSTINAPI_KEY is set.",
       produces: ["application/json"],
       parameters: [
         {
@@ -51,15 +51,24 @@ export const applyGstinLookupDocs = (doc) => {
                   status: { type: "string", example: "Active" },
                   constitution: { type: "string", example: "Proprietorship" },
                   taxpayerType: { type: "string", example: "Regular" },
-                  registeredOn: { type: "string", example: "27/01/2018" },
+                  registeredOn: { type: "string", example: "2017-07-01" },
                   cancelledOn: { type: "string" },
                   address: {
                     type: "string",
                     description: "Principal place of business, one line",
                   },
-                  state: { type: "string" },
+                  state: { type: "string", example: "Tamil Nadu" },
+                  stateCode: { type: "string", example: "33" },
                   pincode: { type: "string" },
-                  source: { type: "string", example: "mastersindia" },
+                  source: { type: "string", example: "gstinapi" },
+                  creditsRemaining: {
+                    type: "integer",
+                    description: "Provider credits left after this lookup",
+                  },
+                  test: {
+                    type: "boolean",
+                    description: "Present for the sandbox GSTIN",
+                  },
                   fetchedAt: { type: "string", format: "date-time" },
                   cached: { type: "boolean" },
                 },
@@ -72,11 +81,15 @@ export const applyGstinLookupDocs = (doc) => {
         403: { description: "Not an admin" },
         404: error("GSTIN_NOT_FOUND", "No taxpayer with this GSTIN"),
         500: error("GSTIN_LOOKUP_FAILED", "Unexpected server error"),
+        429: error(
+          "GSTIN_PROVIDER_RATE_LIMITED",
+          "Provider rate limit (60 lookups/minute); retry shortly",
+        ),
         502: error(
           "GSTIN_PROVIDER_ERROR",
-          "Provider error: GSTIN_PROVIDER_AUTH, GSTIN_PROVIDER_ERROR or GSTIN_PROVIDER_UNREACHABLE",
+          "Provider error: GSTIN_PROVIDER_AUTH (key rejected), GSTIN_PROVIDER_NO_CREDITS, GSTIN_PROVIDER_ERROR or GSTIN_PROVIDER_UNREACHABLE",
         ),
-        503: error("GSTIN_LOOKUP_DISABLED", "Provider credentials not set"),
+        503: error("GSTIN_LOOKUP_DISABLED", "GSTINAPI_KEY not set"),
         504: error("GSTIN_PROVIDER_TIMEOUT", "Provider timed out"),
       },
     },

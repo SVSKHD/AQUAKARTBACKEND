@@ -18,6 +18,151 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-12
+
+### Legacy order routes: login, ownership, server-side prices, PhonePe amount check
+
+- Request/problem: The 2026-11-10 code scan (verified against source), with
+  the user's choices: secure the legacy routes in place, make
+  `GET /order/:id` owner-or-admin, and let customers cancel or change
+  delivery details.
+  - **`PUT /v1/order/user/:id`.** It passed `req.body` straight to
+    `findByIdAndUpdate` with no ownership check. Any logged-in customer could
+    set `paymentStatus: "Paid"` or `totalAmount` on any order.
+  - **`GET /v1/order/:id`.** It had no login.
+  - **`GET /v1/orders/user/:id` and `/v1/order/transaction-id/:id`.** They
+    did not check ownership.
+  - **`POST /v1/order/cod`.** It had no login and trusted the user, prices
+    and total from the body.
+  - **`POST /v1/order/pay`.** It had no login and charged PhonePe the
+    client's `totalAmount`.
+  - **`POST /v1/phonepe-verify/:id`.**
+    - It marked any PAYMENT_SUCCESS as Paid without comparing amounts.
+    - It marked PENDING as Failed.
+    - It re-sent the confirmation on every call, even for failures.
+    - It saved an `orderType` outside the schema enum.
+- Changes/result:
+  - **Already committed in `db8c049` (2026-11-10), untested until now.**
+    - Route auth in `src/routes/orders.js`: `isLoggedIn` on cod/pay,
+      `customerOrAdmin` on `GET /order/:id`, `updateOwnOrder` on the
+      customer PUT.
+    - `customerOrAdmin` and a shared `adminRejection` in
+      `src/middleware/user.js` (`checkAdmin` behaviour unchanged).
+    - In `src/controllers/order.js`: ownership checks; `updateOwnOrder`
+      (allowlist, status-conditional update); `legacyOrderFields`, which
+      prices via `buildCheckout`, sets server statuses and doesn't apply
+      coupons; COD from the token user, with 4xx for cart errors and no
+      `error.message` in 500s.
+  - **New today (`src/controllers/phonepeGateway.js`).**
+    - `payPhonepe`: uses the token user (403 on a mismatch). Validates and
+      de-duplicates `transactionId` (400/409). Builds the order with
+      `legacyOrderFields` and sends PhonePe the server total in paise. No
+      more request-body logging and no `error.message` in responses.
+    - `handlePhoneOrderCheck`: validates the id (400) and finds the order
+      first (404). Returns a Paid order unchanged without calling PhonePe.
+      `paymentStatusFor` gives Paid only on an exact amount match, Pending
+      for pending, Failed for error/declined, and leaves unknown codes
+      unchanged (400).
+    - Updates are conditional on not already Paid, the confirmation is
+      sent only on the transition to Paid, and the `orderType` value is
+      valid.
+  - **Docs.** `docs/COMMERCE_PLATFORM_API.md` documents the new rules.
+- Files: `src/controllers/phonepeGateway.js`, `test/legacyOrders.test.js`
+  (new), `swagger-output.json` (pay/verify responses), `docs/COMMERCE_PLATFORM_API.md`,
+  `docs/CHANGELOG.md`; earlier in `db8c049`: `src/routes/orders.js`,
+  `src/controllers/order.js`, `src/middleware/user.js`.
+- Validation:
+  - `node --check` passed.
+  - `node --test test/legacyOrders.test.js`: 7/7 passed. Models, PhonePe
+    (axios), WhatsApp and the CRM notification store were mocked; no
+    network or database. Coverage:
+    - 401/403/404 and ownership on reads and updates
+    - the update allowlist, including a `$where` key dropped from
+      `shippingAddress`
+    - cancelling, and 409 once the order has moved on
+    - COD and pay totals from catalogue prices (24999 discount price + 350
+      delivery), and the PhonePe payload amount in paise
+    - verify: amount mismatch → Processing, exact match → Paid, a Paid
+      order is not re-checked
+  - Full `node --test`: 291/292. The failure is the pre-existing
+    `test/invoiceViews.test.js`.
+  - `npm run swagger` succeeded (output Prettier-formatted to the committed
+    style).
+  - Not run: no live request, no payment, no message.
+- Limitations/follow-up:
+  - **Possible breaking changes for the storefront (separate repo).**
+    - It must send the customer token on `/order/cod`, `/order/pay` and
+      `/order/:id`.
+    - Totals and coupon discounts it computed itself are now ignored on
+      these routes.
+    - `/order/pay` rejects a reused or malformed `transactionId`.
+    - These are confirmed in the backend only, not against the storefront.
+  - **Quantity limit.** `buildCheckout` limits quantity to 1–5 per product
+    and checks stock, as the new checkout does.
+  - **Still open from the scan.** The GET-based product delete, the 50 MB
+    body limit, pagination, a durable media-cleanup queue, and the
+    hardcoded fallback WhatsApp key in `src/utils/sendWhatsApp.js` (rotate
+    it).
+
+### GSTIN lookup: switched provider from Masters India to GSTIN API (gstinapi.in)
+
+- Request/problem: Masters India has no free API tier (manual web search
+  only; API by sales quote). The user chose gstinapi.in: `GET /v1/gstin/{gstin}`
+  with header `x-api-key`. It has 75 free credits, one credit per real
+  lookup, and a free sandbox GSTIN `00AAAAA0000A1ZT`. The contract was
+  taken from https://gstinapi.in/openapi.json.
+- Changes/result:
+  - **New provider in `src/services/gstinLookup.js`.**
+    - Calls `{GSTINAPI_BASE_URL|https://www.gstinapi.in}/v1/gstin/:gstin`
+      with `x-api-key` from `GSTINAPI_KEY`. There is no OAuth token step
+      any more.
+    - The record is mapped to the same CRM shape: `legalName`,
+      `tradeName`, `status`, `constitution`, `taxpayerType`,
+      `registeredOn`, `cancelledOn`, `address`, `state`, `pincode`,
+      `source` (now `gstinapi`), `fetchedAt` and `cached`.
+    - New fields: `stateCode`, `creditsRemaining`, and `test` for the
+      sandbox.
+    - The address is built from the provider's `address_details`, falling
+      back to its one-line `address` plus the pincode.
+    - `registeredOn` and `cancelledOn` are now ISO dates (`2017-07-01`)
+      instead of Masters India's `dd/mm/yyyy`.
+  - **Provider errors mapped to our codes.** 400 → `GSTIN_INVALID` 400;
+    404 → `GSTIN_NOT_FOUND` 404 (cached 1 h); 401/403 →
+    `GSTIN_PROVIDER_AUTH` 502; 402 → `GSTIN_PROVIDER_NO_CREDITS` 502 (new);
+    429 → `GSTIN_PROVIDER_RATE_LIMITED` 429 (new); others →
+    `GSTIN_PROVIDER_ERROR` 502. Timeouts and network failures are
+    unchanged (504/502).
+  - **Validation.** The sandbox GSTIN is accepted even though its check
+    digit isn't a real one; all others still need a valid check digit.
+  - **Unchanged.** The route, the controller and the 24 h result cache.
+  - **Config and docs.** `.env.example` now has `GSTINAPI_KEY` and
+    optional `GSTINAPI_BASE_URL` (the `MASTERS_INDIA_*` variables were
+    removed). The Swagger contract and `docs/PROJECT_MAP.md` are updated.
+- Files: `src/services/gstinLookup.js`, `test/gstinLookup.test.js`
+  (rewritten for the new provider), `src/docs/gstinLookup.js`,
+  `swagger-output.json`, `.env.example`, `docs/PROJECT_MAP.md`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --test test/gstinLookup.test.js`: 11/11 passed with a fake
+    provider (no network). Coverage: request URL and header, record
+    mapping, the key never appearing in results, caching, the sandbox,
+    every provider status, the not-found TTL, timeouts and address
+    formatting.
+  - `npm run swagger` succeeded (the operation lists
+    200/400/401/403/404/429/500/502/503/504).
+  - Full `node --test`: 291/292. The failure is the pre-existing
+    `test/invoiceViews.test.js`.
+  - Local check script without a key → 503 `GSTIN_LOOKUP_DISABLED` and no
+    provider call.
+  - Not yet verified live: waiting for the user to put `GSTINAPI_KEY` in
+    the local `.env`.
+- Limitations/follow-up:
+  - **Set the key on the server too.** Production needs `GSTINAPI_KEY` and
+    the deployed `MASTERS_INDIA_*` values can be removed.
+  - **CRM display.** If the CRM shows `registeredOn`, it now receives an
+    ISO date.
+  - **Cache.** It is in memory per process and is lost on restart.
+
 ## 2026-11-11
 
 ### CRM GSTIN lookup via Masters India (GST portal record)

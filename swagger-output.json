@@ -2990,9 +2990,6 @@
                 "transactionId": {
                   "example": "any"
                 },
-                "totalAmount": {
-                  "example": "any"
-                },
                 "number": {
                   "example": "any"
                 }
@@ -3004,11 +3001,17 @@
           "200": {
             "description": "OK"
           },
+          "400": {
+            "description": "Bad Request"
+          },
           "401": {
             "description": "Unauthorized"
           },
-          "404": {
-            "description": "Not Found"
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "Conflict"
           },
           "500": {
             "description": "Internal Server Error"
@@ -3035,8 +3038,14 @@
           "400": {
             "description": "Bad Request"
           },
+          "404": {
+            "description": "Not Found"
+          },
           "500": {
             "description": "Internal Server Error"
+          },
+          "502": {
+            "description": "Bad Gateway"
           }
         },
         "tags": ["Orders"]
@@ -5396,7 +5405,7 @@
     },
     "/v1/crm/admin/gstin/{gstin}": {
       "get": {
-        "description": "Staff only (admin JWT). Validates the GSTIN (format + check digit), then reads the taxpayer record from the government GST system through Masters India (a licensed GSP). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because provider lookups are billed. Disabled with 503 until MASTERS_INDIA_USERNAME, MASTERS_INDIA_PASSWORD, MASTERS_INDIA_CLIENT_ID and MASTERS_INDIA_CLIENT_SECRET are set.",
+        "description": "Staff only (admin JWT). Validates the GSTIN (format + check digit; the provider's sandbox GSTIN 00AAAAA0000A1ZT is also accepted), then reads the taxpayer record from the GST network through GSTIN API (gstinapi.in). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because each provider lookup uses a credit. Disabled with 503 until GSTINAPI_KEY is set.",
         "parameters": [
           {
             "name": "gstin",
@@ -5450,7 +5459,7 @@
                     },
                     "registeredOn": {
                       "type": "string",
-                      "example": "27/01/2018"
+                      "example": "2017-07-01"
                     },
                     "cancelledOn": {
                       "type": "string"
@@ -5460,14 +5469,27 @@
                       "description": "Principal place of business, one line"
                     },
                     "state": {
-                      "type": "string"
+                      "type": "string",
+                      "example": "Tamil Nadu"
+                    },
+                    "stateCode": {
+                      "type": "string",
+                      "example": "33"
                     },
                     "pincode": {
                       "type": "string"
                     },
                     "source": {
                       "type": "string",
-                      "example": "mastersindia"
+                      "example": "gstinapi"
+                    },
+                    "creditsRemaining": {
+                      "type": "integer",
+                      "description": "Provider credits left after this lookup"
+                    },
+                    "test": {
+                      "type": "boolean",
+                      "description": "Present for the sandbox GSTIN"
                     },
                     "fetchedAt": {
                       "type": "string",
@@ -5525,6 +5547,25 @@
               }
             }
           },
+          "429": {
+            "description": "Provider rate limit (60 lookups/minute); retry shortly",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_PROVIDER_RATE_LIMITED"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error",
             "schema": {
@@ -5545,7 +5586,7 @@
             }
           },
           "502": {
-            "description": "Provider error: GSTIN_PROVIDER_AUTH, GSTIN_PROVIDER_ERROR or GSTIN_PROVIDER_UNREACHABLE",
+            "description": "Provider error: GSTIN_PROVIDER_AUTH (key rejected), GSTIN_PROVIDER_NO_CREDITS, GSTIN_PROVIDER_ERROR or GSTIN_PROVIDER_UNREACHABLE",
             "schema": {
               "type": "object",
               "properties": {
@@ -5564,7 +5605,7 @@
             }
           },
           "503": {
-            "description": "Provider credentials not set",
+            "description": "GSTINAPI_KEY not set",
             "schema": {
               "type": "object",
               "properties": {

@@ -1,30 +1,29 @@
 /**
- * GSTIN lookup through Masters India (a licensed GST Suvidha Provider), which
- * reads the taxpayer record from the government GST system.
+ * GSTIN lookup through GSTIN API (https://www.gstinapi.in), which reads the
+ * taxpayer record from the GST network.
  *
- * Contract (docs.mastersindia.co/gst-verification-api):
- *  - POST {base}/oauth/access_token  JSON {username, password, client_id,
- *    client_secret, grant_type: "password"} -> {access_token, expires_in}
- *  - GET  {base}/commonapis/searchgstin?gstin=...  headers
- *    Authorization: Bearer <token>, client_id -> {error: false, data: {...}}
+ * Contract (https://gstinapi.in/openapi.json):
+ *  - GET {base}/v1/gstin/{gstin}   header x-api-key: <key>
+ *  - 200 { success: true, gstin, data: GstinRecord, credits_remaining, ... }
+ *  - errors { success: false, error } with 400 (bad format, not charged),
+ *    401 (missing/invalid key), 402 (no credits), 403 (account deactivated),
+ *    404 (not registered), 429 (rate limit, 60/min), 502 (upstream down)
+ *  - sandbox GSTIN 00AAAAA0000A1ZT: fixed sample, no credit used
  *
- * Credentials come only from environment variables and are never logged or
- * returned. Lookups are paid per call, so results are cached in memory.
+ * The key comes only from the environment and is never logged or returned.
+ * Real lookups use credits, so results are cached in memory.
  */
 
-const ENV_KEYS = {
-  username: "MASTERS_INDIA_USERNAME",
-  password: "MASTERS_INDIA_PASSWORD",
-  clientId: "MASTERS_INDIA_CLIENT_ID",
-  clientSecret: "MASTERS_INDIA_CLIENT_SECRET",
-};
-const DEFAULT_BASE_URL = "https://commonapi.mastersindia.co";
+const API_KEY_ENV = "GSTINAPI_KEY";
+const DEFAULT_BASE_URL = "https://www.gstinapi.in";
 const DEFAULT_TIMEOUT_MS = 15000;
 const RESULT_TTL_MS = 24 * 60 * 60 * 1000;
 const NOT_FOUND_TTL_MS = 60 * 60 * 1000;
 const MAX_CACHED = 500;
 const CHARSET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const GSTIN_SHAPE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+// The provider's free test GSTIN (its check digit is not a real one).
+export const SANDBOX_GSTIN = "00AAAAA0000A1ZT";
 
 export class GstinLookupError extends Error {
   constructor(message, code, statusCode) {
@@ -59,25 +58,23 @@ export const isValidGstin = (value) => {
 };
 
 export const getGstinLookupStatus = (env = process.env) => {
-  const missing = Object.values(ENV_KEYS).filter(
-    (key) => !String(env[key] || "").trim(),
-  );
-  return { available: missing.length === 0, provider: "mastersindia", missing };
+  const missing = [API_KEY_ENV].filter((key) => !String(env[key] || "").trim());
+  return { available: missing.length === 0, provider: "gstinapi", missing };
 };
 
 const clean = (value) => String(value ?? "").trim();
 
-/** Principal address parts joined in postal order, skipping blanks/dupes. */
+/** Structured address parts joined in postal order, skipping blanks/dupes. */
 export const formatGstAddress = (addr = {}) => {
   const parts = [
-    addr.flno,
-    addr.bno,
-    addr.bnm,
-    addr.st,
-    addr.loc,
+    addr.floor,
+    addr.building_number,
+    addr.building_name,
+    addr.street,
+    addr.locality,
     addr.city,
-    addr.dst,
-    addr.stcd,
+    addr.district,
+    addr.state,
   ]
     .map(clean)
     .filter(Boolean)
@@ -85,67 +82,122 @@ export const formatGstAddress = (addr = {}) => {
       (part, index, all) =>
         all.findIndex((p) => p.toLowerCase() === part.toLowerCase()) === index,
     );
-  const pincode = clean(addr.pncd);
+  const pincode = clean(addr.pincode);
   const line = parts.join(", ");
   if (!pincode) return line;
   return line ? `${line} - ${pincode}` : pincode;
 };
 
-/** Provider payload -> the small shape the CRM uses. */
+/** Provider record -> the small shape the CRM uses (unchanged field names). */
 export const toTaxpayer = (data = {}, fetchedAt = new Date()) => {
-  const addr = data?.pradr?.addr || {};
+  const details = data.address_details || {};
+  const pincode = clean(data.pincode || details.pincode);
+  // Prefer the structured parts (they include the state); fall back to the
+  // provider's one-line address.
+  const structured = formatGstAddress({ ...details, pincode });
+  const oneLine = clean(data.address);
+  const address =
+    structured && structured !== pincode
+      ? structured
+      : oneLine && pincode && !oneLine.includes(pincode)
+        ? `${oneLine} - ${pincode}`
+        : oneLine || pincode;
   return {
     gstin: normalizeGstin(data.gstin),
-    legalName: clean(data.lgnm),
-    tradeName: clean(data.tradeNam),
-    status: clean(data.sts),
-    constitution: clean(data.ctb),
-    taxpayerType: clean(data.dty),
-    registeredOn: clean(data.rgdt),
-    cancelledOn: clean(data.cxdt),
-    address: formatGstAddress(addr),
-    state: clean(addr.stcd),
-    pincode: clean(addr.pncd),
-    source: "mastersindia",
+    legalName: clean(data.legal_name),
+    tradeName: clean(data.trade_name),
+    status: clean(data.status),
+    constitution: clean(data.business_constitution),
+    taxpayerType: clean(data.taxpayer_type),
+    registeredOn: clean(data.registration_date),
+    cancelledOn: clean(data.cancellation_date),
+    address,
+    state: clean(details.state),
+    stateCode: clean(data.state_code),
+    pincode,
+    source: "gstinapi",
     fetchedAt: fetchedAt.toISOString(),
   };
 };
 
-const providerMessage = (body) => {
-  if (!body || typeof body !== "object") return "";
-  const candidates = [body.message, body.error_description, body.data];
-  if (body.data && typeof body.data === "object")
-    candidates.push(body.data.message, body.data.error);
-  if (typeof body.error === "string") candidates.push(body.error);
-  return clean(candidates.find((v) => typeof v === "string" && v.trim()));
-};
+const providerMessage = (body) =>
+  body && typeof body === "object"
+    ? clean([body.error, body.message].find((v) => typeof v === "string"))
+    : "";
 
-const NOT_FOUND_PATTERN =
-  /not\s*found|no\s*record|invalid\s*gstin|does\s*not\s*exist|no\s*data/i;
+// Provider HTTP status -> our error (the CRM sees code + statusCode).
+const providerError = (status, message) => {
+  const detail = message ? `: ${message.slice(0, 200)}` : "";
+  if (status === 400)
+    return new GstinLookupError(
+      "Enter a valid 15-character GSTIN.",
+      "GSTIN_INVALID",
+      400,
+    );
+  if (status === 404)
+    return new GstinLookupError(
+      "No taxpayer is registered with this GSTIN on the GST portal.",
+      "GSTIN_NOT_FOUND",
+      404,
+    );
+  if (status === 401 || status === 403)
+    return new GstinLookupError(
+      "The GST lookup service rejected our API key. Check GSTINAPI_KEY on the server.",
+      "GSTIN_PROVIDER_AUTH",
+      502,
+    );
+  if (status === 402)
+    return new GstinLookupError(
+      "The GST lookup account has no credits left. Top up at gstinapi.in.",
+      "GSTIN_PROVIDER_NO_CREDITS",
+      502,
+    );
+  if (status === 429)
+    return new GstinLookupError(
+      "Too many GST lookups right now. Try again in a minute.",
+      "GSTIN_PROVIDER_RATE_LIMITED",
+      429,
+    );
+  return new GstinLookupError(
+    `The GST lookup service couldn't answer${detail}. Try again.`,
+    "GSTIN_PROVIDER_ERROR",
+    502,
+  );
+};
 
 export const createGstinLookup = ({
   env = process.env,
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
 } = {}) => {
-  let token = null; // { value, expiresAt }
-  let tokenPromise = null;
   const cache = new Map(); // gstin -> { expiresAt, value | error }
 
   const baseUrl = () =>
-    clean(env.MASTERS_INDIA_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
+    clean(env.GSTINAPI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
   const timeoutMs = () => {
     const parsed = Number(env.GSTIN_LOOKUP_TIMEOUT_MS);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
   };
 
-  const call = async (url, init) => {
+  const remember = (gstin, entry) => {
+    if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value);
+    cache.set(gstin, entry);
+  };
+
+  const fetchRecord = async (gstin) => {
     let response;
     try {
-      response = await fetchImpl(url, {
-        ...init,
-        signal: AbortSignal.timeout(timeoutMs()),
-      });
+      response = await fetchImpl(
+        `${baseUrl()}/v1/gstin/${encodeURIComponent(gstin)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "x-api-key": clean(env[API_KEY_ENV]),
+          },
+          signal: AbortSignal.timeout(timeoutMs()),
+        },
+      );
     } catch (error) {
       if (error?.name === "TimeoutError" || error?.name === "AbortError")
         throw new GstinLookupError(
@@ -168,72 +220,15 @@ export const createGstinLookup = ({
     return { response, body };
   };
 
-  const fetchToken = async () => {
-    const { response, body } = await call(`${baseUrl()}/oauth/access_token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        username: env[ENV_KEYS.username],
-        password: env[ENV_KEYS.password],
-        client_id: env[ENV_KEYS.clientId],
-        client_secret: env[ENV_KEYS.clientSecret],
-        grant_type: "password",
-      }),
-    });
-    const value = clean(body?.access_token);
-    if (!response.ok || !value)
-      throw new GstinLookupError(
-        "The GST lookup service rejected our login. Check the Masters India credentials on the server.",
-        "GSTIN_PROVIDER_AUTH",
-        502,
-      );
-    const seconds = Number(body.expires_in);
-    const lifetime =
-      (Number.isFinite(seconds) && seconds > 0 ? seconds : 3600) * 1000;
-    token = { value, expiresAt: now() + Math.max(lifetime - 60000, 30000) };
-    return value;
-  };
-
-  const getToken = async ({ refresh = false } = {}) => {
-    if (!refresh && token && token.expiresAt > now()) return token.value;
-    if (!tokenPromise)
-      tokenPromise = fetchToken().finally(() => {
-        tokenPromise = null;
-      });
-    return tokenPromise;
-  };
-
-  const remember = (gstin, entry) => {
-    if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value);
-    cache.set(gstin, entry);
-  };
-
-  const search = async (gstin, accessToken) =>
-    call(
-      `${baseUrl()}/commonapis/searchgstin?gstin=${encodeURIComponent(gstin)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
-          client_id: env[ENV_KEYS.clientId],
-        },
-      },
-    );
-
   const lookup = async (input) => {
     const gstin = normalizeGstin(input);
-    if (!isValidGstin(gstin))
+    if (gstin !== SANDBOX_GSTIN && !isValidGstin(gstin))
       throw new GstinLookupError(
         "Enter a valid 15-character GSTIN.",
         "GSTIN_INVALID",
         400,
       );
-    const status = getGstinLookupStatus(env);
-    if (!status.available)
+    if (!getGstinLookupStatus(env).available)
       throw new GstinLookupError(
         "GST portal lookup isn't set up on the server yet.",
         "GSTIN_LOOKUP_DISABLED",
@@ -246,46 +241,26 @@ export const createGstinLookup = ({
       return { ...cached.value, cached: true };
     }
 
-    let { response, body } = await search(gstin, await getToken());
-    if (response.status === 401 || response.status === 403) {
-      ({ response, body } = await search(
-        gstin,
-        await getToken({ refresh: true }),
-      ));
-      if (response.status === 401 || response.status === 403)
-        throw new GstinLookupError(
-          "The GST lookup service rejected our login. Check the Masters India credentials on the server.",
-          "GSTIN_PROVIDER_AUTH",
-          502,
-        );
-    }
-
-    const message = providerMessage(body);
-    const failed =
-      !response.ok || !body || body.error === true || body.error === "true";
+    const { response, body } = await fetchRecord(gstin);
     const data =
-      !failed && body.data && typeof body.data === "object" ? body.data : null;
-
-    if (failed || !data || !clean(data.gstin || data.lgnm)) {
-      if (response.status === 404 || NOT_FOUND_PATTERN.test(message)) {
-        const error = new GstinLookupError(
-          "No taxpayer is registered with this GSTIN on the GST portal.",
-          "GSTIN_NOT_FOUND",
-          404,
-        );
-        remember(gstin, { error, expiresAt: now() + NOT_FOUND_TTL_MS });
-        throw error;
-      }
-      throw new GstinLookupError(
-        message
-          ? `The GST lookup service couldn't answer: ${message.slice(0, 200)}`
-          : "The GST lookup service couldn't answer. Try again.",
-        "GSTIN_PROVIDER_ERROR",
-        502,
+      response.ok && body?.success !== false && body?.data ? body.data : null;
+    if (!data || !clean(data.gstin || data.legal_name)) {
+      const error = providerError(
+        response.ok ? 502 : response.status,
+        providerMessage(body),
       );
+      if (error.code === "GSTIN_NOT_FOUND")
+        remember(gstin, { error, expiresAt: now() + NOT_FOUND_TTL_MS });
+      throw error;
     }
 
-    const value = toTaxpayer({ gstin, ...data }, new Date(now()));
+    const value = {
+      ...toTaxpayer({ gstin, ...data }, new Date(now())),
+      creditsRemaining: Number.isFinite(body.credits_remaining)
+        ? body.credits_remaining
+        : null,
+      ...(body.test === true || data.test === true ? { test: true } : {}),
+    };
     remember(gstin, { value, expiresAt: now() + RESULT_TTL_MS });
     return { ...value, cached: false };
   };

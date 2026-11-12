@@ -77,7 +77,34 @@ slot by phone.
   requests require `X-Admin-Bootstrap-Key` matching `ADMIN_BOOTSTRAP_KEY`.
 - Legacy coupon URLs remain available but now use permission enforcement.
 - Legacy storefront order/payment URLs remain temporarily available until the
-  e-commerce client moves to checkout sessions.
+  e-commerce client moves to checkout sessions. Since 2026-11-12 they are
+  locked down:
+  - `POST /v1/order/cod` and `POST /v1/order/pay` require a customer login.
+    The user comes from the token, and a different `user` in the body gets
+    a 403. Prices, delivery charge and total are computed on the server from
+    `items[].productId` / `quantity` (same pricing as `/v1/checkout`), and
+    status fields in the body are ignored.
+  - Coupons are not applied on these routes; use `/v1/checkout`.
+  - `/order/pay` needs a `transactionId` of 6–38 letters, digits, `_` or
+    `-` that no other order uses (409 otherwise). PhonePe is charged the
+    server total.
+  - `GET /v1/order/:id`: the owning customer or an admin. Other customers
+    get 404.
+  - `GET /v1/orders/user/:id` and `GET /v1/order/transaction-id/:id` return
+    only the caller's own orders.
+  - `PUT /v1/order/user/:id` (customer): own order only, while it is
+    Pending or Processing (409 after). Only cancelling (`orderStatus:
+"Cancelled"` or `orderCancelled: true`), `shippingAddress`,
+    `installation` and `notes` can change. Payment, total, refund, invoice
+    and item fields are ignored.
+  - `PUT /v1/admin/order/:id` is unchanged (admin).
+  - `POST /v1/phonepe-verify/:id` stays public (PhonePe's callback) and
+    re-checks the status with PhonePe.
+    - An order is marked Paid only when the amount PhonePe collected equals
+      the order total. A mismatch is left as Processing and logged.
+    - Pending stays Pending (it was marked Failed before).
+    - A Paid order is never downgraded or re-notified, and the confirmation
+      is sent once, only on Paid.
 
 ## Required environment values
 
