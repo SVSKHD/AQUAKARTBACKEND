@@ -5394,6 +5394,219 @@
         "tags": ["CRM / Invoices"]
       }
     },
+    "/v1/crm/admin/gstin/{gstin}": {
+      "get": {
+        "description": "Staff only (admin JWT). Validates the GSTIN (format + check digit), then reads the taxpayer record from the government GST system through Masters India (a licensed GSP). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because provider lookups are billed. Disabled with 503 until MASTERS_INDIA_USERNAME, MASTERS_INDIA_PASSWORD, MASTERS_INDIA_CLIENT_ID and MASTERS_INDIA_CLIENT_SECRET are set.",
+        "parameters": [
+          {
+            "name": "gstin",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 15,
+            "example": "36HEDPS5768R1Z8"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Taxpayer found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "gstin": {
+                      "type": "string"
+                    },
+                    "legalName": {
+                      "type": "string"
+                    },
+                    "tradeName": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "Active"
+                    },
+                    "constitution": {
+                      "type": "string",
+                      "example": "Proprietorship"
+                    },
+                    "taxpayerType": {
+                      "type": "string",
+                      "example": "Regular"
+                    },
+                    "registeredOn": {
+                      "type": "string",
+                      "example": "27/01/2018"
+                    },
+                    "cancelledOn": {
+                      "type": "string"
+                    },
+                    "address": {
+                      "type": "string",
+                      "description": "Principal place of business, one line"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "pincode": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string",
+                      "example": "mastersindia"
+                    },
+                    "fetchedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "cached": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid GSTIN",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_INVALID"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token"
+          },
+          "403": {
+            "description": "Not an admin"
+          },
+          "404": {
+            "description": "No taxpayer with this GSTIN",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_NOT_FOUND"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_LOOKUP_FAILED"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider error: GSTIN_PROVIDER_AUTH, GSTIN_PROVIDER_ERROR or GSTIN_PROVIDER_UNREACHABLE",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_PROVIDER_ERROR"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Provider credentials not set",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_LOOKUP_DISABLED"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Provider timed out",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string",
+                  "example": "GSTIN_PROVIDER_TIMEOUT"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["CRM / Invoices"],
+        "summary": "Look up a GSTIN on the GST portal",
+        "produces": ["application/json"]
+      }
+    },
     "/v1/crm/create/invoice": {
       "post": {
         "description": "",

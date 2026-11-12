@@ -7,6 +7,7 @@ import optionalUserAuth from "../../middleware/optionalUser.js";
 import userAuth from "../../middleware/user.js";
 import servicePortalAuth from "../../middleware/servicePortal.js";
 import ServiceInvoicePortalOperations from "../../controllers/crm/serviceInvoicePortal.js";
+import GstinLookupOperations from "../../controllers/crm/gstinLookup.js";
 
 const router = express.Router();
 
@@ -74,6 +75,11 @@ router.get(
   "/invoice-phone/:phone",
   userAuth.checkAdmin,
   InvoiceOperations.getInvoiceByPhone,
+);
+router.get(
+  "/admin/gstin/:gstin",
+  userAuth.checkAdmin,
+  GstinLookupOperations.lookup,
 );
 router.post(
   "/create/invoice",

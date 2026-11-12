@@ -18,6 +18,49 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-11
+
+### CRM GSTIN lookup via Masters India (GST portal record)
+
+- Request/problem: The CRM invoice form should fetch GST details from the
+  government GST portal when a GSTIN is typed. The portal has no open API (its
+  public search needs a captcha); machine access goes through a licensed GSP.
+  The user chose Masters India.
+- Changes/result: New staff-only `GET /v1/crm/admin/gstin/:gstin`
+  (`userAuth.checkAdmin`, read-only). It validates format + check digit (400
+  `GSTIN_INVALID`), logs in to Masters India
+  (`POST https://commonapi.mastersindia.co/oauth/access_token`, token cached
+  until a minute before `expires_in`, one refresh on 401/403), calls
+  `GET /commonapis/searchgstin?gstin=` and returns `{ success, data }` with
+  `legalName`, `tradeName`, `status`, `constitution`, `taxpayerType`,
+  `registeredOn`, `cancelledOn`, one-line principal `address`, `state`,
+  `pincode`, `source`, `fetchedAt`, `cached`. Errors: 404 `GSTIN_NOT_FOUND`,
+  502 `GSTIN_PROVIDER_AUTH`/`GSTIN_PROVIDER_ERROR`/`GSTIN_PROVIDER_UNREACHABLE`,
+  503 `GSTIN_LOOKUP_DISABLED` (credentials not set; no provider call), 504
+  `GSTIN_PROVIDER_TIMEOUT`. Results cached in memory 24 h (not-found 1 h, max 500) because lookups are billed. Credentials are read from env only and never
+  logged or returned.
+- Files: `src/services/gstinLookup.js` (new), `src/controllers/crm/gstinLookup.js`
+  (new), `src/routes/crm/invoice.js`, `src/docs/gstinLookup.js` (new),
+  `swagger-autogen.js`, `swagger-output.json`, `.env.example`
+  (`MASTERS_INDIA_USERNAME`, `MASTERS_INDIA_PASSWORD`, `MASTERS_INDIA_CLIENT_ID`,
+  `MASTERS_INDIA_CLIENT_SECRET`, optional `MASTERS_INDIA_BASE_URL`,
+  `GSTIN_LOOKUP_TIMEOUT_MS`), `test/gstinLookup.test.js` (new),
+  `docs/PROJECT_MAP.md`.
+- Validation: `node --check` on changed JS files passed;
+  `node --test test/gstinLookup.test.js` 11/11 passed (fake provider; no real
+  Masters India calls); full `node --test` 284/285 — the one failure,
+  `test/invoiceViews.test.js` "builds separate admin and customer invoice
+  destinations from one id", also fails without the new test file and passes
+  when run alone (pre-existing, unrelated); `npm run swagger` succeeded and the
+  operation shows summary, tag `CRM / Invoices` and 200/400/401/403/404/500/
+  502/503/504; `test/routeGroups.test.js` passed. `swagger-output.json` was
+  re-formatted with Prettier to match the committed style (diff is additions
+  for this route only).
+- Limitations/follow-up: Not verified live: needs a Masters India account and
+  the four env vars on the server, then a deploy. The provider's error-body
+  shape is undocumented, so "not found" is detected from HTTP 404 or the
+  message text. The in-memory cache is per process and resets on restart.
+
 ## 2026-11-10
 
 ### Agent tooling: project-memory map, CLAUDE.md and Stop hook

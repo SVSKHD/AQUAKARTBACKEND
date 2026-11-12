@@ -7,6 +7,7 @@ import { applyCrmAiDocs } from "./src/docs/crmAi.js";
 import { applyCrmCustomerAiDocs } from "./src/docs/crmCustomerAi.js";
 import { applyStorefrontDocs } from "./src/docs/storefront.js";
 import { applyMcpDocs } from "./src/docs/mcp.js";
+import { applyGstinLookupDocs } from "./src/docs/gstinLookup.js";
 
 // Swagger configuration
 // const doc = {
@@ -42,7 +43,9 @@ const generateSwaggerDocs = async () => {
     await applyRouteGroups(
       applyMcpDocs(
         applyStorefrontDocs(
-          applyCrmCustomerAiDocs(applyCrmAiDocs(applyCategoryDocs(document))),
+          applyGstinLookupDocs(
+            applyCrmCustomerAiDocs(applyCrmAiDocs(applyCategoryDocs(document))),
+          ),
         ),
       ),
     );
