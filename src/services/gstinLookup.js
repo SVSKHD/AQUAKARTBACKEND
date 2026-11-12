@@ -14,7 +14,7 @@
  * Real lookups use credits, so results are cached in memory.
  */
 
-const API_KEY_ENV = "GSTINAPI_KEY";
+const API_KEY_ENV = "GST_ENABLE_KEY";
 const DEFAULT_BASE_URL = "https://www.gstinapi.in";
 const DEFAULT_TIMEOUT_MS = 15000;
 const RESULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -142,7 +142,7 @@ const providerError = (status, message) => {
     );
   if (status === 401 || status === 403)
     return new GstinLookupError(
-      "The GST lookup service rejected our API key. Check GSTINAPI_KEY on the server.",
+      "The GST lookup service rejected our API key. Check GST_ENABLE_KEY on the server.",
       "GSTIN_PROVIDER_AUTH",
       502,
     );

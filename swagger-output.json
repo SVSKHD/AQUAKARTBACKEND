@@ -5405,7 +5405,7 @@
     },
     "/v1/crm/admin/gstin/{gstin}": {
       "get": {
-        "description": "Staff only (admin JWT). Validates the GSTIN (format + check digit; the provider's sandbox GSTIN 00AAAAA0000A1ZT is also accepted), then reads the taxpayer record from the GST network through GSTIN API (gstinapi.in). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because each provider lookup uses a credit. Disabled with 503 until GSTINAPI_KEY is set.",
+        "description": "Staff only (admin JWT). Validates the GSTIN (format + check digit; the provider's sandbox GSTIN 00AAAAA0000A1ZT is also accepted), then reads the taxpayer record from the GST network through GSTIN API (gstinapi.in). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because each provider lookup uses a credit. Disabled with 503 until GST_ENABLE_KEY is set.",
         "parameters": [
           {
             "name": "gstin",
@@ -5605,7 +5605,7 @@
             }
           },
           "503": {
-            "description": "GSTINAPI_KEY not set",
+            "description": "GST_ENABLE_KEY not set",
             "schema": {
               "type": "object",
               "properties": {

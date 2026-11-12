@@ -163,6 +163,37 @@ tests, or docs:
     ISO date.
   - **Cache.** It is in memory per process and is lost on restart.
 
+### GSTIN lookup: API key setting renamed to GST_ENABLE_KEY
+
+- Request/problem: The user keeps the gstinapi.in key in `.env` as
+  `GST_ENABLE_KEY` and asked the code to use that name instead of
+  `GSTINAPI_KEY` (from the entry above).
+- Changes/result:
+  - `src/services/gstinLookup.js` reads `GST_ENABLE_KEY`; the
+    `GSTINAPI_KEY` name is no longer used.
+  - `GSTINAPI_BASE_URL` and `GSTIN_LOOKUP_TIMEOUT_MS` are unchanged.
+- Files: `src/services/gstinLookup.js`, `test/gstinLookup.test.js`,
+  `src/docs/gstinLookup.js`, `swagger-output.json`, `.env.example`,
+  `docs/PROJECT_MAP.md`, `docs/CHANGELOG.md`.
+- Validation:
+  - `node --test test/gstinLookup.test.js`: 11/11 passed.
+  - `npm run swagger` succeeded.
+  - **Live local check.** A scratchpad script loaded the real `.env` (key
+    never printed) and called `lookupGstin`:
+    - Sandbox `00AAAAA0000A1ZT` → 200 with `test: true`.
+    - `36AJOPH6387A1Z2` → 200 in under 2 s with legal name, trade name
+      AQUAKART, Active status, the Telangana address, and pincode 500048.
+    - Provider credits went 24 → 23.
+  - The local server and the CRM route were not started; the service
+    function was called directly.
+- Limitations/follow-up:
+  - **Set the key on the server.** Production needs `GST_ENABLE_KEY` and a
+    restart.
+  - **Remove the old settings.** The `MASTERS_INDIA_*` values can be
+    deleted.
+  - **Constitution is blank.** It is only filled by the provider's
+    `?include=profile` lookup, which the backend doesn't request.
+
 ## 2026-11-11
 
 ### CRM GSTIN lookup via Masters India (GST portal record)

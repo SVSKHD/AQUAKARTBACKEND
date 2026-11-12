@@ -21,7 +21,7 @@ export const applyGstinLookupDocs = (doc) => {
       tags: existing.tags || ["CRM / Invoices"],
       summary: "Look up a GSTIN on the GST portal",
       description:
-        "Staff only (admin JWT). Validates the GSTIN (format + check digit; the provider's sandbox GSTIN 00AAAAA0000A1ZT is also accepted), then reads the taxpayer record from the GST network through GSTIN API (gstinapi.in). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because each provider lookup uses a credit. Disabled with 503 until GSTINAPI_KEY is set.",
+        "Staff only (admin JWT). Validates the GSTIN (format + check digit; the provider's sandbox GSTIN 00AAAAA0000A1ZT is also accepted), then reads the taxpayer record from the GST network through GSTIN API (gstinapi.in). Read-only. Results are cached in memory for 24 h (not-found for 1 h) because each provider lookup uses a credit. Disabled with 503 until GST_ENABLE_KEY is set.",
       produces: ["application/json"],
       parameters: [
         {
@@ -89,7 +89,7 @@ export const applyGstinLookupDocs = (doc) => {
           "GSTIN_PROVIDER_ERROR",
           "Provider error: GSTIN_PROVIDER_AUTH (key rejected), GSTIN_PROVIDER_NO_CREDITS, GSTIN_PROVIDER_ERROR or GSTIN_PROVIDER_UNREACHABLE",
         ),
-        503: error("GSTIN_LOOKUP_DISABLED", "GSTINAPI_KEY not set"),
+        503: error("GSTIN_LOOKUP_DISABLED", "GST_ENABLE_KEY not set"),
         504: error("GSTIN_PROVIDER_TIMEOUT", "Provider timed out"),
       },
     },

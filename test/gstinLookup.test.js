@@ -13,7 +13,7 @@ import {
 // Response shapes follow https://gstinapi.in/openapi.json.
 
 const GSTIN = "33AAACC1206D1ZN";
-const ENV = { GSTINAPI_KEY: "gak_test_key" };
+const ENV = { GST_ENABLE_KEY: "gak_test_key" };
 const RECORD = {
   gstin: GSTIN,
   legal_name: "CENTRAL WAREHOUSING CORPORATION",
@@ -75,7 +75,7 @@ test("validates GSTIN shape and check digit", () => {
 });
 
 test("reports a missing API key by name only", () => {
-  assert.deepEqual(getGstinLookupStatus({}).missing, ["GSTINAPI_KEY"]);
+  assert.deepEqual(getGstinLookupStatus({}).missing, ["GST_ENABLE_KEY"]);
   assert.equal(getGstinLookupStatus(ENV).available, true);
   assert.equal(getGstinLookupStatus(ENV).provider, "gstinapi");
 });
