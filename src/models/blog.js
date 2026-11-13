@@ -13,6 +13,8 @@ const BlogSchema = new mongoose.Schema({
       },
     },
   ],
+  // Alt text for the title (banner) image; optional.
+  titleImageAlt: { type: String, trim: true, maxlength: 200 },
   title: {
     type: String,
     required: [true, "please provide product name"],

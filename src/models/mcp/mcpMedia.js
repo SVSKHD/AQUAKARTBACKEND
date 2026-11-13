@@ -14,7 +14,7 @@ const McpMediaSchema = new mongoose.Schema(
     bytes: Number,
     width: Number,
     height: Number,
-    source: { type: String, enum: ["chatgpt-file", "base64"] },
+    source: { type: String, enum: ["chatgpt-file", "base64", "upload-url"] },
     clientId: String,
     adminUser: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
     blog: {

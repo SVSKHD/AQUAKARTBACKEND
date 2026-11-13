@@ -61,6 +61,12 @@ const contentFields = {
   keyHighlights: textList(10, 300),
   tags: textList(20, 60),
   notes: z.string().max(300).describe("Editor note; not shown publicly."),
+  titleImageAlt: z
+    .string()
+    .max(200)
+    .describe(
+      "Alt text for the banner (title image): what it shows, for screen readers and SEO.",
+    ),
   brand: z.string().min(1).max(60),
   category: objectId.nullable().describe("AquaCategory id or null"),
   subCategory: objectId
@@ -83,7 +89,16 @@ const blogSummary = z.object({
   hasTitleImage: z.boolean(),
   source: z.string(),
   revision: z.string(),
-  publicUrl: z.string().nullable(),
+  publicUrl: z
+    .string()
+    .nullable()
+    .describe("Live storefront URL; null until published"),
+  adminUrl: z
+    .string()
+    .nullable()
+    .describe(
+      "CRM link for staff when the server has one configured; otherwise null",
+    ),
 });
 const media = z.object({ id: z.string(), secure_url: z.string() });
 const blogFull = blogSummary.extend({
@@ -96,6 +111,7 @@ const blogFull = blogSummary.extend({
   tags: z.array(z.string()),
   notes: z.string(),
   brand: z.string(),
+  titleImageAlt: z.string(),
   category: z.string().nullable(),
   subCategory: z.string().nullable(),
   product: z.string().nullable(),
@@ -712,18 +728,86 @@ export const createAquakartMcpServer = ({
     },
     (args, ctx) => blogTools.uploadImage(args, ctx),
   );
+  const mediaShape = z.object({
+    mediaId: z.string(),
+    publicId: z.string(),
+    secure_url: z.string(),
+    format: z.string().nullable().optional(),
+    bytes: z.number().nullable().optional(),
+    width: z.number().nullable(),
+    height: z.number().nullable(),
+  });
+  register(
+    "aquakart_create_image_upload",
+    {
+      title: "Create image upload URL",
+      description:
+        'Best way to upload a local image file (e.g. a generated banner PNG) without base64: returns a one-time uploadUrl. PUT the raw file bytes to it from a shell, e.g. `curl --fail -sS -T banner.png "<uploadUrl>"` (no Authorization header; JPEG/PNG/WebP, checked from the bytes, max 5 MB; expires in about 10 minutes). Then call aquakart_get_image_upload for the mediaId and attach it with aquakart_attach_image. Never invent image URLs.',
+      scopes: [MCP_SCOPES.upload],
+      input: z.strictObject({}),
+      output: envelope({
+        upload: z.object({
+          uploadId: z.string(),
+          uploadUrl: z.string(),
+          method: z.literal("PUT"),
+          expiresAt: z.string(),
+          maxBytes: z.number(),
+          acceptedTypes: z.array(z.string()),
+        }),
+        instructions: z.string(),
+      }),
+      annotations: WRITE,
+    },
+    (args, ctx) => blogTools.createImageUpload(args, ctx),
+  );
+  register(
+    "aquakart_get_image_upload",
+    {
+      title: "Get image upload status",
+      description:
+        "Status of an upload URL from aquakart_create_image_upload: pending, processing, uploaded (with media.mediaId to pass to aquakart_attach_image), or expired. lastError explains a rejected file (the URL stays usable until it expires).",
+      scopes: [MCP_SCOPES.upload],
+      input: z.strictObject({ uploadId: objectId }),
+      output: envelope({
+        upload: z.object({
+          uploadId: z.string(),
+          status: z.enum([
+            "pending",
+            "processing",
+            "uploaded",
+            "failed",
+            "expired",
+          ]),
+          expiresAt: z.string(),
+          uploadedAt: z.string().nullable(),
+          lastError: z
+            .object({ code: z.string(), message: z.string() })
+            .nullable(),
+        }),
+        media: mediaShape.nullable(),
+        deduplicated: z.boolean().nullable(),
+      }),
+      annotations: READ,
+    },
+    (args, ctx) => blogTools.getImageUpload(args, ctx),
+  );
   register(
     "aquakart_attach_image",
     {
       title: "Attach title image",
       description:
-        "Set an uploaded image (mediaId) as a blog's title image, replacing the previous one. applyBrandLogo overlays the stored official Aquakart logo (never AI-drawn), bottom-right; logoVariant 'white' suits dark images. Live blogs also need blogs:publish.",
+        "Set an uploaded image (mediaId) as a blog's title (banner) image, replacing the previous one, with optional altText. applyBrandLogo: true overlays the stored official Aquakart logo file server-side (original proportions and colours, never AI-drawn), bottom-right; logoVariant 'white' suits dark images. Use applyBrandLogo for every banner unless the image already contains the authentic logo file. Live blogs also need blogs:publish.",
       scopes: [MCP_SCOPES.write],
       input: z.strictObject({
         idempotencyKey,
         blogId: objectId,
         mediaId: objectId,
         applyBrandLogo: z.boolean().optional(),
+        altText: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Banner alt text; omitted keeps the current alt text"),
         logoVariant: z
           .enum(["original", "white"])
           .optional()
@@ -732,7 +816,19 @@ export const createAquakartMcpServer = ({
           ),
         expectedRevision,
       }),
-      output: envelope({ blog: blogSummary, titleImage: media }, true),
+      output: envelope(
+        {
+          blog: blogSummary,
+          titleImage: media,
+          titleImageAlt: z.string(),
+          logoApplied: z
+            .boolean()
+            .describe(
+              "True when the server composited the official logo onto the banner",
+            ),
+        },
+        true,
+      ),
       annotations: WRITE,
     },
     (args, ctx) => blogTools.attachImage(args, ctx),

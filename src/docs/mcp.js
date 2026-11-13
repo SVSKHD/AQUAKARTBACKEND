@@ -34,7 +34,7 @@ export const applyMcpDocs = (doc) => {
       tags: [TAG],
       summary: "MCP endpoint (Streamable HTTP, stateless)",
       description:
-        "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_get_brand_assets (any signed-in connection: official logo files and usage rules); aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image (media:upload); aquakart_publish_blog (blogs:publish); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup); aquakart_list_products, aquakart_get_product (products:read); aquakart_create_product (products:write); aquakart_list_coupons, aquakart_get_coupon (coupons:read); aquakart_create_coupon (coupons:write); aquakart_list_categories, aquakart_get_category, aquakart_list_subcategories, aquakart_get_subcategory (categories:read); aquakart_create/update/delete_category and _subcategory (categories:write); aquakart_list_seo, aquakart_get_seo, aquakart_get_seo_readiness (seo:read); aquakart_create_seo, aquakart_update_seo (seo:write). Tool errors return result.isError with the JSON error ({ ok: false, error: { code, message } }) in content[0].text; successful results also carry structuredContent. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
+        "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_get_brand_assets (any signed-in connection: official logo files and usage rules); aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image, aquakart_create_image_upload, aquakart_get_image_upload (media:upload); aquakart_publish_blog (blogs:publish); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup); aquakart_list_products, aquakart_get_product (products:read); aquakart_create_product (products:write); aquakart_list_coupons, aquakart_get_coupon (coupons:read); aquakart_create_coupon (coupons:write); aquakart_list_categories, aquakart_get_category, aquakart_list_subcategories, aquakart_get_subcategory (categories:read); aquakart_create/update/delete_category and _subcategory (categories:write); aquakart_list_seo, aquakart_get_seo, aquakart_get_seo_readiness (seo:read); aquakart_create_seo, aquakart_update_seo (seo:write). Tool errors return result.isError with the JSON error ({ ok: false, error: { code, message } }) in content[0].text; successful results also carry structuredContent. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
       security: [{ bearerAuth: [] }],
       parameters: [
         { name: "body", in: "body", required: true, schema: jsonRpc },
@@ -59,6 +59,46 @@ export const applyMcpDocs = (doc) => {
       tags: [TAG],
       summary: "Not supported (stateless server)",
       responses: { 405: { description: "Use POST" } },
+    },
+  };
+  doc.paths["/v1/mcp/uploads/{token}"] = {
+    put: {
+      tags: [TAG],
+      summary: "One-time image upload URL",
+      description:
+        "Created by the aquakart_create_image_upload tool. PUT the raw JPEG/PNG/WebP bytes as the request body (e.g. `curl --fail -sS -T banner.png <uploadUrl>`); the token in the path is the credential, so no Authorization header. Type is checked from the bytes; max MCP_IMAGE_MAX_BYTES (default 5 MB). One successful upload per URL; a rejected file leaves it usable until it expires (MCP_UPLOAD_URL_TTL_SECONDS, default 600). Returns the stored media (mediaId) for aquakart_attach_image. 30 requests / 15 min per IP. The token is never logged.",
+      consumes: [
+        "application/octet-stream",
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+      ],
+      parameters: [
+        { name: "token", in: "path", type: "string", required: true },
+        {
+          name: "body",
+          in: "body",
+          required: true,
+          schema: { type: "string", format: "binary" },
+        },
+      ],
+      responses: {
+        201: {
+          description:
+            "Stored: { ok, uploadId, media: { mediaId, publicId, secure_url, ... }, deduplicated }",
+        },
+        400: { description: "Empty body (VALIDATION_FAILED)" },
+        404: { description: "Unknown or expired URL (UPLOAD_NOT_FOUND)" },
+        409: {
+          description: "Already used (UPLOAD_ALREADY_USED) or in progress",
+        },
+        413: { description: "Image too large (IMAGE_TOO_LARGE)" },
+        415: { description: "Not a JPEG/PNG/WebP (UNSUPPORTED_IMAGE_TYPE)" },
+        429: { description: "Rate limited" },
+        500: {
+          description: "Storing failed (UPLOAD_FAILED); retry the same URL",
+        },
+      },
     },
   };
   doc.paths["/v1/mcp/oauth/consent"] = {
@@ -115,6 +155,12 @@ export const applyMcpDocs = (doc) => {
     "/.well-known/oauth-protected-resource/v1/mcp",
     "Protected resource metadata (RFC 9728)",
     "resource, authorization_servers, scopes_supported.",
+    "get",
+  );
+  oauth(
+    "/.well-known/oauth-protected-resource",
+    "Protected resource metadata, path-less form",
+    "Same document as /.well-known/oauth-protected-resource/v1/mcp, for clients that probe the root first.",
     "get",
   );
   oauth(

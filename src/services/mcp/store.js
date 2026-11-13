@@ -9,6 +9,7 @@ import AquaSeo from "../../models/seo.js";
 import { buildSeoReadiness } from "../seoReadiness.js";
 import McpOperation from "../../models/mcp/mcpOperation.js";
 import McpMedia from "../../models/mcp/mcpMedia.js";
+import McpUpload from "../../models/mcp/mcpUpload.js";
 import InstagramAsset from "../../models/mcp/instagramAsset.js";
 import { PUBLISHED_FILTER, validateTaxonomy } from "../../controllers/blog.js";
 import { INSTAGRAM_TEMP_FOLDER } from "./config.js";
@@ -394,6 +395,20 @@ export const mongoStore = {
   createMedia: async (doc) => (await McpMedia.create(doc)).toObject(),
   updateMedia: (id, set) =>
     McpMedia.findByIdAndUpdate(id, { $set: set }, after).lean(),
+
+  // One-time upload URLs (aquakart_create_image_upload)
+  createUpload: async (doc) => (await McpUpload.create(doc)).toObject(),
+  findUploadById: (id) => (valid(id) ? McpUpload.findById(id).lean() : null),
+  findUploadByTokenHash: (tokenHash) => McpUpload.findOne({ tokenHash }).lean(),
+  // pending -> processing, atomically, only before expiry (single use).
+  claimUpload: (tokenHash, now) =>
+    McpUpload.findOneAndUpdate(
+      { tokenHash, status: "pending", expiresAt: { $gt: now } },
+      { $set: { status: "processing" } },
+      after,
+    ).lean(),
+  finishUpload: (id, set) =>
+    McpUpload.findByIdAndUpdate(id, { $set: set }, after).lean(),
 
   // Idempotency ledger
   createOperation: async (doc) => (await McpOperation.create(doc)).toObject(),

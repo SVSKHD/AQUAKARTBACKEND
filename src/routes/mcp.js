@@ -118,6 +118,21 @@ export const createMcpRouters = ({
       resourceName: "Aquakart MCP",
     }),
   );
+  // RFC 9728 path-less form. Clients should follow the resource_metadata URL
+  // in the 401 challenge (path-suffixed, served above), but some probe the
+  // root first; serve the same document there.
+  const resourceMetadata = {
+    resource: resourceUrl.href,
+    authorization_servers: [new URL(config.issuerUrl).href],
+    scopes_supported: MCP_SCOPE_LIST,
+    resource_name: "Aquakart MCP",
+  };
+  oauthRouter.get("/.well-known/oauth-protected-resource", (_req, res) =>
+    res
+      .set("Access-Control-Allow-Origin", "*")
+      .set("Cache-Control", "public, max-age=3600")
+      .json(resourceMetadata),
+  );
 
   router.use((req, res, next) => {
     const incoming = req.get("x-correlation-id");
@@ -162,6 +177,83 @@ export const createMcpRouters = ({
   });
   // Large enough for an 8 MB image sent as base64.
   const body = express.json({ limit: "12mb" });
+
+  // One-time image upload URLs from aquakart_create_image_upload. The token
+  // in the path is the credential (one successful upload, expires), so no
+  // bearer header: shells and curl never see the OAuth access token. The
+  // token is never logged.
+  const UPLOAD_STATUS = {
+    UPLOAD_NOT_FOUND: 404,
+    UPLOAD_ALREADY_USED: 409,
+    UPLOAD_IN_PROGRESS: 409,
+    VALIDATION_FAILED: 400,
+    IMAGE_TOO_LARGE: 413,
+    UNSUPPORTED_IMAGE_TYPE: 415,
+  };
+  const uploadLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+  });
+  router.put(
+    "/uploads/:token",
+    uploadLimit,
+    express.raw({ type: () => true, limit: config.imageMaxBytes + 1 }),
+    async (req, res) => {
+      const bytes = Buffer.isBuffer(req.body) ? req.body.length : 0;
+      try {
+        const result = await blogTools.completeImageUpload(
+          req.params.token,
+          req.body,
+          { correlationId: req.correlationId },
+        );
+        console.log(
+          JSON.stringify({
+            event: "mcp.upload.completed",
+            uploadId: result.uploadId,
+            mediaId: result.media.mediaId,
+            bytes,
+            deduplicated: result.deduplicated,
+            correlationId: req.correlationId,
+          }),
+        );
+        return res.status(201).json({
+          ok: true,
+          uploadId: result.uploadId,
+          media: result.media,
+          deduplicated: result.deduplicated,
+          next: "Attach media.mediaId with aquakart_attach_image (or check aquakart_get_image_upload).",
+          correlationId: req.correlationId,
+        });
+      } catch (error) {
+        const status = UPLOAD_STATUS[error?.code] || 500;
+        console.log(
+          JSON.stringify({
+            event: "mcp.upload.failed",
+            status,
+            code: error?.code || "UPLOAD_FAILED",
+            bytes,
+            contentType: String(req.get("content-type") || "").slice(0, 60),
+            correlationId: req.correlationId,
+          }),
+        );
+        if (status === 500)
+          console.error("MCP upload failed:", error?.message || error);
+        return res.status(status).json({
+          ok: false,
+          error: {
+            code: status === 500 ? "UPLOAD_FAILED" : error.code,
+            message:
+              status === 500
+                ? "Storing the image failed; retry the same URL before it expires"
+                : error.message,
+          },
+          correlationId: req.correlationId,
+        });
+      }
+    },
+  );
 
   router.post("/", bearer, perGrantLimit, body, async (req, res) => {
     const auth = {

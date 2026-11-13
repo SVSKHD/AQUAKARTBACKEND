@@ -18,6 +18,126 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-13
+
+### MCP for Codex: one-time image upload URLs, banner alt text, adminUrl, root resource metadata
+
+- Request/problem: Codex loaded the Aquakart plugin's content skill, but no
+  Aquakart MCP tools appeared.
+  - **Production checked (read-only, no token, no registration).**
+    - `POST /v1/mcp` → 401 with `WWW-Authenticate` `resource_metadata`.
+    - `/.well-known/oauth-protected-resource/v1/mcp` and
+      `/.well-known/oauth-authorization-server` are valid: S256 PKCE, `none`
+      auth for public clients, refresh tokens and DCR.
+    - The plugin's four scopes are all supported.
+    - Only the root `/.well-known/oauth-protected-resource` returned 404.
+  - **Codex side (local files only, secrets masked).** The plugin's
+    `mcp.json` is valid per OpenAI's plugin docs (`streamable-http`, OAuth
+    `client.mode: "dcr"`).
+  - **Codex logs.** `~/.codex/logs_2.sqlite` showed no MCP connection,
+    discovery, registration or token attempt for Aquakart, and
+    `config.toml` has no enabled entry for the plugin.
+  - **Root cause (host side).** The plugin's bundled MCP server was never
+    connected or authenticated in Codex, so no tools were listed.
+  - **Not confirmed.** The production server log, which would show
+    registration attempts, wasn't available.
+  - **Backend gaps against the request.**
+    - Uploading a local image needed base64 in tool arguments (or a
+      ChatGPT file param).
+    - There was no banner alt text.
+    - There was no admin link for drafts.
+- Changes/result:
+  - **New tools.**
+    - `aquakart_create_image_upload` (scope `media:upload`) returns a
+      one-time `uploadUrl`. The 32-byte base64url token is the credential;
+      only its SHA-256 is stored in the new `AquaMcpUpload` model.
+    - It is tied to the staff member and client, expires after
+      `MCP_UPLOAD_URL_TTL_SECONDS` (default 600), and accepts one
+      successful upload.
+    - `aquakart_get_image_upload` returns the status and `mediaId`, visible
+      only to the creating staff member. It reports expired URLs and the
+      last error.
+  - **New route.** `PUT /v1/mcp/uploads/:token` takes raw bytes with no
+    bearer, so the shell never sees the OAuth token.
+    - Type is checked from the bytes (JPG/PNG/WebP), with the existing 5 MB
+      cap, a 30 requests / 15 min per-IP limit, and the existing de-duplicated
+      Cloudinary store.
+    - A rejected file or a storage failure keeps the URL usable.
+    - Statuses: 201, 400, 404, 409, 413, 415 and 500.
+    - Logs `mcp.upload.completed` / `mcp.upload.failed` without the token.
+  - **Shared upload code.** `aquakart_upload_image` and the upload URL now
+    share one `saveImage` path. `AquaMcpMedia.source` gains `upload-url`.
+  - **Banner alt text.** Optional `titleImageAlt` on the blog model (max
+    200 characters, no migration). Accepted on create/update, set by
+    `altText` on `aquakart_attach_image`, and returned by `aquakart_get_blog`.
+    `aquakart_attach_image` also returns `titleImageAlt` and `logoApplied`.
+  - **adminUrl.** Every blog result carries `adminUrl` from the optional
+    `MCP_ADMIN_BLOG_URL` template (must be https and contain `{id}`).
+    Otherwise it is `null`, never guessed; the user chose to leave it unset.
+  - **Root resource metadata.** `/.well-known/oauth-protected-resource`
+    now serves the same document as the path-suffixed one.
+  - **Unchanged.** No change to OAuth issuance, token validation,
+    resource/audience checks, scopes or production settings. Creating stays
+    draft-only, and publishing remains `aquakart_publish_blog`.
+  - **Docs.**
+    - `docs/MCP_BLOG_PUBLISHING.md` adds the Codex connection steps, the
+      corrected plugin `mcp.json`, the banner workflow and the branding rule
+      (use `applyBrandLogo`; the server composites the stored logo file and
+      doesn't inspect images).
+    - Swagger documents the upload route and the root metadata.
+    - `.env.example` adds `MCP_UPLOAD_URL_TTL_SECONDS` and
+      `MCP_ADMIN_BLOG_URL`.
+- Files: `src/routes/mcp.js`, `src/services/mcp/blogTools.js`,
+  `src/services/mcp/server.js`, `src/services/mcp/store.js`,
+  `src/services/mcp/config.js`, `src/models/mcp/mcpUpload.js` (new),
+  `src/models/mcp/mcpMedia.js`, `src/models/blog.js`,
+  `src/validators/mcp/blog.js`, `src/docs/mcp.js`, `swagger-output.json`,
+  `.env.example`, `docs/MCP_BLOG_PUBLISHING.md`, `test/mcpServer.test.js`,
+  `test/mcpBlogTools.test.js`, `test/support/mcpFakes.js`,
+  `docs/CHANGELOG.md`.
+- Validation:
+  - `node --check` passed.
+  - New in-process end-to-end test in `test/mcpServer.test.js` over real
+    HTTP and the SDK transport, with in-memory stores and a fake Cloudinary:
+    - unauthenticated initialize → 401 challenge
+    - protected-resource metadata (path and root) → AS metadata
+    - DCR for a public loopback client
+    - `/authorize` with staff consent → PKCE token exchange → refresh
+    - initialize (protocol 2025-06-18) → tools/list
+    - upload URL: a non-image is refused with 415, a PNG is stored with 201,
+      reuse gets 409, an unknown token 404
+    - status → `mediaId`
+    - draft create, and a retry with the same `idempotencyKey` is replayed
+      with no duplicate
+    - attach with `applyBrandLogo` and alt text
+    - `aquakart_get_blog` read-back of slug, summary, meta description,
+      keywords, alt text and banner id
+    - nothing published
+  - New unit tests in `test/mcpBlogTools.test.js`: single use, expiry,
+    owner-only status, type/size/empty checks, de-duplication, the
+    `adminUrl` template (https only) and alt-text round-trip.
+  - MCP suites pass (`mcpServer` 4/4, `mcpBlogTools` 15/15, the rest
+    unchanged).
+  - Full `node --test`: 302/303. The failure is the pre-existing
+    `test/invoiceViews.test.js`.
+  - `npm run swagger` succeeded; `test/routeGroups.test.js` passed.
+  - Not run:
+    - no live Codex sign-in
+    - no request to the production MCP beyond the read-only probes above
+    - no deploy
+- Limitations/follow-up:
+  - **Deploy needed.** The upload tools and alt text need a deploy before
+    Codex can use them.
+  - **Connect in Codex.** The user still has to connect/authenticate
+    Aquakart in Codex (steps in `docs/MCP_BLOG_PUBLISHING.md`, "Codex").
+  - **Storefront.** It must render `titleImageAlt` for the alt text to
+    reach the page.
+  - **Proxy logs.** A reverse proxy that logs full URLs would record live
+    upload tokens (short-lived, single use).
+  - **Plugin files.** The cached plugin copy under `~/.codex` was not
+    edited (remote sync would overwrite it). Update the plugin source with
+    the documented `mcp.json` and skill text.
+
 ## 2026-11-12
 
 ### Legacy order routes: login, ownership, server-side prices, PhonePe amount check

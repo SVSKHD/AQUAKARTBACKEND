@@ -46,6 +46,8 @@ answers 503 `MCP_DISABLED`. With `MCP_PUBLIC_BASE_URL=https://api.aquakart.co.in
 | Client registration (DCR)      | `POST /register`                                                           |
 | Authorization (PKCE S256)      | `GET /authorize`, which shows the staff sign-in/consent page               |
 | Consent form submit            | `POST /v1/mcp/oauth/consent`                                               |
+| One-time image upload URL      | `PUT /v1/mcp/uploads/<token>` (from `aquakart_create_image_upload`)        |
+| Resource metadata (root form)  | `/.well-known/oauth-protected-resource` (same document as above)           |
 | Token, refresh and revocation  | `POST /token`, `POST /revoke`                                              |
 
 The OAuth endpoints are at the **API origin root**, not under `/v1`, because
@@ -140,10 +142,99 @@ the MCP SDK serves them relative to the issuer. The reverse proxy must forward
   connector → the MCP URL. Sign in on the consent page.
 - **Claude Code:** `claude mcp add --transport http aquakart https://api.aquakart.co.in/v1/mcp`,
   then run `/mcp` to authenticate. It uses a loopback redirect.
+- **Codex (desktop app or CLI):** see "Codex" below.
 - **Local testing:** MCP Inspector (`npx @modelcontextprotocol/inspector`)
   against `http://localhost:5300/v1/mcp` with
   `MCP_PUBLIC_BASE_URL=http://localhost:5300`. This writes to whatever
   database `.env` points at, so use a non-production DB.
+
+### Codex
+
+Codex discovers everything from the 401 challenge (protected-resource
+metadata → authorization-server metadata), registers itself with DCR as a
+public client with a loopback redirect (`http://127.0.0.1:<port>/…`, allowed
+by default via `MCP_OAUTH_ALLOW_LOOPBACK_REDIRECTS`), signs in with PKCE and
+refreshes tokens. Codex tries CIMD first only when a server advertises it;
+this server doesn't, so Codex uses DCR.
+
+A plugin that bundles this server does not connect by itself. Until the
+server is authenticated in Codex, no Aquakart tools appear even though the
+plugin's skill loads (seen 2026-11-13: Codex logged no connection, discovery
+or registration attempt at all).
+
+1. **Desktop app:** Settings → Plugins → Aquakart → enable it, then
+   **Connect / Authenticate** the Aquakart MCP server and sign in on the
+   Aquakart consent page with a CRM staff account (needs `blogs.manage`;
+   tick blogs:read, blogs:write, media:upload, and blogs:publish only if
+   publishing should be allowed).
+2. **CLI, or if the plugin route doesn't connect:** add a direct server to
+   `~/.codex/config.toml` and log in:
+
+   ```toml
+   [mcp_servers.aquakart]
+   url = "https://api.aquakart.co.in/v1/mcp"
+   scopes = ["blogs:read", "blogs:write", "media:upload", "blogs:publish"]
+   ```
+
+   ```bash
+   codex mcp login aquakart
+   codex mcp list   # aquakart should show as connected
+   ```
+
+3. Start a new thread and check that `aquakart_*` tools are listed (`/mcp`).
+
+Plugin `mcp.json` (portable layout; no secrets; DCR; discovery supplies the
+endpoints):
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "aquakart": {
+      "type": "streamable-http",
+      "url": "https://api.aquakart.co.in/v1/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "dcr" },
+            "baseScopes": ["blogs:read", "blogs:write", "media:upload"],
+            "defaultScopes": [
+              "blogs:read",
+              "blogs:write",
+              "media:upload",
+              "blogs:publish"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Banner workflow for the plugin's content skill:
+
+1. Generate the banner as a local PNG/JPEG/WebP (max 5 MB).
+2. `aquakart_create_image_upload` → run the returned
+   `curl --fail -sS -T banner.png "<uploadUrl>"` → `aquakart_get_image_upload`
+   for the `mediaId`. Never pass large base64 and never invent image URLs.
+3. `aquakart_create_blog` (always a draft) with title, slug, `summary`
+   (excerpt), `shortDescription` (meta description), keywords/keyphrases and
+   `titleImageAlt`, with a fresh `idempotencyKey` that is reused on retries.
+4. `aquakart_attach_image` with the `mediaId`, `applyBrandLogo: true` and
+   `altText`.
+5. `aquakart_get_blog` to confirm the saved fields, then report `blogId`,
+   status, banner and `adminUrl`/`publicUrl` from the results.
+6. Publish only on an explicit request (`aquakart_publish_blog`).
+
+**Branding rule for the skill:** every banner must carry the authentic
+Aquakart logo, unaltered (original proportions and colours). Do not draw or
+recreate the logo with image generation. Attach banners with
+`applyBrandLogo: true` so the server composites the stored official logo file
+(`logoVariant: "white"` on dark images); `logoApplied: true` in the result
+confirms the overlay was applied. The server does not inspect an image for a
+logo, so only the overlay counts as verified branding.
 
 ## Tools
 
@@ -370,6 +461,16 @@ input methods per call:
 host <host>`), then set `MCP_TRUSTED_FILE_HOSTS`.
 2. **`imageBase64`.** Works with every MCP client, but large images are
    impractical when a model has to emit the bytes as text.
+3. **One-time upload URL (preferred for files on disk, e.g. Codex).**
+   `aquakart_create_image_upload` returns `uploadUrl`; the client PUTs the raw
+   bytes (`curl -T banner.png <uploadUrl>`). The 43-character token in the
+   path is the credential (only its SHA-256 is stored, `AquaMcpUpload`), so
+   the OAuth token never reaches a shell. One successful upload per URL; it
+   expires after `MCP_UPLOAD_URL_TTL_SECONDS` (default 10 minutes); a rejected
+   file keeps the URL usable. `aquakart_get_image_upload` returns the status
+   and the `mediaId`. Logged as `mcp.upload.completed` / `mcp.upload.failed`
+   without the token. A reverse proxy that writes access logs with full URLs
+   would record live tokens; they expire quickly and work once.
 
 Format is detected from the file's bytes (JPEG, PNG or WebP); declared types
 are ignored. Limits:

@@ -101,7 +101,14 @@ const cleanList = (items) => {
   });
 };
 
-const TEXT_FIELDS = ["title", "shortDescription", "summary", "notes", "brand"];
+const TEXT_FIELDS = [
+  "title",
+  "shortDescription",
+  "summary",
+  "notes",
+  "brand",
+  "titleImageAlt",
+];
 const JOINED_LIST_FIELDS = ["keywords", "keyphrases"];
 const LIST_FIELDS = ["keyHighlights", "tags"];
 const REFERENCE_FIELDS = ["category", "subCategory", "product"];

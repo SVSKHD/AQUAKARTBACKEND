@@ -505,3 +505,107 @@ test("lists and reads drafts and published blogs", async () => {
   assert.equal(read.blog.title, "Staff Blog About RO Filters");
   await rejects(tools.getBlog({ slug: "missing" }), "BLOG_NOT_FOUND");
 });
+
+test("upload URLs: one success per URL, expiry, owner-only status, and type/size checks", async () => {
+  const { clock, store, tools, audits, config } = setup();
+  const { upload } = await tools.createImageUpload({}, WRITE);
+  const token = upload.uploadUrl.split("/uploads/")[1];
+  assert.match(token, /^[A-Za-z0-9_-]{43}$/);
+  assert.ok(
+    store.uploads.every((u) => !JSON.stringify(u).includes(token)),
+    "only the token hash is stored",
+  );
+  assert.equal(upload.maxBytes, config.imageMaxBytes);
+
+  // Wrong type and empty body are rejected; the URL stays usable.
+  await assert.rejects(
+    tools.completeImageUpload(token, GIF),
+    (e) => e.code === "UNSUPPORTED_IMAGE_TYPE",
+  );
+  await assert.rejects(
+    tools.completeImageUpload(token, Buffer.alloc(0)),
+    (e) => e.code === "VALIDATION_FAILED",
+  );
+  await assert.rejects(
+    tools.completeImageUpload(token, Buffer.alloc(config.imageMaxBytes + 1)),
+    (e) => e.code === "IMAGE_TOO_LARGE",
+  );
+  const done = await tools.completeImageUpload(token, PNG, {
+    correlationId: "c-1",
+  });
+  assert.equal(done.deduplicated, false);
+  assert.equal(store.media[0].source, "upload-url");
+  assert.equal(audits.at(-1).action, "mcp.media.upload");
+  await assert.rejects(
+    tools.completeImageUpload(token, PNG),
+    (e) => e.code === "UPLOAD_ALREADY_USED",
+  );
+
+  // Status is only visible to the staff member who created the URL.
+  const mine = await tools.getImageUpload({ uploadId: upload.uploadId }, WRITE);
+  assert.equal(mine.upload.status, "uploaded");
+  assert.equal(mine.media.mediaId, done.media.mediaId);
+  await assert.rejects(
+    tools.getImageUpload(
+      { uploadId: upload.uploadId },
+      ctxFor([MCP_SCOPES.upload], { adminUserId: objectId() }),
+    ),
+    (e) => e.code === "UPLOAD_NOT_FOUND",
+  );
+
+  // Same bytes again through a new URL are de-duplicated.
+  const second = await tools.createImageUpload({}, WRITE);
+  const again = await tools.completeImageUpload(
+    second.upload.uploadUrl.split("/uploads/")[1],
+    PNG,
+  );
+  assert.equal(again.deduplicated, true);
+  assert.equal(again.media.mediaId, done.media.mediaId);
+
+  // Expired URLs are refused and reported as expired.
+  const third = await tools.createImageUpload({}, WRITE);
+  clock.advance((config.uploadUrlTtlSeconds + 1) * 1000);
+  await assert.rejects(
+    tools.completeImageUpload(
+      third.upload.uploadUrl.split("/uploads/")[1],
+      PNG,
+    ),
+    (e) => e.code === "UPLOAD_NOT_FOUND",
+  );
+  assert.equal(
+    (await tools.getImageUpload({ uploadId: third.upload.uploadId }, WRITE))
+      .upload.status,
+    "expired",
+  );
+  await assert.rejects(
+    tools.completeImageUpload("not-a-token", PNG),
+    (e) => e.code === "UPLOAD_NOT_FOUND",
+  );
+});
+
+test("adminUrl comes only from a configured https template; alt text round-trips", async () => {
+  const unset = setup();
+  const plain = await unset.tools.createBlog(draftArgs(), WRITE);
+  assert.equal(plain.blog.adminUrl, null);
+
+  const bad = setup({ MCP_ADMIN_BLOG_URL: "http://admin.example/blogs/{id}" });
+  assert.equal(
+    bad.config.adminBlogUrl,
+    null,
+    "non-https templates are ignored",
+  );
+
+  const { tools } = setup({
+    MCP_ADMIN_BLOG_URL: "https://admin.aquakart.co.in/blogs/{id}",
+  });
+  const created = await tools.createBlog(
+    draftArgs({ titleImageAlt: "  Softener beside a geyser  " }),
+    WRITE,
+  );
+  assert.equal(
+    created.blog.adminUrl,
+    `https://admin.aquakart.co.in/blogs/${created.blog.blogId}`,
+  );
+  const read = await tools.getBlog({ blogId: created.blog.blogId }, WRITE);
+  assert.equal(read.blog.titleImageAlt, "Softener beside a geyser");
+});

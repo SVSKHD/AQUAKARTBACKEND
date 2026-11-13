@@ -97,6 +97,7 @@ const duplicateKey = () =>
 export const createMemoryStore = (clock) => {
   const blogs = [];
   const media = [];
+  const uploads = [];
   const operations = [];
   const assets = [];
   const categories = new Map();
@@ -110,6 +111,7 @@ export const createMemoryStore = (clock) => {
   const store = {
     blogs,
     media,
+    uploads,
     operations,
     assets,
     categories,
@@ -195,6 +197,33 @@ export const createMemoryStore = (clock) => {
       const saved = { _id: objectId(), ...clone(doc) };
       media.push(saved);
       return clone(saved);
+    },
+    // One-time upload URLs
+    createUpload: async (doc) => {
+      const saved = { _id: objectId(), ...clone(doc) };
+      uploads.push(saved);
+      return clone(saved);
+    },
+    findUploadById: async (id) =>
+      clone(uploads.find((u) => String(u._id) === String(id))) || null,
+    findUploadByTokenHash: async (tokenHash) =>
+      clone(uploads.find((u) => u.tokenHash === tokenHash)) || null,
+    claimUpload: async (tokenHash, now) => {
+      const doc = uploads.find(
+        (u) =>
+          u.tokenHash === tokenHash &&
+          u.status === "pending" &&
+          new Date(u.expiresAt) > now,
+      );
+      if (!doc) return null;
+      doc.status = "processing";
+      return clone(doc);
+    },
+    finishUpload: async (id, set) => {
+      const doc = uploads.find((u) => String(u._id) === String(id));
+      if (!doc) return null;
+      Object.assign(doc, clone(set));
+      return clone(doc);
     },
     updateMedia: async (id, set) => {
       const doc = media.find((m) => String(m._id) === String(id));

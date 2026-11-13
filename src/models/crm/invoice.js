@@ -77,6 +77,14 @@ const AquaInvoiceSchema = new mongoose.Schema(
       enum: ["AquaOrder", "AquaCRMOrder", "manual"],
       default: "manual",
     },
+    // Set when the invoice was created from a sold quotation.
+    sourceQuotationId: {
+      type: ObjectId,
+      ref: "AquaQuotation",
+      default: null,
+      index: true,
+    },
+    sourceQuotationNo: { type: String },
     productId: { type: ObjectId, ref: "AquaProduct" },
     paymentType: { type: String },
     migrated: { type: Boolean, default: false, index: true },

@@ -170,6 +170,18 @@ export const loadMcpConfig = (env = process.env) => {
     imageMaxBytes: Math.trunc(
       positive(env.MCP_IMAGE_MAX_BYTES, 5 * 1024 * 1024, 15 * 1024 * 1024),
     ),
+    // One-time upload URLs (aquakart_create_image_upload) expire after this.
+    uploadUrlTtlSeconds: Math.trunc(
+      positive(env.MCP_UPLOAD_URL_TTL_SECONDS, 600, 3600),
+    ),
+    // Optional CRM link for a blog, e.g. https://admin.aquakart.co.in/blogs/{id}.
+    // Unset (or not https / no {id}) → adminUrl is null; never guessed.
+    adminBlogUrl: (() => {
+      const template = String(env.MCP_ADMIN_BLOG_URL || "").trim();
+      return /^https:\/\/[^\s]+$/.test(template) && template.includes("{id}")
+        ? template
+        : null;
+    })(),
     publishMinWords: Math.trunc(
       positive(env.MCP_PUBLISH_MIN_WORDS, 300, 20000),
     ),

@@ -347,9 +347,11 @@ test("ChatGPT-style OAuth + MCP flow: discovery, consent, tools and scope enforc
     "aquakart_attach_image",
     "aquakart_cleanup_instagram_asset",
     "aquakart_create_blog",
+    "aquakart_create_image_upload",
     "aquakart_get_blog",
     "aquakart_get_blog_status",
     "aquakart_get_brand_assets",
+    "aquakart_get_image_upload",
     "aquakart_get_instagram_status",
     "aquakart_list_blogs",
     "aquakart_list_instagram_posts",
@@ -607,4 +609,246 @@ test("the MCP endpoint answers 503 when MCP_PUBLIC_BASE_URL is not set", async (
     (await fetch(`${base}/.well-known/oauth-authorization-server`)).status,
     404,
   );
+});
+
+// Codex-style client: follows the 401 challenge to discovery, registers a
+// public client with a loopback redirect (DCR), signs in with PKCE, then
+// uploads a local PNG through a one-time upload URL (no base64 in tool
+// arguments), saves a draft idempotently, attaches the banner with the
+// official logo and alt text, and reads the draft back. Nothing is published.
+test("Codex-style flow: challenge → discovery → DCR → PKCE → upload URL → draft → read-back", async (t) => {
+  const env = await startServer();
+  t.after(env.close);
+  const LOOPBACK = "http://127.0.0.1:53682/callback";
+  const SCOPES = "blogs:read blogs:write media:upload blogs:publish";
+
+  // 1. Unauthenticated initialize → 401 with resource_metadata.
+  const challenge = await rpc(env, null, "initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "codex", version: "test" },
+  });
+  assert.equal(challenge.status, 401);
+  const metadataUrl = /resource_metadata="([^"]+)"/.exec(
+    challenge.headers.get("www-authenticate"),
+  )[1];
+
+  // 2. Discovery: protected resource (path-suffixed and root) → AS metadata.
+  const resource = await (await fetch(metadataUrl)).json();
+  assert.equal(resource.resource, env.config.resourceUrl);
+  for (const scope of SCOPES.split(" "))
+    assert.ok(resource.scopes_supported.includes(scope), scope);
+  const rootResource = await fetch(
+    `${env.base}/.well-known/oauth-protected-resource`,
+  );
+  assert.equal(rootResource.status, 200);
+  assert.deepEqual(await rootResource.json(), resource);
+  const issuer = resource.authorization_servers[0];
+  const as = await (
+    await fetch(new URL("/.well-known/oauth-authorization-server", issuer))
+  ).json();
+  assert.equal(as.issuer, issuer);
+  assert.ok(as.token_endpoint_auth_methods_supported.includes("none"));
+  assert.ok(as.grant_types_supported.includes("refresh_token"));
+  assert.deepEqual(as.code_challenge_methods_supported, ["S256"]);
+
+  // 3. Dynamic client registration: public client, loopback redirect.
+  const registered = await fetch(as.registration_endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "Codex",
+      redirect_uris: [LOOPBACK],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+  });
+  assert.equal(registered.status, 201);
+  const client = await registered.json();
+  assert.equal(client.token_endpoint_auth_method, "none");
+  assert.equal(client.client_secret, undefined);
+
+  // 4. Authorization code + PKCE with staff sign-in and consent.
+  const { verifier, challenge: codeChallenge } = pkce();
+  const page = await fetch(
+    `${as.authorization_endpoint}?${new URLSearchParams({
+      response_type: "code",
+      client_id: client.client_id,
+      redirect_uri: LOOPBACK,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+      scope: SCOPES,
+      state: "codex-state",
+      resource: resource.resource,
+    })}`,
+  );
+  assert.equal(page.status, 200);
+  const requestId = /name="request_id" value="([^"]+)"/.exec(
+    await page.text(),
+  )[1];
+  const consent = await fetch(`${env.base}/v1/mcp/oauth/consent`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: form({
+      request_id: requestId,
+      email: "editor@aquakart.co.in",
+      password: "correct-horse-battery",
+      scope: SCOPES.split(" "),
+      decision: "approve",
+    }),
+  });
+  assert.equal(consent.status, 302);
+  const callback = new URL(consent.headers.get("location"));
+  assert.equal(`${callback.origin}${callback.pathname}`, LOOPBACK);
+  assert.equal(callback.searchParams.get("state"), "codex-state");
+
+  // 5. Token exchange (PKCE, resource-bound), then refresh.
+  const tokens = await (
+    await exchange(env, {
+      grant_type: "authorization_code",
+      code: callback.searchParams.get("code"),
+      code_verifier: verifier,
+      client_id: client.client_id,
+      redirect_uri: LOOPBACK,
+      resource: resource.resource,
+    })
+  ).json();
+  assert.equal(tokens.scope, SCOPES);
+  assert.ok(tokens.refresh_token);
+  const refreshed = await (
+    await exchange(env, {
+      grant_type: "refresh_token",
+      refresh_token: tokens.refresh_token,
+      client_id: client.client_id,
+      resource: resource.resource,
+    })
+  ).json();
+  assert.match(refreshed.access_token, /^aqm_at_/);
+  const token = refreshed.access_token;
+
+  // 6. MCP initialize (protocol negotiation) and tool discovery.
+  const init = await rpc(env, token, "initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "codex", version: "test" },
+  });
+  assert.equal(init.status, 200);
+  assert.equal(init.body.result.protocolVersion, "2025-06-18");
+  const listed = await rpc(env, token, "tools/list");
+  const tools = Object.fromEntries(
+    listed.body.result.tools.map((tool) => [tool.name, tool]),
+  );
+  for (const name of [
+    "aquakart_list_blogs",
+    "aquakart_get_blog",
+    "aquakart_create_blog",
+    "aquakart_update_blog",
+    "aquakart_create_image_upload",
+    "aquakart_get_image_upload",
+    "aquakart_attach_image",
+    "aquakart_publish_blog",
+  ])
+    assert.ok(tools[name], name);
+  assert.match(tools.aquakart_create_image_upload.description, /curl/);
+  assert.ok(tools.aquakart_create_blog.inputSchema.properties.titleImageAlt);
+
+  // 7. Banner upload through a one-time URL (raw bytes, no bearer header).
+  const png = Buffer.concat([
+    Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
+    randomBytes(64),
+  ]);
+  const session = (await call(env, token, "aquakart_create_image_upload", {}))
+    .body.result.structuredContent;
+  assert.equal(session.ok, true);
+  const { uploadUrl, uploadId } = session.upload;
+  assert.ok(uploadUrl.startsWith(`${env.config.resourceUrl}/uploads/`));
+  const notImage = await fetch(uploadUrl, {
+    method: "PUT",
+    body: Buffer.from("definitely not an image file"),
+  });
+  assert.equal(notImage.status, 415);
+  const pendingAgain = (
+    await call(env, token, "aquakart_get_image_upload", { uploadId })
+  ).body.result.structuredContent;
+  assert.equal(pendingAgain.upload.status, "pending");
+  assert.equal(pendingAgain.upload.lastError.code, "UNSUPPORTED_IMAGE_TYPE");
+  const put = await fetch(uploadUrl, { method: "PUT", body: png });
+  assert.equal(put.status, 201);
+  const uploaded = await put.json();
+  assert.equal(uploaded.uploadId, uploadId);
+  const reuse = await fetch(uploadUrl, { method: "PUT", body: png });
+  assert.equal(reuse.status, 409);
+  const unknown = await fetch(
+    `${env.config.resourceUrl}/uploads/${"x".repeat(43)}`,
+    { method: "PUT", body: png },
+  );
+  assert.equal(unknown.status, 404);
+  const status = (
+    await call(env, token, "aquakart_get_image_upload", { uploadId })
+  ).body.result.structuredContent;
+  assert.equal(status.upload.status, "uploaded");
+  const { mediaId } = status.media;
+  assert.equal(mediaId, uploaded.media.mediaId);
+  assert.equal(env.store.media[0].source, "upload-url");
+
+  // 8. Draft with SEO fields; a retry with the same key is not duplicated.
+  const draftArgs = {
+    idempotencyKey: "codex-draft-0001",
+    title: "How Hard Water Affects Geysers in Hyderabad",
+    slug: "hard-water-geysers-hyderabad",
+    description:
+      "<h2>Why geysers scale</h2><p>Hard water leaves calcium deposits on heating elements.</p>",
+    summary: "Scale from hard water shortens geyser life; here is what helps.",
+    shortDescription:
+      "Hard water scale damages geysers in Hyderabad homes. Learn the signs and how a water softener prevents it.",
+    keywords: ["hard water", "geyser scale"],
+    titleImageAlt: "Aquakart water softener next to a bathroom geyser",
+  };
+  const created = (await call(env, token, "aquakart_create_blog", draftArgs))
+    .body.result.structuredContent;
+  assert.equal(created.blog.status, "draft");
+  assert.equal(created.blog.adminUrl, null);
+  const retry = (await call(env, token, "aquakart_create_blog", draftArgs)).body
+    .result.structuredContent;
+  assert.equal(retry.replayed, true);
+  assert.equal(retry.blog.blogId, created.blog.blogId);
+  assert.equal(env.store.blogs.length, 1);
+
+  // 9. Attach the banner with the official logo overlay and alt text.
+  const attached = (
+    await call(env, token, "aquakart_attach_image", {
+      idempotencyKey: "codex-attach-0001",
+      blogId: created.blog.blogId,
+      mediaId,
+      applyBrandLogo: true,
+      altText: "Aquakart softener protecting a geyser from scale",
+    })
+  ).body.result.structuredContent;
+  assert.equal(attached.ok, true);
+  assert.equal(attached.logoApplied, true);
+  assert.equal(
+    attached.titleImageAlt,
+    "Aquakart softener protecting a geyser from scale",
+  );
+
+  // 10. Read back the persisted draft.
+  const saved = (
+    await call(env, token, "aquakart_get_blog", {
+      blogId: created.blog.blogId,
+    })
+  ).body.result.structuredContent.blog;
+  assert.equal(saved.status, "draft");
+  assert.equal(saved.slug, "hard-water-geysers-hyderabad");
+  assert.equal(saved.summary, draftArgs.summary);
+  assert.equal(saved.shortDescription, draftArgs.shortDescription);
+  assert.equal(saved.keywords, "hard water, geyser scale");
+  assert.equal(
+    saved.titleImageAlt,
+    "Aquakart softener protecting a geyser from scale",
+  );
+  assert.equal(saved.titleImages[0].id, uploaded.media.publicId);
+  assert.equal(saved.publicUrl, null);
+  assert.equal(env.store.blogs[0].status, "draft", "nothing was published");
 });

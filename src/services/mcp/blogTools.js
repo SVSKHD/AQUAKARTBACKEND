@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { BlogToolError } from "./errors.js";
 import { MCP_SCOPES } from "./config.js";
 import { readImageInput } from "./imageInput.js";
@@ -6,8 +6,14 @@ import {
   countWords,
   normalizeBlogFields,
   normalizeTitleKey,
+  sniffImageType,
   stripText,
 } from "../../validators/mcp/blog.js";
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+// 32 random bytes, base64url: the capability in a one-time upload URL.
+const UPLOAD_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const UPLOAD_FORMATS = ["jpg", "png", "webp"];
 
 // Blog operations behind the Aquakart MCP tools. Works on the existing
 // AquaBlog documents (no parallel collection) through an injected `store`,
@@ -59,6 +65,12 @@ export const createBlogTools = ({
       blog.integration?.source === "mcp" ? "mcp" : blog.generatedBy || "staff",
     revision: revisionOf(blog),
     publicUrl: statusOf(blog) === "published" ? blogUrl(blog) : null,
+    adminUrl: config.adminBlogUrl
+      ? config.adminBlogUrl.replace(
+          "{id}",
+          encodeURIComponent(String(blog._id)),
+        )
+      : null,
   });
 
   const full = (blog) => ({
@@ -72,6 +84,7 @@ export const createBlogTools = ({
     tags: blog.tags || [],
     notes: blog.notes || "",
     brand: blog.brand || "",
+    titleImageAlt: blog.titleImageAlt || "",
     category: idOf(blog.category),
     subCategory: idOf(blog.subCategory),
     product: idOf(blog.product),
@@ -161,6 +174,72 @@ export const createBlogTools = ({
     );
 
   const hasScope = (ctx, scope) => ctx.auth.scopes.includes(scope);
+
+  // Stores verified image bytes in Cloudinary once (de-duplicated by
+  // SHA-256) and records them as McpMedia. `auth` is the staff member and
+  // OAuth client the image is attributed to.
+  const saveImage = async (input, auth, meta) => {
+    const existing = await store.findMediaBySha(input.sha256);
+    if (existing?.status === "active") {
+      return { media: mediaView(existing), deduplicated: true };
+    }
+    const uploaded = await uploader.uploadImage(input.buffer, {
+      publicId: `Blogs/mcp_${input.sha256.slice(0, 32)}`,
+    });
+    const record = {
+      sha256: input.sha256,
+      publicId: uploaded.public_id,
+      secureUrl: uploaded.secure_url,
+      format: uploaded.format || input.type.format,
+      bytes: uploaded.bytes || input.buffer.length,
+      width: uploaded.width,
+      height: uploaded.height,
+      source: input.source,
+      clientId: auth.clientId,
+      adminUser: auth.adminUserId,
+      status: "active",
+    };
+    const media = existing
+      ? await store.updateMedia(existing._id, { ...record, blog: null })
+      : await store.createMedia(record).catch(async (error) => {
+          if (error?.code === 11000) return store.findMediaBySha(input.sha256);
+          throw error;
+        });
+    await audit({
+      action: "mcp.media.upload",
+      adminUserId: auth.adminUserId,
+      resourceType: "media",
+      resourceId: media._id,
+      metadata: {
+        clientId: auth.clientId,
+        operationId: meta.operationId,
+        correlationId: meta.correlationId,
+        source: input.source,
+      },
+    });
+    return { media: mediaView(media), deduplicated: false };
+  };
+
+  // Raw bytes from an upload URL: size and real type (from the bytes).
+  const verifyUploadBytes = (buffer) => {
+    if (!Buffer.isBuffer(buffer) || !buffer.length)
+      throw new BlogToolError(
+        "VALIDATION_FAILED",
+        "The request body is empty; send the image bytes (e.g. curl -T banner.png <uploadUrl>)",
+      );
+    if (buffer.length > config.imageMaxBytes)
+      throw new BlogToolError(
+        "IMAGE_TOO_LARGE",
+        `Image exceeds ${config.imageMaxBytes} bytes`,
+      );
+    const type = sniffImageType(buffer);
+    if (!type || !UPLOAD_FORMATS.includes(type.format))
+      throw new BlogToolError(
+        "UNSUPPORTED_IMAGE_TYPE",
+        "Image must be JPG, PNG, WEBP (checked from the file contents)",
+      );
+    return { buffer, type, sha256: sha256(buffer), source: "upload-url" };
+  };
 
   return {
     // Official logo files and rules for MCP clients that generate images.
@@ -459,47 +538,12 @@ export const createBlogTools = ({
             trustedHosts: config.trustedFileHosts,
             download: uploader.download,
           });
-          const existing = await store.findMediaBySha(input.sha256);
-          if (existing?.status === "active") {
-            return {
-              result: { media: mediaView(existing), deduplicated: true },
-            };
-          }
-          const uploaded = await uploader.uploadImage(input.buffer, {
-            publicId: `Blogs/mcp_${input.sha256.slice(0, 32)}`,
-          });
-          const record = {
-            sha256: input.sha256,
-            publicId: uploaded.public_id,
-            secureUrl: uploaded.secure_url,
-            format: uploaded.format || input.type.format,
-            bytes: uploaded.bytes || input.buffer.length,
-            width: uploaded.width,
-            height: uploaded.height,
-            source: input.source,
-            clientId: ctx.auth.clientId,
-            adminUser: ctx.auth.adminUserId,
-            status: "active",
-          };
-          const media = existing
-            ? await store.updateMedia(existing._id, { ...record, blog: null })
-            : await store.createMedia(record).catch(async (error) => {
-                if (error?.code === 11000)
-                  return store.findMediaBySha(input.sha256);
-                throw error;
-              });
-          await audit({
-            action: "mcp.media.upload",
-            adminUserId: ctx.auth.adminUserId,
-            resourceType: "media",
-            resourceId: media._id,
-            metadata: {
-              clientId: ctx.auth.clientId,
+          return {
+            result: await saveImage(input, ctx.auth, {
               operationId: operation.operationId,
               correlationId: ctx.correlationId,
-            },
-          });
-          return { result: { media: mediaView(media), deduplicated: false } };
+            }),
+          };
         },
       );
       return {
@@ -507,6 +551,124 @@ export const createBlogTools = ({
         operationId: outcome.operationId,
         replayed: outcome.replayed,
       };
+    },
+
+    // aquakart_create_image_upload: a one-time URL the client PUTs the file
+    // to, so images never travel as base64 in tool arguments. Not
+    // idempotent on purpose: a retry just creates another short-lived URL.
+    async createImageUpload(_args, ctx) {
+      const token = randomBytes(32).toString("base64url");
+      const expiresAt = new Date(
+        now().getTime() + config.uploadUrlTtlSeconds * 1000,
+      );
+      const upload = await store.createUpload({
+        tokenHash: sha256(token),
+        clientId: ctx.auth.clientId,
+        adminUser: ctx.auth.adminUserId,
+        purpose: "blog-image",
+        status: "pending",
+        expiresAt,
+      });
+      const uploadUrl = `${config.resourceUrl}/uploads/${token}`;
+      return {
+        upload: {
+          uploadId: String(upload._id),
+          uploadUrl,
+          method: "PUT",
+          expiresAt: expiresAt.toISOString(),
+          maxBytes: config.imageMaxBytes,
+          acceptedTypes: ["image/png", "image/jpeg", "image/webp"],
+        },
+        instructions: `PUT the raw image bytes to uploadUrl before ${expiresAt.toISOString()}, e.g. curl --fail -sS -T banner.png "${uploadUrl}". No Authorization header is needed (the URL is the credential; do not share it). It accepts one successful upload. Then call aquakart_get_image_upload with this uploadId to get the mediaId for aquakart_attach_image.`,
+      };
+    },
+
+    // aquakart_get_image_upload: status of an upload URL and, once the file
+    // arrived, the stored media (mediaId) to attach.
+    async getImageUpload({ uploadId }, ctx) {
+      const upload = await store.findUploadById(uploadId);
+      if (!upload || String(upload.adminUser) !== String(ctx.auth.adminUserId))
+        throw new BlogToolError("UPLOAD_NOT_FOUND", "No upload with that id");
+      const expired =
+        upload.status === "pending" && new Date(upload.expiresAt) <= now();
+      const media = upload.media
+        ? await store.findMediaById(String(upload.media))
+        : null;
+      return {
+        upload: {
+          uploadId: String(upload._id),
+          status: expired ? "expired" : upload.status,
+          expiresAt: new Date(upload.expiresAt).toISOString(),
+          uploadedAt: upload.uploadedAt
+            ? new Date(upload.uploadedAt).toISOString()
+            : null,
+          lastError: upload.error?.code
+            ? { code: upload.error.code, message: upload.error.message }
+            : null,
+        },
+        media: media ? mediaView(media) : null,
+        deduplicated:
+          typeof upload.deduplicated === "boolean" ? upload.deduplicated : null,
+      };
+    },
+
+    // PUT /v1/mcp/uploads/:token (HTTP route, not a tool). Single use on
+    // success; a rejected file (wrong type, too big) or a storage failure
+    // leaves the URL usable until it expires.
+    async completeImageUpload(token, buffer, { correlationId } = {}) {
+      if (typeof token !== "string" || !UPLOAD_TOKEN.test(token))
+        throw new BlogToolError(
+          "UPLOAD_NOT_FOUND",
+          "Unknown or expired upload URL",
+        );
+      const tokenHash = sha256(token);
+      const claimed = await store.claimUpload(tokenHash, now());
+      if (!claimed) {
+        const existing = await store.findUploadByTokenHash(tokenHash);
+        if (existing?.status === "uploaded")
+          throw new BlogToolError(
+            "UPLOAD_ALREADY_USED",
+            "This upload URL was already used; create a new one",
+            {
+              uploadId: String(existing._id),
+              mediaId: existing.media ? String(existing.media) : null,
+            },
+          );
+        if (existing?.status === "processing")
+          throw new BlogToolError(
+            "UPLOAD_IN_PROGRESS",
+            "An upload to this URL is in progress",
+          );
+        throw new BlogToolError(
+          "UPLOAD_NOT_FOUND",
+          "Unknown or expired upload URL",
+        );
+      }
+      try {
+        const saved = await saveImage(
+          verifyUploadBytes(buffer),
+          { clientId: claimed.clientId, adminUserId: claimed.adminUser },
+          { operationId: `upload:${claimed._id}`, correlationId },
+        );
+        await store.finishUpload(claimed._id, {
+          status: "uploaded",
+          media: saved.media.mediaId,
+          deduplicated: saved.deduplicated,
+          uploadedAt: now(),
+          error: null,
+        });
+        return { uploadId: String(claimed._id), ...saved };
+      } catch (error) {
+        const known = error instanceof BlogToolError;
+        await store.finishUpload(claimed._id, {
+          status: "pending",
+          error: {
+            code: known ? error.code : "UPLOAD_FAILED",
+            message: known ? error.message : "Storing the image failed",
+          },
+        });
+        throw error;
+      }
     },
 
     async attachImage(args, ctx) {
@@ -553,10 +715,13 @@ export const createBlogTools = ({
               : media.secureUrl,
           };
           const previous = blog.titleImages?.[0];
+          const set = { titleImages: [titleImage] };
+          if (args.altText !== undefined)
+            set.titleImageAlt = String(args.altText).trim();
           const updated = await store.updateBlog(
             args.blogId,
             { updatedAt: blog.updatedAt ?? null },
-            { $set: { titleImages: [titleImage] } },
+            { $set: set },
           );
           if (!updated)
             throw new BlogToolError(
@@ -570,7 +735,12 @@ export const createBlogTools = ({
             mediaId: String(media._id),
           });
           return {
-            result: { blog: summary(updated), titleImage },
+            result: {
+              blog: summary(updated),
+              titleImage,
+              titleImageAlt: updated.titleImageAlt || "",
+              logoApplied: Boolean(args.applyBrandLogo),
+            },
             blogId: args.blogId,
           };
         },

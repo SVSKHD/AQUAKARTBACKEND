@@ -66,6 +66,7 @@ const AquaQuotationSchema = new mongoose.Schema(
         "Payment Pending",
         "Paid",
         "Converted",
+        "Sold",
       ],
       default: "Draft",
     },
