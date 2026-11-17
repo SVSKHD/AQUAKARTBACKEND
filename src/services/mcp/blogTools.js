@@ -267,7 +267,7 @@ export const createBlogTools = ({
           overlay: {
             available: Boolean(config.logoPublicId),
             howTo:
-              "For a blog title image, generate the artwork WITHOUT a logo, upload it with aquakart_upload_image, then call aquakart_attach_image with applyBrandLogo: true (logoVariant 'white' on dark images). The server composites the real logo file, bottom-right.",
+              "For a blog title image, generate the artwork WITHOUT a logo, upload it with aquakart_upload_image, then call aquakart_attach_image (logoVariant 'white' on dark images). The server composites the real logo file, bottom-right, by default; pass applyBrandLogo: false only for an image that already contains the authentic logo file.",
           },
           rules: [
             "Use `url` (the clean logo file) as the visual reference; `previewUrl` is only a round badge rendition for display, so do not copy its red border or dark circle.",
@@ -698,6 +698,9 @@ export const createBlogTools = ({
               "Upload the image with aquakart_upload_image first",
             );
           }
+          // The official logo goes on every banner unless the caller
+          // opts out with applyBrandLogo: false (image already carries it).
+          const applyLogo = args.applyBrandLogo ?? Boolean(config.logoPublicId);
           if (args.applyBrandLogo && !config.logoPublicId) {
             throw new BlogToolError(
               "LOGO_NOT_CONFIGURED",
@@ -706,7 +709,7 @@ export const createBlogTools = ({
           }
           const titleImage = {
             id: media.publicId,
-            secure_url: args.applyBrandLogo
+            secure_url: applyLogo
               ? uploader.brandedUrl(
                   media.publicId,
                   config,
@@ -739,7 +742,7 @@ export const createBlogTools = ({
               blog: summary(updated),
               titleImage,
               titleImageAlt: updated.titleImageAlt || "",
-              logoApplied: Boolean(args.applyBrandLogo),
+              logoApplied: applyLogo,
             },
             blogId: args.blogId,
           };

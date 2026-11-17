@@ -20,6 +20,51 @@ tests, or docs:
 
 ## 2026-11-17
 
+### MCP: legacy product/coupon reads fixed; logo overlay on by default
+
+- Request/problem: `aquakart_list_products` and `aquakart_list_coupons` failed
+  MCP output validation in production (`discountPrice` stored as a string;
+  legacy coupons without `status`/`discountType`/`discountValue`). The owner
+  also wants the official logo on every blog banner.
+- Changes/result: catalogue serializers convert numeric text to numbers and
+  tolerate missing fields; legacy coupons read as `archived` percentage coupons
+  (the storefront only redeems `status: "active"`), using
+  `discountPercentage`/`validity`. `aquakart_attach_image` now applies the logo
+  overlay unless `applyBrandLogo: false` is passed (and only when a logo is
+  configured). No stored data is changed.
+- Files: `src/services/mcp/catalogTools.js`, `src/services/mcp/blogTools.js`,
+  `src/services/mcp/server.js`, `test/mcpCatalogTools.test.js`,
+  `test/mcpBlogTools.test.js`, `docs/MCP_BLOG_PUBLISHING.md`.
+- Validation: `node --check` on the three source files; `node --test
+test/mcpCatalogTools.test.js test/mcpBlogTools.test.js test/mcpServer.test.js`
+  (32 tests, all pass). Unit tests only; dependencies were installed without
+  `pg-sdk-node` (host unreachable from the agent sandbox), `npm ci` not run.
+  Not deployed and not verified against production data.
+- Limitations/follow-up: the text values remain in MongoDB; other tools that
+  read them are unchanged. `MCP_TRUSTED_FILE_HOSTS` still only trusts
+  `*.oaiusercontent.com`, so stock-photo URLs cannot be passed as `image`.
+
+### MCP: output-schema mismatches are returned as tool errors
+
+- Request/problem: the owner wants the MCP server to behave cleanly in ChatGPT
+  as well. A result that did not match its `outputSchema` surfaced as a
+  JSON-RPC `-32602` protocol error for every client.
+- Changes/result: the shared tool wrapper validates each successful result
+  against the tool's output schema and, on a mismatch, returns an
+  `OUTPUT_INVALID` tool error listing the offending fields (keeping
+  `operationId` for writes) and logs it.
+- Files: `src/services/mcp/server.js`, `test/mcpCatalogTools.test.js`,
+  `docs/MCP_BLOG_PUBLISHING.md`.
+- Validation: `node --test test/mcpCatalogTools.test.js
+test/mcpBlogTools.test.js test/mcpServer.test.js test/mcpInstagram.test.js
+test/mcpTaxonomySeo.test.js` (58 tests, all pass). Live read tools for
+  blogs, categories, subcategories, SEO, SEO readiness and Instagram were
+  called against production from Claude and returned valid results; products
+  and coupons stay broken there until this branch is deployed.
+- Limitations/follow-up: not exercised from ChatGPT itself. The ChatGPT
+  file-download host in `MCP_TRUSTED_FILE_HOSTS` is still the unconfirmed
+  default.
+
 ### MCP invoice data-quality audit: suggested actions with approved execution
 
 - Request/problem: Add MCP tools that find invoices with missing customer

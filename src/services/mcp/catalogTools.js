@@ -14,7 +14,23 @@ import { sanitizeBlogHtml, stripText } from "../../validators/mcp/blog.js";
 
 const refOf = (value) =>
   value?._id ? { id: String(value._id), title: value.title || "" } : null;
-const iso = (value) => (value ? new Date(value).toISOString() : null);
+const iso = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+// Older documents hold numbers as text ("12,999", "₹ 4500") and reads are
+// lean, so Mongoose never casts them. Output schemas need real numbers.
+const num = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[^0-9.-]/g, "");
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+const text = (value) => (value == null ? "" : String(value));
+const COUPON_STATUSES = ["draft", "active", "paused", "archived"];
 const escapeText = (value) =>
   String(value ?? "")
     .replace(/<[^>]*>/g, " ")
@@ -64,18 +80,17 @@ export const createCatalogTools = ({
   // ---- Products ------------------------------------------------------
   const productSummary = (product) => ({
     productId: String(product._id),
-    title: product.title,
+    title: text(product.title),
     shortName: product.ShortName || null,
     slug: product.slug || null,
     code: product.code || null,
     sku: product.sku || null,
-    brand: product.brand || "",
-    price: product.price ?? null,
-    discountPrice:
-      product.discountPriceStatus && product.discountPrice != null
-        ? product.discountPrice
-        : null,
-    stock: product.stock ?? null,
+    brand: text(product.brand),
+    price: num(product.price),
+    discountPrice: product.discountPriceStatus
+      ? num(product.discountPrice)
+      : null,
+    stock: num(product.stock),
     category: refOf(product.category),
     subCategory: refOf(product.subCategory),
     imageUrl: product.photos?.[0]?.secure_url || null,
@@ -94,12 +109,14 @@ export const createCatalogTools = ({
     googleProductCategory: product.googleProductCategory || null,
     productType: product.productType || null,
     shippingWeight: product.shippingWeight || null,
-    photos: (product.photos || []).map(({ id, secure_url: url }) => ({
-      id,
-      secure_url: url,
-    })),
-    ratings: product.ratings ?? 0,
-    numberOfReviews: product.numberOfReviews ?? 0,
+    photos: (product.photos || [])
+      .filter((photo) => photo?.secure_url)
+      .map(({ id, secure_url: url }) => ({
+        id: text(id),
+        secure_url: url,
+      })),
+    ratings: num(product.ratings) ?? 0,
+    numberOfReviews: num(product.numberOfReviews) ?? 0,
   });
 
   const loadProduct = async (productId) => {
@@ -112,18 +129,24 @@ export const createCatalogTools = ({
   // ---- Coupons -------------------------------------------------------
   const couponView = (coupon) => ({
     couponId: String(coupon._id),
-    code: coupon.code,
+    code: text(coupon.code),
     description: coupon.description || "",
-    status: coupon.status,
-    discountType: coupon.discountType,
-    discountValue: coupon.discountValue,
-    maxDiscount: coupon.maxDiscount ?? null,
-    minimumOrder: coupon.minimumOrder || 0,
+    // Legacy coupons (discountPercentage/validity, no status) cannot be
+    // redeemed by the storefront, which requires status "active"; report
+    // them as archived instead of failing the whole list.
+    status: COUPON_STATUSES.includes(coupon.status)
+      ? coupon.status
+      : "archived",
+    discountType: coupon.discountType === "fixed" ? "fixed" : "percentage",
+    discountValue:
+      num(coupon.discountValue) ?? num(coupon.discountPercentage) ?? 0,
+    maxDiscount: num(coupon.maxDiscount),
+    minimumOrder: num(coupon.minimumOrder) ?? 0,
     startsAt: iso(coupon.startsAt),
-    endsAt: iso(coupon.endsAt),
-    usageLimit: coupon.usageLimit ?? null,
-    usageCount: coupon.usageCount || 0,
-    perUserLimit: coupon.perUserLimit ?? 1,
+    endsAt: iso(coupon.endsAt || coupon.validity),
+    usageLimit: num(coupon.usageLimit),
+    usageCount: num(coupon.usageCount) ?? 0,
+    perUserLimit: num(coupon.perUserLimit) ?? 1,
     firstOrderOnly: Boolean(coupon.firstOrderOnly),
     stackable: Boolean(coupon.stackable),
     productIds: (coupon.productIds || []).map(String),

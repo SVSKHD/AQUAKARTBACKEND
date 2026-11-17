@@ -230,16 +230,17 @@ Banner workflow for the plugin's content skill:
 3. `aquakart_create_blog` (always a draft) with title, slug, `summary`
    (excerpt), `shortDescription` (meta description), keywords/keyphrases and
    `titleImageAlt`, with a fresh `idempotencyKey` that is reused on retries.
-4. `aquakart_attach_image` with the `mediaId`, `applyBrandLogo: true` and
-   `altText`.
+4. `aquakart_attach_image` with the `mediaId` and `altText` (the logo overlay
+   is on by default).
 5. `aquakart_get_blog` to confirm the saved fields, then report `blogId`,
    status, banner and `adminUrl`/`publicUrl` from the results.
 6. Publish only on an explicit request (`aquakart_publish_blog`).
 
 **Branding rule for the skill:** every banner must carry the authentic
 Aquakart logo, unaltered (original proportions and colours). Do not draw or
-recreate the logo with image generation. Attach banners with
-`applyBrandLogo: true` so the server composites the stored official logo file
+recreate the logo with image generation. Attaching a
+banner composites the stored official logo file by default
+(`applyBrandLogo: false` opts out for an image that already contains it)
 (`logoVariant: "white"` on dark images); `logoApplied: true` in the result
 confirms the overlay was applied. The server does not inspect an image for a
 logo, so only the overlay counts as verified branding.
@@ -325,7 +326,10 @@ Common error codes:
   `CONTAINER_FAILED`, `PUBLISH_UNCERTAIN`, `PUBLISH_UNVERIFIED`,
   `ALREADY_POSTED`, `INVALID_ASPECT_RATIO`, `INVALID_CAPTION`
 - **Cleanup:** `CLEANUP_NOT_ALLOWED`, `CLEANUP_FAILED`
-- **General:** `STORAGE_UNAVAILABLE`, `INTERNAL_ERROR`
+- **General:** `STORAGE_UNAVAILABLE`, `INTERNAL_ERROR`, `OUTPUT_INVALID` (a result did not
+  match the tool's output schema; `details.fields` names the stored fields to
+  correct. Returned as a normal tool error so ChatGPT and other clients never
+  see a protocol-level validation failure)
 
 ## Product and coupon rules
 
@@ -493,7 +497,12 @@ are ignored. Limits:
   Cloudinary account and de-duplicated by SHA-256 (`AquaMcpMedia`). A
   replaced MCP image is deleted only when no other blog uses it. Staff images
   are never deleted.
-- **Branded headers:** `applyBrandLogo: true` overlays the official logo
+- **Legacy catalogue data:** product and coupon reads are lean, so values
+  stored as text (`"12,999"`) are converted to numbers, and legacy coupons
+  (`discountPercentage`/`validity`, no `status`) are returned as `archived`
+  percentage coupons instead of failing output validation.
+- **Branded headers:** `aquakart_attach_image` overlays the official logo by
+  default (`applyBrandLogo: false` opts out); it uses the logo
   already stored in Cloudinary using a Cloudinary transformation (bottom-right
   by default). The logo is never AI-generated.
   - The default logo ids are `logo_nt2v92` (original) and
