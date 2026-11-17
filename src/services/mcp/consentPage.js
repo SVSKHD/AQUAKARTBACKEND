@@ -21,6 +21,8 @@ const SENSITIVE = new Set([
   "coupons:write",
   "categories:write",
   "seo:write",
+  "invoices:audit",
+  "invoices:actions",
 ]);
 
 const originOf = (url) => {

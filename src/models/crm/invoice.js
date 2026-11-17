@@ -94,6 +94,10 @@ const AquaInvoiceSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Non-unique: existing data may already repeat numbers. Used by the MCP
+// invoice audit's duplicate check (src/services/mcp/invoiceStore.js).
+AquaInvoiceSchema.index({ invoiceNo: 1 });
+
 AquaInvoiceSchema.pre("save", function normalizeInvoiceOwnership() {
   this.customerPhoneNormalized = normalizeIndianPhone(
     this.customerDetails?.phone,

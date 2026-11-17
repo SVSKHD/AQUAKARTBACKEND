@@ -22,6 +22,7 @@ first. Read only the sections relevant to the task.
 | Runtime configuration in the DB (aqua-env), CRM /v1/crm/env     | [RUNTIME_CONFIG.md](RUNTIME_CONFIG.md)                                                    |
 | MCP server (ChatGPT/Claude): OAuth, blog and Instagram tools    | [MCP_BLOG_PUBLISHING.md](MCP_BLOG_PUBLISHING.md)                                          |
 | MCP walkthrough: logos, connecting Claude/ChatGPT, examples     | [MCP_WALKTHROUGH.md](MCP_WALKTHROUGH.md)                                                  |
+| MCP invoice audit: missing addresses, duplicates, approvals     | [MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md)                                              |
 | Products, category contracts, Swagger, CRM, AI, scheduling      | Start with the relevant row in [PROJECT_MAP.md](PROJECT_MAP.md); verify details in source |
 
 `docs/` contains human/agent guides. `src/docs/` contains executable Swagger

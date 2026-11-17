@@ -21,6 +21,8 @@ export const MCP_SCOPES = {
   categoriesWrite: "categories:write",
   seoRead: "seo:read",
   seoWrite: "seo:write",
+  invoicesAudit: "invoices:audit",
+  invoicesActions: "invoices:actions",
 };
 export const MCP_SCOPE_LIST = Object.values(MCP_SCOPES);
 export const MCP_SCOPE_LABELS = {
@@ -45,11 +47,16 @@ export const MCP_SCOPE_LABELS = {
   "seo:read": "Read page SEO settings and the SEO readiness report",
   "seo:write":
     "Create and edit page SEO settings (titles, descriptions, canonical, social tags) on the live website",
+  "invoices:audit":
+    "Scan invoices for missing addresses and possible duplicates and read the suggested fixes (reads customer names, addresses and invoice lines; never changes invoices)",
+  "invoices:actions":
+    "Apply or dismiss approved invoice suggestions (only fills a missing customer address; never deletes, voids or renumbers invoices)",
 };
 // The CRM permission a staff member needs before they can grant a scope.
-// Scopes cover blogs, Instagram, the product catalogue, categories, coupons
-// and page SEO only:
-// never customers, orders or payments. products.* are admin-only by default
+// Scopes cover blogs, Instagram, the product catalogue, categories, coupons,
+// page SEO and the invoice data-quality audit: never orders or payments.
+// Only the invoices:* scopes read customer details, and they need their own
+// invoices.audit / invoices.audit.execute permissions. products.* are admin-only by default
 // (super-admin / role 1), matching the CRM product routes (checkAdmin).
 export const SCOPE_PERMISSIONS = {
   "blogs:read": "blogs.manage",
@@ -69,6 +76,10 @@ export const SCOPE_PERMISSIONS = {
   "categories:write": "products.manage",
   "seo:read": "seo.read",
   "seo:write": "seo.manage",
+  // Invoice data-quality audit: its own permissions, not reachable through
+  // invoices.read/manage or any blog, Instagram or catalogue scope.
+  "invoices:audit": "invoices.audit",
+  "invoices:actions": "invoices.audit.execute",
 };
 // OAuth callbacks of supported MCP clients: ChatGPT (stable RFC 9207 URI and
 // per-connector callback ids) and Claude. Claude Code and other native
@@ -214,8 +225,28 @@ export const loadMcpConfig = (env = process.env) => {
       positive(env.MCP_OPERATION_LOCK_SECONDS, 120, 3600) * 1000,
     ),
     instagram: loadInstagramConfig(env),
+    invoiceAudit: loadInvoiceAuditConfig(env),
   };
 };
+
+// Invoice data-quality audit (src/services/mcp/invoiceAuditTools.js).
+// duplicateWindowDays compares the invoices' own dates
+// (parseInvoicePurchaseDate), not record creation times.
+export const loadInvoiceAuditConfig = (env = process.env) => ({
+  duplicateWindowDays: Math.trunc(
+    positive(env.MCP_INVOICE_DUPLICATE_WINDOW_DAYS, 1, 30),
+  ),
+  scanMaxInvoices: Math.trunc(
+    positive(env.MCP_INVOICE_SCAN_MAX_INVOICES, 500, 2000),
+  ),
+  scanMaxRangeDays: Math.trunc(
+    positive(env.MCP_INVOICE_SCAN_MAX_RANGE_DAYS, 366, 3660),
+  ),
+  // How long an execution claim is held before a retry may take it over.
+  executionLockMs: Math.trunc(
+    positive(env.MCP_INVOICE_EXECUTION_LOCK_SECONDS, 120, 3600) * 1000,
+  ),
+});
 
 // Meta Instagram Content Publishing. Tools report INSTAGRAM_NOT_CONFIGURED
 // until the account id and token are set. The token is only ever sent in

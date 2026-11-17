@@ -7,17 +7,30 @@ import { createCatalogTools } from "./catalogTools.js";
 import { createTaxonomySeoTools } from "./taxonomySeoTools.js";
 import { createInstagramTools } from "./instagramTools.js";
 import { createInstagramGraph } from "./instagramGraph.js";
+import { createInvoiceAuditTools } from "./invoiceAuditTools.js";
+import { createInvoiceActionTools } from "./invoiceActionTools.js";
+import { mongoInvoiceStore } from "./invoiceStore.js";
 import { createOAuthProvider } from "./oauthProvider.js";
 import { cloudinaryUploader, mongoStore } from "./store.js";
 
 // Builds the production MCP services from the environment.
 
-const audit = ({ action, adminUserId, resourceType, resourceId, metadata }) =>
+const audit = ({
+  action,
+  adminUserId,
+  resourceType,
+  resourceId,
+  before,
+  after,
+  metadata,
+}) =>
   writeAudit({
     req: { user: { _id: adminUserId } },
     action,
     resourceType,
     resourceId,
+    before,
+    after,
     metadata,
   });
 
@@ -45,6 +58,16 @@ export const buildMcpServices = (env = process.env) => {
     taxonomySeoTools: createTaxonomySeoTools({
       store: mongoStore,
       runOperation,
+      audit,
+    }),
+    invoiceAuditTools: createInvoiceAuditTools({
+      store: mongoInvoiceStore,
+      config,
+    }),
+    invoiceActionTools: createInvoiceActionTools({
+      store: mongoInvoiceStore,
+      runOperation,
+      config,
       audit,
     }),
     instagramTools: createInstagramTools({

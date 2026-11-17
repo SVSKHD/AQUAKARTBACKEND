@@ -106,7 +106,7 @@ export const applyMcpDocs = (doc) => {
       tags: [TAG],
       summary: "Staff sign-in and consent form submit",
       description:
-        "Posted by the HTML page from /authorize. Staff sign in with CRM email/password; each granted scope needs its CRM permission (blogs.manage, instagram.publish, products.read/products.manage (also categories), coupons.read/coupons.manage, seo.read/seo.manage). Redirects to the client's registered redirect_uri with code+state, or error=access_denied. 10 requests / 15 min per IP.",
+        "Posted by the HTML page from /authorize. Staff sign in with CRM email/password; each granted scope needs its CRM permission (blogs.manage, instagram.publish, products.read/products.manage (also categories), coupons.read/coupons.manage, seo.read/seo.manage, invoices.audit for invoices:audit, invoices.audit.execute for invoices:actions). Redirects to the client's registered redirect_uri with code+state, or error=access_denied. 10 requests / 15 min per IP.",
       consumes: ["application/x-www-form-urlencoded"],
       parameters: [
         { name: "request_id", in: "formData", type: "string", required: true },

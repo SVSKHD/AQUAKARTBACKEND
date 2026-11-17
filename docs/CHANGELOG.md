@@ -18,6 +18,108 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-17
+
+### MCP invoice data-quality audit: suggested actions with approved execution
+
+- Request/problem: Add MCP tools that find invoices with missing customer
+  addresses and possible duplicate invoices, propose fixes as reviewable
+  suggested actions, and apply only explicitly approved fixes. Approved with
+  these changes:
+  - new `invoices.audit` / `invoices.audit.execute` permissions
+  - the duplicate window uses the invoice's own date
+  - migrated invoices handled separately
+  - quotation and PO documents compared only with their own kind
+  - the payment-reference source is stated
+  - the existing total logic is reused
+  - invoice audit first, as its own PR; the Instagram and blog changes follow
+    in a second PR
+- Changes/result:
+  - **Six MCP tools on the existing `/v1/mcp` server:**
+    `aquakart_audit_invoices`, `aquakart_list_invoice_actions`,
+    `aquakart_get_invoice_action`, `aquakart_get_invoice_audit_history`
+    (scope `invoices:audit`), and `aquakart_execute_invoice_action`,
+    `aquakart_ignore_invoice_action` (scope `invoices:actions`).
+  - **Scopes:** each needs its new CRM permission (assigned to no role) and
+    starts unticked on the consent page.
+  - **Scans never change invoices.** Findings become `AquaMcpInvoiceAction`
+    records, de-duplicated by a stable `issueKey`. Ignored and executed
+    decisions survive re-scans; `dryRun` saves nothing.
+  - **Missing addresses:**
+    - Detected: null, empty, whitespace and placeholder values. Short
+      addresses get a non-executable review.
+    - Evidence ranked from the linked `AquaOrder`/`AquaCRMOrder`, then the
+      linked quotation, then the `firebaseUid` account, then phone-only
+      matches, with documented fixed confidences.
+    - Conflicts or several addresses give no automatic suggestion. No
+      evidence gives `REQUEST_ADDRESS`.
+  - **Duplicates:**
+    - Strong signals: same `invoiceNo`, `sourceOrderId`,
+      `sourceQuotationId`, or the same `AquaOrder.transactionId` through
+      linked orders. `AquaPayment` is not used, because its `invoiceId` is a
+      free-form client string.
+    - Otherwise the full combination is needed: phone + identical lines +
+      identical total (existing `getInvoiceProductPriceTotal`) + invoice
+      dates (`parseInvoicePurchaseDate`) within
+      `MCP_INVOICE_DUPLICATE_WINDOW_DAYS`.
+    - Migrated records are skipped by default; with `includeMigrated` they
+      are compared only with each other, on invoice number.
+    - Duplicates are never executable: they return a manual
+      accounting-review recommendation.
+  - **Execution:**
+    - Only fills a missing `customerDetails.address`.
+    - Requires `approval.confirmed`, `expectedRevision` and an
+      idempotency key.
+    - Holds an atomic claim, then re-validates the invoice revision, the
+      missing address and the evidence (otherwise `stale`).
+    - Writes with one conditional update on `updatedAt`, then records
+      `AquaAuditLog` before/after.
+    - The MCP audit helper now forwards `before`/`after`.
+  - **Privacy:** phone numbers are masked in results and stored on actions
+    only as a SHA-256 key. Addresses are never logged.
+  - **Database:** new collection `aquamcpinvoiceactions`; new non-unique
+    `{ invoiceNo: 1 }` index on `AquaInvoice`.
+- Files:
+  - New: `src/services/mcp/invoiceAuditRules.js`,
+    `src/services/mcp/invoiceAuditTools.js`,
+    `src/services/mcp/invoiceActionTools.js`,
+    `src/services/mcp/invoiceStore.js`,
+    `src/services/mcp/invoiceSchemas.js`,
+    `src/models/mcp/invoiceAction.js`, `test/mcpInvoiceAudit.test.js`,
+    `docs/MCP_INVOICE_AUDIT.md`.
+  - Modified: `src/services/mcp/server.js`, `src/services/mcp/index.js`,
+    `src/services/mcp/config.js`, `src/services/mcp/consentPage.js`,
+    `src/routes/mcp.js`, `src/constants/permissions.js`,
+    `src/models/crm/invoice.js` (index only), `src/docs/mcp.js`,
+    `swagger-output.json`, `.env.example`, `docs/MCP_BLOG_PUBLISHING.md`,
+    `docs/README.md`, `docs/PROJECT_MAP.md`.
+- Validation:
+  - `node --check` on every changed JS file: OK.
+  - `node --test test/mcpInvoiceAudit.test.js`: 27/27 pass (unit tests with
+    in-memory fakes, plus MCP-over-in-memory-transport scope and schema
+    checks).
+  - MCP, invoice, blog regression, route group, role, quotation and service
+    reminder suites: 138/139. The full suite (`node --test`): 336/337. In
+    both, the only failure is the existing `invoiceViews.test.js` "builds
+    separate admin and customer invoice destinations from one id"
+    (recorded 2026-11-14; it imports none of the changed files).
+  - `npm run swagger`: the only change is the consent endpoint text (MCP
+    tools are not REST operations). Output re-formatted with Prettier to
+    match the committed file.
+  - ESLint on new files: only the repo-wide existing patterns (quotes vs
+    Prettier, `.js` import extensions, `_id`, loops). No unused or undefined
+    variables. Prettier: clean.
+  - Not run: anything against a real MongoDB, `index.js` startup, any live
+    MCP call or production request. Nothing deployed.
+- Limitations/follow-up:
+  - Invoices without `customerPhoneNormalized` are matched only on
+    references, not phone.
+  - The scan range filters on `createdAt`.
+  - There is no CRM review screen (separate repo).
+  - The Instagram (logo overlay, metadata, category rotation) and blog
+    (`needsTitleImage`, opt-in `onlyIfMissing`) changes are planned for the
+    second PR.
+
 ## 2026-11-14
 
 ### Configuration moved to the encrypted aqua-env collection, managed from the CRM

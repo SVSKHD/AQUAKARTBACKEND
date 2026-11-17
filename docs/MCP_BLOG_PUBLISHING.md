@@ -1,6 +1,6 @@
 # Aquakart MCP server: blogs, Instagram, catalogue, coupons and SEO
 
-Last reviewed: 2026-11-06 (Asia/Calcutta). Verify details in source:
+Last reviewed: 2026-11-17 (Asia/Calcutta). Verify details in source:
 `src/routes/mcp.js`, `src/services/mcp/`, `src/models/mcp/`,
 `src/validators/mcp/blog.js`. Tests: `test/mcpServer.test.js`,
 `test/mcpBlogTools.test.js`, `test/mcpInstagram.test.js`,
@@ -20,6 +20,8 @@ Code, MCP Inspector) do these jobs:
 - create, read, update and delete categories and subcategories
 - create, read and update page SEO, and run the SEO readiness report over
   all pages
+- audit invoices for missing addresses and possible duplicates, and apply
+  approved address fixes; see [MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md)
 
 The client starts every action. The backend has no cron job for this
 workflow. The only background work is the cleanup worker, which deletes
@@ -71,6 +73,10 @@ the MCP SDK serves them relative to the issuer. The reverse proxy must forward
   - `categories:read` and `categories:write` need `products.read` and
     `products.manage` (the CRM category routes are admin-only)
   - `seo:read` and `seo:write` need `seo.read` and `seo.manage`
+  - `invoices:audit` needs `invoices.audit` and `invoices:actions` needs
+    `invoices.audit.execute`. Both are new and assigned to no role;
+    `invoices.read`/`invoices.manage` do not grant them
+    ([MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md))
 
   Super-admin and legacy role 1 have every permission.
 
@@ -78,12 +84,14 @@ the MCP SDK serves them relative to the issuer. The reverse proxy must forward
   `instagram:read`, `instagram:upload`, `instagram:publish`,
   `instagram:cleanup`, `products:read`, `products:write`, `coupons:read`,
   `coupons:write`, `categories:read`, `categories:write`, `seo:read`,
-  `seo:write`. Live-effect scopes start unticked on the consent page
+  `seo:write`, `invoices:audit`, `invoices:actions`. Live-effect and
+  customer-data scopes start unticked on the consent page
   (`blogs:publish`, `instagram:publish`, `instagram:cleanup`,
-  `products:write`, `coupons:write`, `categories:write`, `seo:write`), so
-  granting them is always a
-  deliberate choice. No scope reaches customers, orders, payments or other
-  CRM data.
+  `products:write`, `coupons:write`, `categories:write`, `seo:write`,
+  `invoices:audit`, `invoices:actions`), so granting them is always a
+  deliberate choice. Only the `invoices:*` scopes read customer details
+  (names, masked phones, addresses on invoices); no scope reaches orders as
+  such, payments or other CRM data.
 - **Clients:** Dynamic Client Registration only accepts redirect URIs on the
   allowlist:
   - ChatGPT: `https://chatgpt.com/connector_platform_oauth_redirect` and
@@ -287,6 +295,12 @@ Category, subcategory and SEO tools:
 | `aquakart_list_seo`, `aquakart_get_seo`                      | `seo:read`         | By `seoId` or `pageKey`; `active` filter                                                      |
 | `aquakart_get_seo_readiness`                                 | `seo:read`         | Every page: status, priority, score, issues, actions; `pageKey`/`entityType`/`status` filters |
 | `aquakart_create_seo`, `aquakart_update_seo`                 | `seo:write`        | CRM validation; partial updates; `active: false` switches a page off                          |
+
+Invoice audit tools (`invoices:audit` / `invoices:actions`) are documented in
+[MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md): `aquakart_audit_invoices`,
+`aquakart_list_invoice_actions`, `aquakart_get_invoice_action`,
+`aquakart_get_invoice_audit_history`, `aquakart_execute_invoice_action`,
+`aquakart_ignore_invoice_action`.
 
 Run `tools/list` for the full JSON Schemas.
 
