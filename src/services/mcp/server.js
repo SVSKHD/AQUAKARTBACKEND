@@ -796,7 +796,7 @@ export const createAquakartMcpServer = ({
     {
       title: "Attach title image",
       description:
-        "Set an uploaded image (mediaId) as a blog's title (banner) image, replacing the previous one, with optional altText. applyBrandLogo: true overlays the stored official Aquakart logo file server-side (original proportions and colours, never AI-drawn), bottom-right; logoVariant 'white' suits dark images. Use applyBrandLogo for every banner unless the image already contains the authentic logo file. Live blogs also need blogs:publish.",
+        "Set an uploaded image (mediaId) as a blog's title (banner) image, replacing the previous one, with optional altText. The stored official Aquakart logo file is overlaid server-side by default (original proportions and colours, never AI-drawn), bottom-right; logoVariant 'white' suits dark images. Pass applyBrandLogo: false only when the image already contains the authentic logo file. Live blogs also need blogs:publish.",
       scopes: [MCP_SCOPES.write],
       input: z.strictObject({
         idempotencyKey,

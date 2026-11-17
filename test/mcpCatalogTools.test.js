@@ -397,6 +397,42 @@ test("coupon reads count targeted customers but never return their ids", async (
   }
 });
 
+test("legacy product and coupon documents are normalised for reads", async () => {
+  const { store, catalog } = setup();
+  store.productDocs.push({
+    _id: objectId(),
+    title: "Old softener",
+    price: "24,999",
+    discountPriceStatus: true,
+    discountPrice: "19999",
+    stock: "7",
+    ratings: "4.5",
+    photos: [{ secure_url: "https://img.test/a.png" }, {}],
+  });
+  const product = (await catalog.listProducts({})).products.at(-1);
+  assert.equal(product.price, 24999);
+  assert.equal(product.discountPrice, 19999);
+  assert.equal(product.stock, 7);
+
+  store.couponDocs.push(
+    {
+      _id: objectId(),
+      code: "OLD10",
+      discountPercentage: 10,
+      validity: new Date("2025-01-31"),
+    },
+    { _id: objectId(), code: "ODD", status: "live", discountValue: "x" },
+  );
+  const { coupons } = await catalog.listCoupons({});
+  const [old, odd] = coupons.slice(-2);
+  assert.equal(old.status, "archived");
+  assert.equal(old.discountType, "percentage");
+  assert.equal(old.discountValue, 10);
+  assert.equal(old.endsAt, "2025-01-31T00:00:00.000Z");
+  assert.equal(odd.status, "archived");
+  assert.equal(odd.discountValue, 0);
+});
+
 test("catalog tools enforce their scopes over MCP; write scopes start unticked", async () => {
   const { catalog, blogs } = setup();
   const callTool = async (scopes, name, args) => {

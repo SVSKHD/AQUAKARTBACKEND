@@ -18,6 +18,32 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-17
+
+### MCP: legacy product/coupon reads fixed; logo overlay on by default
+
+- Request/problem: `aquakart_list_products` and `aquakart_list_coupons` failed
+  MCP output validation in production (`discountPrice` stored as a string;
+  legacy coupons without `status`/`discountType`/`discountValue`). The owner
+  also wants the official logo on every blog banner.
+- Changes/result: catalogue serializers convert numeric text to numbers and
+  tolerate missing fields; legacy coupons read as `archived` percentage coupons
+  (the storefront only redeems `status: "active"`), using
+  `discountPercentage`/`validity`. `aquakart_attach_image` now applies the logo
+  overlay unless `applyBrandLogo: false` is passed (and only when a logo is
+  configured). No stored data is changed.
+- Files: `src/services/mcp/catalogTools.js`, `src/services/mcp/blogTools.js`,
+  `src/services/mcp/server.js`, `test/mcpCatalogTools.test.js`,
+  `test/mcpBlogTools.test.js`, `docs/MCP_BLOG_PUBLISHING.md`.
+- Validation: `node --check` on the three source files; `node --test
+test/mcpCatalogTools.test.js test/mcpBlogTools.test.js test/mcpServer.test.js`
+  (32 tests, all pass). Unit tests only; dependencies were installed without
+  `pg-sdk-node` (host unreachable from the agent sandbox), `npm ci` not run.
+  Not deployed and not verified against production data.
+- Limitations/follow-up: the text values remain in MongoDB; other tools that
+  read them are unchanged. `MCP_TRUSTED_FILE_HOSTS` still only trusts
+  `*.oaiusercontent.com`, so stock-photo URLs cannot be passed as `image`.
+
 ## 2026-11-14
 
 ### Configuration moved to the encrypted aqua-env collection, managed from the CRM

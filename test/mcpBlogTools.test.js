@@ -419,6 +419,36 @@ test("branded title images use the stored logo", async () => {
   assert.match(attached.titleImage.secure_url, /l_logo/);
 });
 
+test("banners get the logo unless applyBrandLogo is false", async () => {
+  const { tools } = setup({ AQUAKART_LOGO_PUBLIC_ID: "brand/aquakart-logo" });
+  const { blog } = await tools.createBlog(draftArgs(), WRITE);
+  const { media } = await tools.uploadImage(
+    { idempotencyKey: "img-0001", imageBase64: PNG.toString("base64") },
+    WRITE,
+  );
+  const byDefault = await tools.attachImage(
+    {
+      idempotencyKey: "attach-d1",
+      blogId: blog.blogId,
+      mediaId: media.mediaId,
+    },
+    WRITE,
+  );
+  assert.equal(byDefault.logoApplied, true);
+  assert.match(byDefault.titleImage.secure_url, /l_logo/);
+  const optedOut = await tools.attachImage(
+    {
+      idempotencyKey: "attach-d2",
+      blogId: blog.blogId,
+      mediaId: media.mediaId,
+      applyBrandLogo: false,
+    },
+    WRITE,
+  );
+  assert.equal(optedOut.logoApplied, false);
+  assert.doesNotMatch(optedOut.titleImage.secure_url, /l_logo/);
+});
+
 test("the official logo is the default overlay and brand assets describe it", async () => {
   const { tools, uploader, config } = setup();
   assert.equal(config.logoPublicId, "logo_nt2v92");
