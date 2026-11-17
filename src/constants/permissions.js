@@ -19,6 +19,10 @@ export const PERMISSIONS = Object.freeze([
   "orders.manage",
   "invoices.read",
   "invoices.manage",
+  // MCP invoice data-quality audit (aquakart_audit_invoices etc.) and
+  // executing approved suggestions. Assigned to no role by default.
+  "invoices.audit",
+  "invoices.audit.execute",
   "payments.read",
   "payments.create",
   "payments.reconcile",

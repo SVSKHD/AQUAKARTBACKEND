@@ -31,6 +31,8 @@ export const createMcpRouters = ({
   instagramTools,
   catalogTools,
   taxonomySeoTools,
+  invoiceAuditTools,
+  invoiceActionTools,
 }) => {
   const router = express.Router();
   const oauthRouter = express.Router();
@@ -267,6 +269,8 @@ export const createMcpRouters = ({
       instagramTools,
       catalogTools,
       taxonomySeoTools,
+      invoiceAuditTools,
+      invoiceActionTools,
       auth,
       correlationId: req.correlationId,
       resourceMetadataUrl,
