@@ -177,6 +177,12 @@ const assertStockAvailable = async (stockChanges = []) => {
   }
 };
 
+// Read-only check that CRM stock covers these invoice lines (throws the same
+// "Insufficient CRM stock" error persistInvoice would). Used before an
+// offline payment starts, so most shortfalls are refused before payment.
+export const assertInvoiceStock = (products = []) =>
+  assertStockAvailable(buildStockChanges(products, []));
+
 const applyStockChanges = async (stockChanges = []) => {
   if (!stockChanges.length) return [];
 

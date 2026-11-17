@@ -84,6 +84,9 @@ const UserSchema = new mongoose.Schema(
       sparse: true,
     },
     alternativeEmail: { type: String, trim: true },
+    // Second mobile number the customer gave on an offline payment link
+    // (normalized 10-digit Indian mobile). Never used for account matching.
+    alternatePhone: { type: String, trim: true },
     photo: {
       id: { type: String },
       secure_url: { type: String },

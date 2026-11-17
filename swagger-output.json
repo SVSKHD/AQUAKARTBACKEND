@@ -3685,6 +3685,763 @@
         "tags": ["Checkout"]
       }
     },
+    "/v1/payments/offline/{token}": {
+      "get": {
+        "tags": ["Payments / Offline Links"],
+        "summary": "Public summary of a payment link",
+        "description": "No sign-in. Returns only the document number and type, product names/descriptions/quantities, subtotal, discount, tax, amount, currency, expiry and whether it can be paid. No ids, customer data, notes or terms. Rate limited (30/min per IP).",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Payment link token from /pay/{token}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payable (state payable) or already paid (state paid, payable false)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "documentType": {
+                      "type": "string",
+                      "enum": ["pre_invoice", "quotation"]
+                    },
+                    "documentNumber": {
+                      "type": "string"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "subTotal": {
+                      "type": "number"
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "tax": {
+                      "type": "number"
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "example": "INR"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "payable": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": ["payable", "paid"]
+                    },
+                    "requiresSignIn": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, revoked, expired, outdated or unpayable link (identical response)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_UNAVAILABLE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["RATE_LIMITED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payments/offline/{token}/customer": {
+      "post": {
+        "tags": ["Payments / Offline Links"],
+        "summary": "Confirm customer details and bind the link to the signed-in account",
+        "description": "Google sign-in required. The first signed-in account to call this owns the link; others get 403. The address is appended to the account (never overwrites) and alternatePhone is saved. If the document's mobile belongs to another account the link is flagged for admin review; accounts are never merged.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Payment link token from /pay/{token}"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <Firebase Google ID token>"
+          },
+          {
+            "name": "x-aquakart-session",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Aquakart backend session JWT from Google sign-in"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["address"],
+              "properties": {
+                "address": {
+                  "type": "object",
+                  "required": ["street", "city", "state", "postalCode"],
+                  "properties": {
+                    "street": {
+                      "type": "string",
+                      "minLength": 5
+                    },
+                    "city": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "postalCode": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]{5}$"
+                    }
+                  }
+                },
+                "alternatePhone": {
+                  "type": "string",
+                  "description": "Optional 10-digit Indian mobile"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bound",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "bound": {
+                      "type": "boolean"
+                    },
+                    "documentNumber": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "flaggedForReview": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid address or phone",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["VALIDATION_FAILED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Google sign-in required",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Link belongs to another account",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_BOUND_TO_ANOTHER_USER"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, revoked, expired, outdated or unpayable link (identical response)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_UNAVAILABLE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already paid",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["ALREADY_PAID"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payments/offline/{token}/initiate": {
+      "post": {
+        "tags": ["Payments / Offline Links"],
+        "summary": "Start (or resume) the PhonePe payment",
+        "description": "Same signed-in account. No body: the amount is always the document's stored total. Reuses a still-pending attempt (reused true) for OFFLINE_PAYMENT_ATTEMPT_TTL_MINUTES; refuses when already paid or when stock is short. Redirect the browser to redirectUrl; PhonePe returns to /pay/{token}?return=1.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Payment link token from /pay/{token}"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <Firebase Google ID token>"
+          },
+          {
+            "name": "x-aquakart-session",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Aquakart backend session JWT from Google sign-in"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Payment started",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "redirectUrl": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["pending"]
+                    },
+                    "reused": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Google sign-in required",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Link belongs to another account",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_BOUND_TO_ANOTHER_USER"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, revoked, expired, outdated or unpayable link (identical response)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_UNAVAILABLE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Details missing, already paid, payment starting, out of stock",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "CUSTOMER_DETAILS_REQUIRED",
+                    "ALREADY_PAID",
+                    "PAYMENT_IN_PROGRESS",
+                    "OUT_OF_STOCK"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Gateway error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["GATEWAY_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Payments not available",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["GATEWAY_DISABLED", "GATEWAY_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payments/offline/{token}/status": {
+      "get": {
+        "tags": ["Payments / Offline Links"],
+        "summary": "Verified payment status",
+        "description": "Same signed-in account. If the latest attempt is pending the server asks PhonePe directly (the browser redirect is never trusted). invoiceReady is true once the final invoice exists.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Payment link token from /pay/{token}"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <Firebase Google ID token>"
+          },
+          {
+            "name": "x-aquakart-session",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Aquakart backend session JWT from Google sign-in"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not_started",
+                        "created",
+                        "pending",
+                        "paid",
+                        "failed",
+                        "expired",
+                        "refunded",
+                        "partially_refunded"
+                      ]
+                    },
+                    "linkStatus": {
+                      "type": "string",
+                      "enum": ["active", "revoked", "expired", "paid"]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": ["CRM_OFFLINE"]
+                    },
+                    "documentType": {
+                      "type": "string"
+                    },
+                    "documentNumber": {
+                      "type": "string"
+                    },
+                    "quotationNo": {
+                      "type": "string"
+                    },
+                    "preInvoiceNo": {
+                      "type": "string"
+                    },
+                    "invoiceNo": {
+                      "type": "string"
+                    },
+                    "invoiceReady": {
+                      "type": "boolean"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "amountPaid": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "gatewayTransactionId": {
+                      "type": "string"
+                    },
+                    "paidAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Google sign-in required",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Link belongs to another account",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_BOUND_TO_ANOTHER_USER"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, revoked, expired, outdated or unpayable link (identical response)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["LINK_UNAVAILABLE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Customer details not confirmed yet",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["CUSTOMER_DETAILS_REQUIRED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/checkout/payment-methods": {
       "get": {
         "description": "",
@@ -7888,6 +8645,2055 @@
         "tags": ["CRM / Customer Profiles"]
       }
     },
+    "/v1/crm/pre-invoices": {
+      "get": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "List pre-invoices",
+        "description": "Permission preinvoices.read. Newest first.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "Draft",
+              "Payment Pending",
+              "Paid",
+              "Cancelled",
+              "Converted"
+            ]
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string",
+            "description": "Pre-invoice number, customer name or quotation number"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of pre-invoices with pagination"
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Create a pre-invoice",
+        "description": "Permission preinvoices.manage. Numbered AQPI|YYYYMMDD|NNNN; starts as Draft.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "example": "2026-11-18"
+                },
+                "customerDetails": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "type": "string",
+                      "description": "10-digit Indian mobile, optional +91"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "address": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "gst": {
+                  "type": "boolean"
+                },
+                "gstDetails": {
+                  "type": "object",
+                  "description": "gstNo and gstName required when gst is true"
+                },
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "productName",
+                      "productQuantity",
+                      "productPrice"
+                    ],
+                    "properties": {
+                      "productId": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{24}$"
+                      },
+                      "productName": {
+                        "type": "string"
+                      },
+                      "productDescription": {
+                        "type": "string"
+                      },
+                      "productSerialNo": {
+                        "type": "string"
+                      },
+                      "productQuantity": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "productPrice": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "productDiscount": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "productTax": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "minItems": 1,
+                  "maxItems": 100
+                },
+                "discount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "tax": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": ["INR"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["Draft", "Payment Pending", "Cancelled"],
+                  "description": "PATCH only"
+                }
+              },
+              "description": "Totals are always computed by the server; subTotal/totalAmount in the body are ignored."
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created: { preInvoice, paymentLink }"
+          },
+          "400": {
+            "description": "Invalid fields",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["VALIDATION_FAILED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/pre-invoices/{id}": {
+      "get": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Get a pre-invoice with its payment-link state",
+        "description": "Permission preinvoices.read.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ preInvoice, paymentLink }"
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["PRE_INVOICE_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Edit or cancel an unpaid pre-invoice",
+        "description": "Permission preinvoices.manage. Only while Draft or Payment Pending and unpaid. Changing lines or totals makes an existing payment link stop working (regenerate it). status Cancelled revokes the link and frees the source quotation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "example": "2026-11-18"
+                },
+                "customerDetails": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "type": "string",
+                      "description": "10-digit Indian mobile, optional +91"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "address": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "gst": {
+                  "type": "boolean"
+                },
+                "gstDetails": {
+                  "type": "object",
+                  "description": "gstNo and gstName required when gst is true"
+                },
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "productName",
+                      "productQuantity",
+                      "productPrice"
+                    ],
+                    "properties": {
+                      "productId": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{24}$"
+                      },
+                      "productName": {
+                        "type": "string"
+                      },
+                      "productDescription": {
+                        "type": "string"
+                      },
+                      "productSerialNo": {
+                        "type": "string"
+                      },
+                      "productQuantity": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true
+                      },
+                      "productPrice": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "productDiscount": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "productTax": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "minItems": 1,
+                  "maxItems": 100
+                },
+                "discount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "tax": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": ["INR"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["Draft", "Payment Pending", "Cancelled"],
+                  "description": "PATCH only"
+                }
+              },
+              "description": "Totals are always computed by the server; subTotal/totalAmount in the body are ignored."
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ preInvoice, paymentLink }"
+          },
+          "400": {
+            "description": "Invalid or empty update",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["VALIDATION_FAILED", "NOTHING_TO_UPDATE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["PRE_INVOICE_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Paid, converted or cancelled",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["PRE_INVOICE_LOCKED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/quotations/{id}/pre-invoice": {
+      "post": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Move a quotation to a pre-invoice",
+        "description": "Permission preinvoices.manage. Copies lines and totals, links both ways, sets the quotation to Converted, stops its WhatsApp follow-ups and revokes its payment link. The quotation is kept. One active pre-invoice per quotation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "{ preInvoice, paymentLink, quotationLinksRevoked }"
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Quotation not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["QUOTATION_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already moved, already invoiced, or rejected/expired/sold/paid",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "QUOTATION_ALREADY_MOVED",
+                    "QUOTATION_ALREADY_INVOICED",
+                    "QUOTATION_NOT_MOVABLE"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/pre-invoices/{id}/payment-link": {
+      "get": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Current payment link of a pre-invoice",
+        "description": "Permission payments.link.manage. Never returns the token.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest link or null",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "linkId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["active", "revoked", "expired", "paid"]
+                        },
+                        "source": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["pre_invoice", "quotation"]
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "number": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "amount": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "boundToCustomer": {
+                          "type": "boolean"
+                        },
+                        "reviewFlags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "paidAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "amountPaid": {
+                          "type": "number"
+                        },
+                        "gatewayTransactionId": {
+                          "type": "string"
+                        },
+                        "conversion": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "in_progress",
+                                "done",
+                                "failed",
+                                "blocked_stock",
+                                "needs_review"
+                              ]
+                            },
+                            "invoiceId": {
+                              "type": "string"
+                            },
+                            "invoiceNo": {
+                              "type": "string"
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "matchesDocument": {
+                          "type": "boolean",
+                          "description": "GET only: false when the document changed and the link must be regenerated"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Create or regenerate the payment link of a pre-invoice",
+        "description": "Permission payments.link.manage. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the pre-invoice's stored total. ",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Link created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "example": "https://aquakart.co.in/pay/{token}"
+                    },
+                    "linkId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "revoked", "expired", "paid"]
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["pre_invoice", "quotation"]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "boundToCustomer": {
+                      "type": "boolean"
+                    },
+                    "reviewFlags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "paidAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "amountPaid": {
+                      "type": "number"
+                    },
+                    "gatewayTransactionId": {
+                      "type": "string"
+                    },
+                    "conversion": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "in_progress",
+                            "done",
+                            "failed",
+                            "blocked_stock",
+                            "needs_review"
+                          ]
+                        },
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "invoiceNo": {
+                          "type": "string"
+                        },
+                        "lastError": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "matchesDocument": {
+                      "type": "boolean",
+                      "description": "GET only: false when the document changed and the link must be regenerated"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Document needs a valid customer mobile",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["CUSTOMER_PHONE_INVALID"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SOURCE_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not payable (paid, invoiced, rejected, expired, zero total, non-INR) or quotation moved",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["NOT_PAYABLE", "USE_PRE_INVOICE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PhonePe not configured or disabled",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["GATEWAY_DISABLED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Revoke the active payment link of a pre-invoice",
+        "description": "Permission payments.link.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revoked count",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SOURCE_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/quotations/{id}/payment-link": {
+      "get": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Current payment link of a quotation",
+        "description": "Permission payments.link.manage. Never returns the token.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest link or null",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "linkId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["active", "revoked", "expired", "paid"]
+                        },
+                        "source": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["pre_invoice", "quotation"]
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "number": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "amount": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "boundToCustomer": {
+                          "type": "boolean"
+                        },
+                        "reviewFlags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "paidAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "amountPaid": {
+                          "type": "number"
+                        },
+                        "gatewayTransactionId": {
+                          "type": "string"
+                        },
+                        "conversion": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "in_progress",
+                                "done",
+                                "failed",
+                                "blocked_stock",
+                                "needs_review"
+                              ]
+                            },
+                            "invoiceId": {
+                              "type": "string"
+                            },
+                            "invoiceNo": {
+                              "type": "string"
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "matchesDocument": {
+                          "type": "boolean",
+                          "description": "GET only: false when the document changed and the link must be regenerated"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Create or regenerate the payment link of a quotation",
+        "description": "Permission payments.link.manage. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the quotation's stored total. Refused with USE_PRE_INVOICE once the quotation was moved to a pre-invoice.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Link created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "example": "https://aquakart.co.in/pay/{token}"
+                    },
+                    "linkId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["active", "revoked", "expired", "paid"]
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["pre_invoice", "quotation"]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "boundToCustomer": {
+                      "type": "boolean"
+                    },
+                    "reviewFlags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "paidAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "amountPaid": {
+                      "type": "number"
+                    },
+                    "gatewayTransactionId": {
+                      "type": "string"
+                    },
+                    "conversion": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "in_progress",
+                            "done",
+                            "failed",
+                            "blocked_stock",
+                            "needs_review"
+                          ]
+                        },
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "invoiceNo": {
+                          "type": "string"
+                        },
+                        "lastError": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "matchesDocument": {
+                      "type": "boolean",
+                      "description": "GET only: false when the document changed and the link must be regenerated"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Document needs a valid customer mobile",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["CUSTOMER_PHONE_INVALID"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SOURCE_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not payable (paid, invoiced, rejected, expired, zero total, non-INR) or quotation moved",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["NOT_PAYABLE", "USE_PRE_INVOICE"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PhonePe not configured or disabled",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["GATEWAY_DISABLED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Revoke the active payment link of a quotation",
+        "description": "Permission payments.link.manage.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revoked count",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SOURCE_NOT_FOUND"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/crm/quotations/status": {
       "get": {
         "description": "",
@@ -8413,6 +11219,9 @@
           },
           "404": {
             "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
           },
           "500": {
             "description": "Internal Server Error"
@@ -13361,6 +16170,9 @@
           "200": {
             "description": "OK"
           },
+          "400": {
+            "description": "Bad Request"
+          },
           "404": {
             "description": "Not Found"
           }
@@ -14599,6 +17411,10 @@
       "description": "CRM / Payments endpoints"
     },
     {
+      "name": "CRM / Pre-invoices & Payment Links",
+      "description": "CRM / Pre-invoices & Payment Links endpoints"
+    },
+    {
       "name": "CRM / Quotations",
       "description": "CRM / Quotations endpoints"
     },
@@ -14649,6 +17465,10 @@
     {
       "name": "Payments",
       "description": "Payments endpoints"
+    },
+    {
+      "name": "Payments / Offline Links",
+      "description": "Payments / Offline Links endpoints"
     },
     {
       "name": "PhonePe Gateway",

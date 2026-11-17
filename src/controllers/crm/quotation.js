@@ -5,6 +5,7 @@ import { sendQuotationWhatsApp } from "../../services/quotation/quotationWhatsAp
 import AquaInvoice from "../../models/crm/invoice.js";
 import { persistInvoice, validateInvoicePayload } from "./invoice.js";
 import { mapQuotationToInvoicePayload } from "../../services/quotation/quotationInvoice.js";
+import { calculateTotals } from "../../services/quotation/quotationTotals.js";
 
 const isValidObjectId = (id) =>
   mongoose.Types.ObjectId.isValid(String(id || ""));
@@ -66,33 +67,6 @@ const getNextQuotationNo = async () => {
   const lastSerial = Number(lastQuotation?.quotationNo?.split("|")?.[2]) || 0;
   const nextSerial = String(lastSerial + 1).padStart(4, "0");
   return `${prefix}${nextSerial}`;
-};
-
-const calculateTotals = (payload = {}) => {
-  const products = Array.isArray(payload.products) ? payload.products : [];
-  let subTotal = 0;
-
-  const calculatedProducts = products.map((product) => {
-    const quantity = Number(product.productQuantity) || 0;
-    const price = Number(product.productPrice) || 0;
-    const discount = Number(product.productDiscount) || 0;
-    const tax = Number(product.productTax) || 0;
-    const productTotal = Math.max(quantity * price - discount, 0) + tax;
-    subTotal += productTotal;
-    return { ...product, productTotal };
-  });
-
-  const discount = Number(payload.discount) || 0;
-  const tax = Number(payload.tax) || 0;
-  const totalAmount = Math.max(subTotal - discount, 0) + tax;
-
-  return {
-    products: calculatedProducts,
-    subTotal,
-    discount,
-    tax,
-    totalAmount,
-  };
 };
 
 const validateQuotationPayload = (payload = {}) => {
@@ -665,6 +639,18 @@ const convertQuotationToInvoice = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Quotation not found" });
+    }
+
+    // A quotation moved to a pre-invoice is invoiced from the pre-invoice
+    // (after payment), never directly: that would create a second invoice.
+    if (quotation.convertedToPreInvoice) {
+      return res.status(409).json({
+        success: false,
+        code: "QUOTATION_MOVED_TO_PRE_INVOICE",
+        message:
+          "This quotation was moved to a pre-invoice; the invoice is created from the pre-invoice",
+        preInvoiceId: quotation.convertedToPreInvoice,
+      });
     }
 
     // Never create a second invoice for the same quotation. The source lookup

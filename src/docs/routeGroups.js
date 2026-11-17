@@ -29,6 +29,8 @@ const labels = {
   mcp: "MCP",
   aquaEnv: "Environment",
   phonepegatway: "PhonePe Gateway",
+  preInvoice: "Pre-invoices & Payment Links",
+  offlinePayments: "Payments / Offline Links",
 };
 const humanize = (name) =>
   labels[name] ||
