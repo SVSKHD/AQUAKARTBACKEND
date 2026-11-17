@@ -95,6 +95,13 @@ const AquaQuotationSchema = new mongoose.Schema(
       type: ObjectId,
       ref: "AquaOrder",
     },
+    // Set when the quotation was moved to a pre-invoice; payment links are
+    // then allowed only on the pre-invoice.
+    convertedToPreInvoice: {
+      type: ObjectId,
+      ref: "AquaPreInvoice",
+      default: null,
+    },
     notes: { type: String },
     terms: { type: String },
     whatsapp: {

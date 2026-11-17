@@ -7,11 +7,16 @@ const keyIndex = () => process.env.PHONEPE_KEY_INDEX || "1";
 const baseUrl = () =>
   process.env.PHONEPE_BASE_URL || "https://api.phonepe.com/apis/hermes";
 
+export const phonePeMerchantId = () => merchantId() || "";
+
+// redirectUrl is optional: storefront checkout keeps the default
+// /order/{transactionId}; offline payment links pass their own page.
 export const createPhonePePayment = async ({
   transactionId,
   userId,
   amount,
   phone,
+  redirectUrl,
 }) => {
   if (!merchantId() || !saltKey())
     throw Object.assign(new Error("PhonePe is not configured"), {
@@ -22,7 +27,9 @@ export const createPhonePePayment = async ({
     merchantTransactionId: transactionId,
     merchantUserId: String(userId),
     amount: Math.round(amount * 100),
-    redirectUrl: `${process.env.ECOM_BASE_URL || "https://aquakart.co.in"}/order/${transactionId}`,
+    redirectUrl:
+      redirectUrl ||
+      `${process.env.ECOM_BASE_URL || "https://aquakart.co.in"}/order/${transactionId}`,
     redirectMode: "REDIRECT",
     callbackUrl: `${process.env.API_BASE_URL || "https://api.aquakart.co.in"}/v1/webhooks/payments/phonepe/${transactionId}`,
     mobileNumber: String(phone || "")
@@ -69,9 +76,17 @@ export const verifyPhonePePayment = async (transactionId) => {
       : code === "PAYMENT_PENDING"
         ? "pending"
         : "failed";
+  const data = response.data?.data || {};
   return {
     status,
-    amount: Number(response.data?.data?.amount || 0) / 100,
+    amount: Number(data.amount || 0) / 100,
+    // Extra fields for strict checks (offline payment links); existing
+    // callers ignore them.
+    code: code || null,
+    merchantId: data.merchantId || null,
+    merchantTransactionId: data.merchantTransactionId || null,
+    gatewayTransactionId: data.transactionId || null,
+    paymentInstrumentType: data.paymentInstrument?.type || null,
     raw: response.data,
   };
 };

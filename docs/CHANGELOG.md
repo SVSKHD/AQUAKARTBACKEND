@@ -165,6 +165,127 @@ test/mcpTaxonomySeo.test.js` (58 tests, all pass). Live read tools for
     (`needsTitleImage`, opt-in `onlyIfMissing`) changes are planned for the
     second PR.
 
+### Pre-invoices and admin-created offline payment links (PhonePe)
+
+- Request/problem: Let admins send a customer a payment link for an offline
+  sale, against a new pre-invoice document (own number series, stored totals)
+  or a quotation. The customer signs in with Google, confirms an address,
+  and pays with the existing PhonePe integration. A verified payment creates
+  the final invoice exactly once. Approved choices:
+  - PhonePe returns to `/pay/{token}?return=1`.
+  - Stock short at payment time: the payment is recorded and the invoice is
+    retried.
+  - The existing quotation convert is blocked once a quotation is moved to a
+    pre-invoice.
+  - New permissions, assigned to no role.
+  - The invoice WhatsApp stays on.
+- Corrections to the brief, found in the audit:
+  - The existing quotation conversion sets `Sold`, not `Converted`.
+  - `persistInvoice` consumes stock (it throws when stock is short) and sends
+    WhatsApp.
+  - PhonePe's return URL was hardcoded.
+  - `verifyPhonePePayment` returned no merchant or transaction fields.
+  - No existing test covered `createPayment` or the webhook.
+- Changes/result:
+  - **New models:** `AquaPreInvoice` and `AquaOfflinePaymentLink` (SHA-256
+    token hash, document snapshot hash, one active link per document,
+    customer binding, review flags, conversion state).
+  - **Additive fields on existing models:**
+    - `PaymentAttempt.source` (`ECOM` default or `CRM_OFFLINE`), plus
+      `sourceKind`, `sourceId` and `paymentLinkId`. `checkoutSessionId` is
+      required only for `ECOM`.
+    - `AquaInvoice.sourcePreInvoiceId/No` (partial-unique).
+    - `AquaQuotation.convertedToPreInvoice`.
+    - `AquaEcomUser.alternatePhone`.
+  - **Admin API:**
+    - Pre-invoice create, list, get, edit and cancel.
+    - Move a quotation to a pre-invoice (the quotation is kept, its link is
+      revoked and its follow-ups stopped).
+    - Create, regenerate, revoke and view links on both document kinds.
+    - Permissions `preinvoices.read`, `preinvoices.manage` and
+      `payments.link.manage`.
+  - **Customer API** under `/v1/payments/offline/:token`:
+    - Public summary with only the allowed fields, and an identical 404 for
+      unknown, revoked, expired, outdated and unpayable links.
+    - Rate limited.
+    - Google-session customer binding: append-only address, alternate phone,
+      a flag (never a merge) when the phone is on another account.
+    - Initiate: amount from the database only, one initiate at a time,
+      pending attempts reused, stock checked before payment.
+    - Status, verified with PhonePe server-side.
+  - **Verification:** the existing PhonePe webhook and admin reconcile route
+    `CRM_OFFLINE` attempts to the new service.
+    - Strict merchant, transaction, INR and paise checks.
+    - Guarded steps: attempt paid, then link paid, then document paid, then
+      one invoice through the existing `persistInvoice`, linked to the
+      customer.
+    - Duplicate payments, total changes after payment, short stock and
+      refunds are each handled without a second invoice.
+    - The storefront path (`finalize`) is unchanged.
+  - **PhonePe service (additive):** optional `redirectUrl`; the verify result
+    now also includes `merchantId`, `merchantTransactionId`,
+    `gatewayTransactionId`, `paymentInstrumentType` and `code`.
+  - **Refactors:** quotation `calculateTotals` moved unchanged to
+    `src/services/quotation/quotationTotals.js`, now used by quotations and
+    pre-invoices. New `assertInvoiceStock` export (read-only stock check).
+  - **Existing route change:** `POST /v1/crm/quotations/:id/convert-to-invoice`
+    returns 409 `QUOTATION_MOVED_TO_PRE_INVOICE` for a moved quotation.
+- Files:
+  - New: `src/models/crm/preInvoice.js`, `src/models/offlinePaymentLink.js`,
+    `src/services/offlinePayments/{rules,sources,service,preInvoices,mongoStore,index}.js`,
+    `src/services/quotation/quotationTotals.js`,
+    `src/controllers/offlinePayments.js`, `src/routes/offlinePayments.js`,
+    `src/routes/crm/preInvoice.js`, `src/docs/offlinePayments.js`,
+    `test/offlinePayments.test.js`, `docs/OFFLINE_PAYMENT_LINKS.md`.
+  - Modified: `app.js`, `src/models/paymentAttempt.js`,
+    `src/models/crm/invoice.js`, `src/models/crm/quotation.js`,
+    `src/models/user.js`, `src/services/gateways/phonepe.js`,
+    `src/controllers/payments.js`, `src/controllers/crm/quotation.js`,
+    `src/controllers/crm/invoice.js`, `src/constants/permissions.js`,
+    `src/docs/routeGroups.js`, `swagger-autogen.js`, `swagger-output.json`,
+    `.env.example`, `docs/COMMERCE_PLATFORM_API.md`, `docs/README.md`,
+    `docs/PROJECT_MAP.md`.
+- Validation:
+  - `node --check` on every changed JS file: OK. Importing `app.js` without a
+    database: OK.
+  - `node --test test/offlinePayments.test.js`: 28/28 pass. These are service
+    tests with an in-memory store and a fake PhonePe gateway, plus HTTP
+    checks of the real routers for 401 and 404 without a database. They
+    cover:
+    - admin auth and the new permissions
+    - invalid, expired and revoked links
+    - the second user blocked
+    - address and phone validation
+    - amount and total tampering
+    - concurrent initiate
+    - duplicate webhooks and duplicate payments
+    - pending, failed and refunded attempts
+    - verification mismatches
+    - stock blocking with retry
+    - quotation move, second move blocked, link revoked on move
+    - paying a pre-invoice and paying a quotation, through the same adapter
+      interface
+    - exactly one invoice per source
+    - the invoice visible to the customer
+    - `PaymentAttempt` schema: ECOM still requires a checkout session
+    - the guarded quotation convert route
+  - Full suite `node --test`: 367/368. The only failure is the existing
+    `invoiceViews.test.js` test (recorded 2026-11-14).
+  - `npm run swagger`: 15 operations added, none removed. Only
+    convert-to-invoice and payment reconcile changed among existing
+    operations. `test/routeGroups.test.js` passes.
+  - Not run: anything against MongoDB or the real PhonePe API, the
+    storefront webhook path end-to-end (static review only; `finalize` is
+    unchanged), or any deploy.
+- Limitations/follow-up:
+  - PhonePe's status API can't report refunds; they're handled outside this
+    flow.
+  - Duplicate payments and total changes after payment are only flagged for
+    admin action.
+  - No CRM screens or `/pay/{token}` page yet: they belong to the CRM and
+    AQUAKARTECOM repos, and the API contract is in the guide.
+  - Rolling back while links are pending needs the steps in the guide.
+
 ## 2026-11-14
 
 ### Configuration moved to the encrypted aqua-env collection, managed from the CRM

@@ -85,6 +85,10 @@ const AquaInvoiceSchema = new mongoose.Schema(
       index: true,
     },
     sourceQuotationNo: { type: String },
+    // Set when the invoice was created from a paid pre-invoice. Unique (see
+    // the partial index below), so one pre-invoice can never get two invoices.
+    sourcePreInvoiceId: { type: ObjectId, ref: "AquaPreInvoice" },
+    sourcePreInvoiceNo: { type: String },
     productId: { type: ObjectId, ref: "AquaProduct" },
     paymentType: { type: String },
     migrated: { type: Boolean, default: false, index: true },
@@ -97,6 +101,16 @@ const AquaInvoiceSchema = new mongoose.Schema(
 // Non-unique: existing data may already repeat numbers. Used by the MCP
 // invoice audit's duplicate check (src/services/mcp/invoiceStore.js).
 AquaInvoiceSchema.index({ invoiceNo: 1 });
+
+// Only documents that actually carry a pre-invoice id are indexed, so
+// existing invoices are unaffected.
+AquaInvoiceSchema.index(
+  { sourcePreInvoiceId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { sourcePreInvoiceId: { $type: "objectId" } },
+  },
+);
 
 AquaInvoiceSchema.pre("save", function normalizeInvoiceOwnership() {
   this.customerPhoneNormalized = normalizeIndianPhone(

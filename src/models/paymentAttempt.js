@@ -1,11 +1,32 @@
 import mongoose from "mongoose";
 
+// ECOM: storefront checkout (checkoutSessionId + orderId), unchanged.
+// CRM_OFFLINE: an admin-created payment link for a pre-invoice or quotation
+// (src/services/offlinePayments): no checkout session, no order.
+export const PAYMENT_ATTEMPT_SOURCES = ["ECOM", "CRM_OFFLINE"];
+
 const PaymentAttemptSchema = new mongoose.Schema(
   {
+    source: {
+      type: String,
+      enum: PAYMENT_ATTEMPT_SOURCES,
+      default: "ECOM",
+      index: true,
+    },
     checkoutSessionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "AquaCheckoutSession",
-      required: true,
+      // Still required for every storefront (ECOM) attempt.
+      required: function requiredForEcom() {
+        return (this.source || "ECOM") === "ECOM";
+      },
+      index: true,
+    },
+    sourceKind: { type: String, enum: ["pre_invoice", "quotation"] },
+    sourceId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    paymentLinkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AquaOfflinePaymentLink",
       index: true,
     },
     orderId: {

@@ -27,6 +27,10 @@ export const PERMISSIONS = Object.freeze([
   "payments.create",
   "payments.reconcile",
   "payments.refund",
+  // Admin-created offline payment links (pre-invoices and quotations).
+  "payments.link.manage",
+  "preinvoices.read",
+  "preinvoices.manage",
   "gateways.read",
   "gateways.manage",
   "seo.read",

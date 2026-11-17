@@ -53,6 +53,12 @@ Send a unique `Idempotency-Key` header.
 malformed value is dropped and never blocks the order. The team confirms the
 slot by phone.
 
+Admin-created payment links for offline sales (pre-invoices and
+quotations) use the same PhonePe service and webhook with
+`PaymentAttempt.source: "CRM_OFFLINE"`; storefront attempts keep
+`source: "ECOM"` and behave as described here. See
+[OFFLINE_PAYMENT_LINKS.md](OFFLINE_PAYMENT_LINKS.md).
+
 ## CRM API
 
 | Area               | Endpoints                                                                                   |

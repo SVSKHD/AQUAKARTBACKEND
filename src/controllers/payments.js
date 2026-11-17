@@ -12,6 +12,14 @@ import {
 import { writeAudit } from "../services/audit.js";
 import { installationFrom } from "../services/checkout.js";
 import { qualifyReferralForPaidOrder } from "../services/referrals.js";
+import { offlinePayments } from "../services/offlinePayments/index.js";
+
+// Attempts from admin-created payment links (source CRM_OFFLINE) have no
+// order or checkout session; their verification is handled by the offline
+// payment service. Storefront (ECOM) attempts keep using finalize() below.
+const isOffline = (attempt) => attempt?.source === "CRM_OFFLINE";
+const plainAttempt = (attempt) =>
+  typeof attempt?.toObject === "function" ? attempt.toObject() : attempt;
 
 const gatewayHandlers = {
   phonepe: { create: createPhonePePayment, verify: verifyPhonePePayment },
@@ -253,6 +261,14 @@ export const phonePeWebhook = async (req, res) => {
     const verification = await verifyPhonePePayment(
       attempt.merchantTransactionId,
     );
+    if (isOffline(attempt)) {
+      await offlinePayments.processVerification(
+        plainAttempt(attempt),
+        verification,
+        "phonepe-webhook-verified",
+      );
+      return res.json({ success: true });
+    }
     await finalize(attempt, verification, "phonepe-webhook-verified");
     return res.json({ success: true });
   } catch (error) {
@@ -284,6 +300,35 @@ export const reconcile = async (req, res) => {
       .status(404)
       .json({ success: false, message: "Payment not found" });
   const before = attempt.toObject();
+  if (isOffline(attempt)) {
+    try {
+      const verification = await gatewayHandlers[attempt.gateway].verify(
+        attempt.merchantTransactionId,
+      );
+      let updated = await offlinePayments.processVerification(
+        before,
+        verification,
+        "admin-reconcile",
+      );
+      // Paid but the invoice is missing (e.g. stock was short): retry it.
+      if (updated?.status === "paid")
+        await offlinePayments.retryConversion(updated);
+      updated = await PaymentAttempt.findById(attempt._id).lean();
+      await writeAudit({
+        req,
+        action: "payment.reconcile",
+        resourceType: "payment",
+        resourceId: attempt._id,
+        before,
+        after: updated,
+      });
+      return res.json({ success: true, data: updated });
+    } catch (error) {
+      return res
+        .status(error.status || 400)
+        .json({ success: false, code: error.code, message: error.message });
+    }
+  }
   const updated = await finalize(
     attempt,
     await gatewayHandlers[attempt.gateway].verify(
