@@ -8,6 +8,7 @@ import { applyCrmCustomerAiDocs } from "./src/docs/crmCustomerAi.js";
 import { applyStorefrontDocs } from "./src/docs/storefront.js";
 import { applyMcpDocs } from "./src/docs/mcp.js";
 import { applyGstinLookupDocs } from "./src/docs/gstinLookup.js";
+import { applyAquaEnvDocs } from "./src/docs/aquaEnv.js";
 
 // Swagger configuration
 // const doc = {
@@ -41,10 +42,14 @@ const generateSwaggerDocs = async () => {
     const result = await swaggerAutogen()(outputFile, endpointsFiles);
     const document = JSON.parse(await fs.readFile(outputFile, "utf8"));
     await applyRouteGroups(
-      applyMcpDocs(
-        applyStorefrontDocs(
-          applyGstinLookupDocs(
-            applyCrmCustomerAiDocs(applyCrmAiDocs(applyCategoryDocs(document))),
+      applyAquaEnvDocs(
+        applyMcpDocs(
+          applyStorefrontDocs(
+            applyGstinLookupDocs(
+              applyCrmCustomerAiDocs(
+                applyCrmAiDocs(applyCategoryDocs(document)),
+              ),
+            ),
           ),
         ),
       ),

@@ -18,6 +18,64 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-14
+
+### Configuration moved to the encrypted aqua-env collection, managed from the CRM
+
+- Request/problem: Move all environment variables into a MongoDB collection
+  `aqua-env`, managed through the CRM; only the DB connection stays in the
+  environment. Chosen: values encrypted (one extra bootstrap variable,
+  `AQUA_ENV_ENCRYPTION_KEY`) and stored values win over `.env`.
+- Changes/result:
+  - Startup (`index.js`) connects MongoDB first, decrypts `aqua-env` into
+    `process.env`, then dynamically imports the app and its modules, so
+    existing `process.env.X` reads work unchanged. Logs key names only;
+    undecryptable records keep their `.env` value; DB down → `.env` only.
+    The server now waits for the DB connection before listening.
+  - AES-256-GCM per value with the key name as AAD; reserved names
+    (`DB_URL`, `AQUA_ENV_ENCRYPTION_KEY`, `PORT`, OS variables, `NODE_`/
+    `NPM_`/`PM2_`/`DOPPLER_`/`LD_`/`DYLD_`) are refused and skipped.
+  - CRM API `/v1/crm/env` (list/get with `settings.read`; PUT create or
+    partial update and DELETE with `settings.manage`). Secrets masked, never
+    returned in full; writes apply to `process.env` on that instance at once
+    and return a `restartNote`; delete falls back to the `.env` value. Audit
+    actions `settings.env.*` without values. New permissions are not in any
+    role by default.
+  - `npm run env:import` copies a `.env` file into `aqua-env` (dry run by
+    default, `--apply`, `--overwrite`, `--file`); prints names only and
+    verifies decryption after writing. `npm run mcp:grants` now loads
+    `aqua-env` after connecting.
+- Files: `index.js`, `app.js`, `package.json`, `.env.example`,
+  `swagger-autogen.js`, `swagger-output.json`, `src/models/aquaEnv.js`,
+  `src/services/aquaEnv.js`, `src/controllers/crm/aquaEnv.js`,
+  `src/routes/crm/aquaEnv.js`, `src/docs/aquaEnv.js`,
+  `src/docs/routeGroups.js`, `src/constants/permissions.js`,
+  `src/scripts/aqua-env-import.js`, `src/scripts/mcp-grants.js`,
+  `test/aquaEnv.test.js`, `docs/RUNTIME_CONFIG.md`, `docs/README.md`,
+  `docs/PROJECT_MAP.md`.
+- Validation:
+  - `node --check` on every changed JS file: OK.
+  - `node --test test/aquaEnv.test.js`: 7/7 pass (in-memory model fake).
+  - `node --test` (full suite): 309/310; the only failure is the existing
+    `invoiceViews.test.js` "builds separate admin and customer invoice
+    destinations from one id".
+  - `npm run swagger`: four `/v1/crm/env` operations under
+    "CRM / Environment" with auth, body and error codes;
+    `test/routeGroups.test.js` passes.
+  - Importing `app.js` with an empty `DB_URL` succeeds.
+  - ESLint on new files: only the repo-wide existing patterns
+    (quotes vs Prettier, `.js` import extensions, `for` loops, `_id`,
+    `console`).
+  - Not run: `index.js` startup against a database, `env:import` against
+    any database, any live CRM request.
+- Limitations/follow-up: no encryption-key rotation; edits reach other
+  instances only on restart, and startup-read settings (Cloudinary,
+  WhatsApp, MCP, scheduler, `app.js` CORS/proxy) need a restart; seed
+  scripts and `npm run role` still read only the server environment; the
+  CRM screen lives in the CRM repo; `GOOGLE_APPLICATION_CREDENTIALS` file
+  must still be mounted; the hard-coded WhatsApp key fallback in
+  `src/utils/sendWhatsApp.js` was left as is (out of scope).
+
 ## 2026-11-13
 
 ### MCP for Codex: one-time image upload URLs, banner alt text, adminUrl, root resource metadata

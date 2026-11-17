@@ -31,6 +31,8 @@ export const PERMISSIONS = Object.freeze([
   "audit.read",
   "jobs.read",
   "jobs.manage",
+  "settings.read",
+  "settings.manage",
 ]);
 
 export const SUPER_ADMIN_ROLE = "super-admin";

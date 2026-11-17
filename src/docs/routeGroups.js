@@ -27,6 +27,7 @@ const labels = {
   ai: "AI",
   seo: "SEO",
   mcp: "MCP",
+  aquaEnv: "Environment",
   phonepegatway: "PhonePe Gateway",
 };
 const humanize = (name) =>

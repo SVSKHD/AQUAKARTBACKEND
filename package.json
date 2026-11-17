@@ -19,7 +19,8 @@
     "seed:blog:pawsattva-aquakart": "node src/scripts/seed-pawsattva-aquakart-blog.js",
     "role": "node src/scripts/set-user-role.js",
     "roles:seed": "node src/scripts/set-user-role.js list",
-    "mcp:grants": "node src/scripts/mcp-grants.js"
+    "mcp:grants": "node src/scripts/mcp-grants.js",
+    "env:import": "node src/scripts/aqua-env-import.js"
   },
   "keywords": [],
   "author": "",

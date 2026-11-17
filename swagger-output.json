@@ -12082,6 +12082,733 @@
         "tags": ["CRM / Scheduled Jobs"]
       }
     },
+    "/v1/crm/env/": {
+      "get": {
+        "tags": ["CRM / Environment"],
+        "summary": "List stored configuration variables",
+        "description": "Permission settings.read. Lists the variables in the aqua-env collection with secrets masked. Values are never returned in full for secrets. status.lastLoad reports which keys were applied at startup (names only).",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variables",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "example": "SMTP_HOST"
+                      },
+                      "secret": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Plain value when secret is false. Secrets are masked: '••••' plus the last 4 characters for values of 12+ characters, otherwise '••••'. null when the value cannot be decrypted (readable false).",
+                        "example": "••••a1Z2"
+                      },
+                      "readable": {
+                        "type": "boolean",
+                        "description": "false when AQUA_ENV_ENCRYPTION_KEY is missing or wrong"
+                      },
+                      "inEffect": {
+                        "type": "boolean",
+                        "description": "process.env on this instance currently holds this value"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "updatedBy": {
+                        "type": "string",
+                        "description": "Staff id"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                },
+                "status": {
+                  "type": "object",
+                  "properties": {
+                    "keyConfigured": {
+                      "type": "boolean"
+                    },
+                    "lastLoad": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "loaded": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "failed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "skipped": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "keyConfigured": {
+                          "type": "boolean"
+                        },
+                        "error": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "AUTH"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "FORBIDDEN"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "SERVER_ERROR"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/env/{key}": {
+      "get": {
+        "tags": ["CRM / Environment"],
+        "summary": "Get one stored variable (masked if secret)",
+        "description": "Permission settings.read.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,99}$",
+            "example": "SMTP_HOST"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variable",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "example": "SMTP_HOST"
+                    },
+                    "secret": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Plain value when secret is false. Secrets are masked: '••••' plus the last 4 characters for values of 12+ characters, otherwise '••••'. null when the value cannot be decrypted (readable false).",
+                      "example": "••••a1Z2"
+                    },
+                    "readable": {
+                      "type": "boolean",
+                      "description": "false when AQUA_ENV_ENCRYPTION_KEY is missing or wrong"
+                    },
+                    "inEffect": {
+                      "type": "boolean",
+                      "description": "process.env on this instance currently holds this value"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "description": "Staff id"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "AUTH"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "FORBIDDEN"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not stored",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "NOT_FOUND"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "SERVER_ERROR"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["CRM / Environment"],
+        "summary": "Create or update a variable",
+        "description": "Permission settings.manage. value is required when creating; on update, omitted fields keep their stored values. The value is encrypted (AES-256-GCM) before it is stored and is applied to process.env on this instance immediately. DB_URL, AQUA_ENV_ENCRYPTION_KEY, PORT, PATH-like OS variables and NODE_/NPM_/PM2_/DOPPLER_/LD_/DYLD_ prefixes are refused. Audited as settings.env.create/update with no values.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,99}$",
+            "example": "SMTP_HOST"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "secret": {
+                  "type": "boolean",
+                  "description": "Mask in responses (default true on create)"
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 300
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "example": "SMTP_HOST"
+                    },
+                    "secret": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Plain value when secret is false. Secrets are masked: '••••' plus the last 4 characters for values of 12+ characters, otherwise '••••'. null when the value cannot be decrypted (readable false).",
+                      "example": "••••a1Z2"
+                    },
+                    "readable": {
+                      "type": "boolean",
+                      "description": "false when AQUA_ENV_ENCRYPTION_KEY is missing or wrong"
+                    },
+                    "inEffect": {
+                      "type": "boolean",
+                      "description": "process.env on this instance currently holds this value"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "description": "Staff id"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "restartNote": {
+                  "type": "string",
+                  "description": "Changes apply to process.env on the instance that handled the request; settings read only at startup need a restart."
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "example": "SMTP_HOST"
+                    },
+                    "secret": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Plain value when secret is false. Secrets are masked: '••••' plus the last 4 characters for values of 12+ characters, otherwise '••••'. null when the value cannot be decrypted (readable false).",
+                      "example": "••••a1Z2"
+                    },
+                    "readable": {
+                      "type": "boolean",
+                      "description": "false when AQUA_ENV_ENCRYPTION_KEY is missing or wrong"
+                    },
+                    "inEffect": {
+                      "type": "boolean",
+                      "description": "process.env on this instance currently holds this value"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "description": "Staff id"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "restartNote": {
+                  "type": "string",
+                  "description": "Changes apply to process.env on the instance that handled the request; settings read only at startup need a restart."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name, reserved name, or invalid field",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "INVALID_KEY"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "AUTH"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "FORBIDDEN"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Concurrent create",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "CONFLICT"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "SERVER_ERROR"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AQUA_ENV_ENCRYPTION_KEY is not set on the server",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "ENCRYPTION_KEY_MISSING"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["CRM / Environment"],
+        "summary": "Delete a stored variable",
+        "description": "Permission settings.manage. process.env falls back to the server environment value (.env/Doppler) if there was one, otherwise the variable is removed. Audited as settings.env.delete.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,99}$",
+            "example": "SMTP_HOST"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "secret": {
+                      "type": "boolean"
+                    },
+                    "fallback": {
+                      "type": "string",
+                      "enum": ["server-env", "none"]
+                    }
+                  }
+                },
+                "restartNote": {
+                  "type": "string",
+                  "description": "Changes apply to process.env on the instance that handled the request; settings read only at startup need a restart."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "AUTH"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "FORBIDDEN"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not stored",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "NOT_FOUND"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "SERVER_ERROR"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/permissions": {
       "get": {
         "description": "",
@@ -13842,6 +14569,10 @@
     {
       "name": "CRM / Ecommerce Orders",
       "description": "CRM / Ecommerce Orders endpoints"
+    },
+    {
+      "name": "CRM / Environment",
+      "description": "CRM / Environment endpoints"
     },
     {
       "name": "CRM / Invoices",

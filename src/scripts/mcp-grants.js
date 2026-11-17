@@ -4,6 +4,7 @@ import AquaAdminUser from "../models/crm/adminUser.js";
 import { randomUUID } from "node:crypto";
 import { McpOAuthClient, McpOAuthToken } from "../models/mcp/oauth.js";
 import { loadMcpConfig, redirectUriAllowed } from "../services/mcp/config.js";
+import { aquaEnvStore } from "../services/aquaEnv.js";
 
 // Lists or revokes MCP OAuth grants (ChatGPT/Claude connections). Never
 // prints tokens (only hashes are stored anyway).
@@ -21,6 +22,8 @@ const [command, target, ...rest] = process.argv.slice(2);
 const now = new Date();
 
 await mongoose.connect(process.env.DB_URL);
+// MCP settings live in the "aqua-env" collection, like for the server.
+await aquaEnvStore.load();
 try {
   if (command === "list") {
     const grants = await McpOAuthToken.aggregate([

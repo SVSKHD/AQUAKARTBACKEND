@@ -6,11 +6,15 @@ and controller for the current contract.
 
 ## Runtime and boundaries
 
-- `index.js`: loads configuration, connects MongoDB, starts the scheduler,
-  configures Cloudinary, listens on `PORT` (default 5300), and generates Swagger.
+- `index.js`: loads `.env`, connects MongoDB, loads the encrypted `aqua-env`
+  collection into `process.env` (see [runtime config](RUNTIME_CONFIG.md)),
+  then imports the app, starts the scheduler, configures Cloudinary, listens on
+  `PORT` (default 5300), and generates Swagger.
 - `app.js`: constructs Express, configures middleware/CORS/proxy handling,
   mounts routers, and serves Swagger UI at `/v1/api-docs`.
-- `config.js`: loads `.env` unless `DOPPLER_PROJECT` is set.
+- `config.js`: loads `.env` unless `DOPPLER_PROJECT` is set. Only `DB_URL`
+  and `AQUA_ENV_ENCRYPTION_KEY` must be there; the rest can live in `aqua-env`
+  (`src/services/aquaEnv.js`, CRM `/v1/crm/env`).
 - `src/utils/db.js`: MongoDB connection. Models are under `src/models/` and
   `src/models/crm/`; do not assume a route module name equals its model name.
 - `src/routes/` and `src/controllers/`: storefront/public APIs.
@@ -61,6 +65,7 @@ the whole repository.
 | Syntax check                | `node --check src/<changed-file>.js`                                      |
 | Lint                        | `npm run lint` (existing Airbnb rules; distinguish pre-existing failures) |
 | Regenerate Swagger          | `npm run swagger`                                                         |
+| Copy .env into aqua-env     | `npm run env:import` (dry run; `-- --apply` writes)                       |
 | Container build             | `docker build -t aquakartbackend:local .` when Docker is available        |
 
 `Dockerfile` uses Node 22 Alpine, production dependencies with lifecycle scripts
