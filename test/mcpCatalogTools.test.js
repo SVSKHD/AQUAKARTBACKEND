@@ -397,6 +397,42 @@ test("coupon reads count targeted customers but never return their ids", async (
   }
 });
 
+test("legacy product and coupon documents are normalised for reads", async () => {
+  const { store, catalog } = setup();
+  store.productDocs.push({
+    _id: objectId(),
+    title: "Old softener",
+    price: "24,999",
+    discountPriceStatus: true,
+    discountPrice: "19999",
+    stock: "7",
+    ratings: "4.5",
+    photos: [{ secure_url: "https://img.test/a.png" }, {}],
+  });
+  const product = (await catalog.listProducts({})).products.at(-1);
+  assert.equal(product.price, 24999);
+  assert.equal(product.discountPrice, 19999);
+  assert.equal(product.stock, 7);
+
+  store.couponDocs.push(
+    {
+      _id: objectId(),
+      code: "OLD10",
+      discountPercentage: 10,
+      validity: new Date("2025-01-31"),
+    },
+    { _id: objectId(), code: "ODD", status: "live", discountValue: "x" },
+  );
+  const { coupons } = await catalog.listCoupons({});
+  const [old, odd] = coupons.slice(-2);
+  assert.equal(old.status, "archived");
+  assert.equal(old.discountType, "percentage");
+  assert.equal(old.discountValue, 10);
+  assert.equal(old.endsAt, "2025-01-31T00:00:00.000Z");
+  assert.equal(odd.status, "archived");
+  assert.equal(odd.discountValue, 0);
+});
+
 test("catalog tools enforce their scopes over MCP; write scopes start unticked", async () => {
   const { catalog, blogs } = setup();
   const callTool = async (scopes, name, args) => {
@@ -544,4 +580,39 @@ test("brand assets are available to any signed-in connection over MCP", async ()
     brand.logos.map((item) => item.variant),
     ["original", "white"],
   );
+});
+
+test("a result that breaks its output schema becomes a clean tool error", async () => {
+  const { catalog, blogs } = setup();
+  const server = createAquakartMcpServer({
+    blogTools: blogs,
+    instagramTools: {},
+    catalogTools: {
+      ...catalog,
+      listProducts: async () => ({
+        products: [{ productId: 1, title: null }],
+        page: 1,
+        limit: 20,
+        total: 1,
+      }),
+    },
+    auth: ctxFor([MCP_SCOPES.productsRead]).auth,
+    correlationId: "test-correlation-id",
+    resourceMetadataUrl: "http://localhost/.well-known/x",
+    log: { log() {}, error() {} },
+  });
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const client = new Client({ name: "t", version: "1" });
+  await client.connect(clientSide);
+  const result = await client.callTool({
+    name: "aquakart_list_products",
+    arguments: {},
+  });
+  await client.close();
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent, undefined);
+  const { error } = JSON.parse(result.content[0].text);
+  assert.equal(error.code, "OUTPUT_INVALID");
+  assert.ok(error.details.fields.includes("products.0.productId"));
 });
