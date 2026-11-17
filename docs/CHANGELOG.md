@@ -44,6 +44,27 @@ test/mcpCatalogTools.test.js test/mcpBlogTools.test.js test/mcpServer.test.js`
   read them are unchanged. `MCP_TRUSTED_FILE_HOSTS` still only trusts
   `*.oaiusercontent.com`, so stock-photo URLs cannot be passed as `image`.
 
+### MCP: output-schema mismatches are returned as tool errors
+
+- Request/problem: the owner wants the MCP server to behave cleanly in ChatGPT
+  as well. A result that did not match its `outputSchema` surfaced as a
+  JSON-RPC `-32602` protocol error for every client.
+- Changes/result: the shared tool wrapper validates each successful result
+  against the tool's output schema and, on a mismatch, returns an
+  `OUTPUT_INVALID` tool error listing the offending fields (keeping
+  `operationId` for writes) and logs it.
+- Files: `src/services/mcp/server.js`, `test/mcpCatalogTools.test.js`,
+  `docs/MCP_BLOG_PUBLISHING.md`.
+- Validation: `node --test test/mcpCatalogTools.test.js
+test/mcpBlogTools.test.js test/mcpServer.test.js test/mcpInstagram.test.js
+test/mcpTaxonomySeo.test.js` (58 tests, all pass). Live read tools for
+  blogs, categories, subcategories, SEO, SEO readiness and Instagram were
+  called against production from Claude and returned valid results; products
+  and coupons stay broken there until this branch is deployed.
+- Limitations/follow-up: not exercised from ChatGPT itself. The ChatGPT
+  file-download host in `MCP_TRUSTED_FILE_HOSTS` is still the unconfirmed
+  default.
+
 ## 2026-11-14
 
 ### Configuration moved to the encrypted aqua-env collection, managed from the CRM

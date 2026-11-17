@@ -581,3 +581,38 @@ test("brand assets are available to any signed-in connection over MCP", async ()
     ["original", "white"],
   );
 });
+
+test("a result that breaks its output schema becomes a clean tool error", async () => {
+  const { catalog, blogs } = setup();
+  const server = createAquakartMcpServer({
+    blogTools: blogs,
+    instagramTools: {},
+    catalogTools: {
+      ...catalog,
+      listProducts: async () => ({
+        products: [{ productId: 1, title: null }],
+        page: 1,
+        limit: 20,
+        total: 1,
+      }),
+    },
+    auth: ctxFor([MCP_SCOPES.productsRead]).auth,
+    correlationId: "test-correlation-id",
+    resourceMetadataUrl: "http://localhost/.well-known/x",
+    log: { log() {}, error() {} },
+  });
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const client = new Client({ name: "t", version: "1" });
+  await client.connect(clientSide);
+  const result = await client.callTool({
+    name: "aquakart_list_products",
+    arguments: {},
+  });
+  await client.close();
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent, undefined);
+  const { error } = JSON.parse(result.content[0].text);
+  assert.equal(error.code, "OUTPUT_INVALID");
+  assert.ok(error.details.fields.includes("products.0.productId"));
+});

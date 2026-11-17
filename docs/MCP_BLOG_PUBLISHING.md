@@ -312,7 +312,10 @@ Common error codes:
   `CONTAINER_FAILED`, `PUBLISH_UNCERTAIN`, `PUBLISH_UNVERIFIED`,
   `ALREADY_POSTED`, `INVALID_ASPECT_RATIO`, `INVALID_CAPTION`
 - **Cleanup:** `CLEANUP_NOT_ALLOWED`, `CLEANUP_FAILED`
-- **General:** `STORAGE_UNAVAILABLE`, `INTERNAL_ERROR`
+- **General:** `STORAGE_UNAVAILABLE`, `INTERNAL_ERROR`, `OUTPUT_INVALID` (a result did not
+  match the tool's output schema; `details.fields` names the stored fields to
+  correct. Returned as a normal tool error so ChatGPT and other clients never
+  see a protocol-level validation failure)
 
 ## Product and coupon rules
 

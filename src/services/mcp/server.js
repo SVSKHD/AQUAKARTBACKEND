@@ -527,6 +527,35 @@ export const createAquakartMcpServer = ({
             }
           }
         }
+        // Last line of defence for every client (ChatGPT, Claude, ...): a
+        // result that doesn't match the tool's outputSchema would otherwise
+        // surface as a protocol error (-32602) that hides what happened.
+        // Report it as a normal tool error naming the offending fields.
+        if (!isError && output) {
+          const check = output.safeParse(body);
+          if (!check.success) {
+            const fields = [
+              ...new Set(
+                check.error.issues.map((issue) => issue.path.join(".")),
+              ),
+            ].slice(0, 20);
+            log.error(`MCP tool ${name} produced invalid output:`, fields);
+            isError = true;
+            body = {
+              ok: false,
+              error: {
+                code: "OUTPUT_INVALID",
+                message: body.operationId
+                  ? "The action completed but its result could not be formatted; read the record again before retrying"
+                  : "Stored data for this result has unexpected values; staff need to correct the listed fields",
+                details: { fields },
+                retryable: false,
+              },
+              ...(body.operationId ? { operationId: body.operationId } : {}),
+              correlationId,
+            };
+          }
+        }
         // Structured audit line: identity, tool, result. No arguments/tokens.
         log.log(
           JSON.stringify({
