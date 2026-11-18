@@ -132,6 +132,12 @@ const linkState = {
     paidAt: { type: "string", format: "date-time" },
     amountPaid: { type: "number" },
     gatewayTransactionId: { type: "string" },
+    paidAttemptId: {
+      type: "string",
+      nullable: true,
+      description:
+        "Payment attempt that paid this link; use it with POST /v1/crm/payments/{id}/reconcile",
+    },
     conversion: {
       type: "object",
       properties: {

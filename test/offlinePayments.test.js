@@ -751,6 +751,13 @@ test("paid quotation: one invoice, quotation Sold, invoice visible to the custom
   assert.equal(saved.payment.mode, "UPI");
   assert.equal(env.store.db.links[0].status, "paid");
   assert.equal(env.store.db.links[0].conversion.status, "done");
+  // The admin link state names the attempt to reconcile.
+  const { link: adminState } = await env.payments.getLinkState({
+    kind: "quotation",
+    sourceId: quotation._id,
+    actor: env.admin,
+  });
+  assert.equal(adminState.paidAttemptId, String(env.store.db.attempts[0]._id));
   // Customer can see it.
   assert.equal(invoice.firebaseUid, user.firebaseUid);
   const customer = env.store.db.users.find((u) => u._id === user._id);
@@ -928,14 +935,23 @@ test("move quotation to pre-invoice: lines and totals copied, second move blocke
   assert.equal(pre.sourceQuotationNo, quotation.quotationNo);
   const savedQuotation = env.store.db.quotation[0];
   assert.equal(String(savedQuotation.convertedToPreInvoice), String(pre._id));
+  assert.equal(savedQuotation.convertedToPreInvoiceNo, pre.preInvoiceNo);
   assert.equal(savedQuotation.status, "Converted");
   assert.equal(savedQuotation.whatsapp.followUpEnabled, false);
   await rejects(env.payments.publicView(quotationToken), "LINK_UNAVAILABLE");
-  await rejects(
+  await assert.rejects(
     env.preInvoices.moveFromQuotation(quotation._id, env.admin),
-    "QUOTATION_ALREADY_MOVED",
+    (error) =>
+      error.code === "QUOTATION_ALREADY_MOVED" &&
+      error.details.preInvoiceNo === pre.preInvoiceNo,
   );
-  await rejects(linkFor(env, "quotation", savedQuotation), "USE_PRE_INVOICE");
+  await assert.rejects(
+    linkFor(env, "quotation", savedQuotation),
+    (error) =>
+      error.code === "USE_PRE_INVOICE" &&
+      error.details.preInvoiceId === String(pre._id) &&
+      error.details.preInvoiceNo === pre.preInvoiceNo,
+  );
   assert.equal(env.store.db.pre_invoice.length, 1);
 });
 
@@ -1032,6 +1048,7 @@ test("pre-invoice edits are blocked once paid; cancelling revokes the link and f
   await rejects(env.payments.publicView(token), "LINK_UNAVAILABLE");
   const q = env.store.db.quotation[0];
   assert.equal(q.convertedToPreInvoice, null);
+  assert.equal(q.convertedToPreInvoiceNo, null);
   assert.equal(q.status, "Sent");
   const again = await env.preInvoices.moveFromQuotation(
     quotation._id,
@@ -1147,6 +1164,7 @@ test("existing quotation convert-to-invoice refuses a quotation moved to a pre-i
   AquaQuotation.findById = async () => ({
     _id: "64b000000000000000000001",
     convertedToPreInvoice: "64b000000000000000000002",
+    convertedToPreInvoiceNo: "AQPI|20261118|0001",
   });
   try {
     const res = {
@@ -1167,6 +1185,11 @@ test("existing quotation convert-to-invoice refuses a quotation moved to a pre-i
     );
     assert.equal(res.statusCode, 409);
     assert.equal(res.body.code, "QUOTATION_MOVED_TO_PRE_INVOICE");
+    assert.equal(res.body.preInvoiceId, "64b000000000000000000002");
+    assert.deepEqual(res.body.details, {
+      preInvoiceId: "64b000000000000000000002",
+      preInvoiceNo: "AQPI|20261118|0001",
+    });
   } finally {
     AquaQuotation.findById = original;
   }

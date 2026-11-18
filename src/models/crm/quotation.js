@@ -102,6 +102,7 @@ const AquaQuotationSchema = new mongoose.Schema(
       ref: "AquaPreInvoice",
       default: null,
     },
+    convertedToPreInvoiceNo: { type: String, default: null },
     notes: { type: String },
     terms: { type: String },
     whatsapp: {

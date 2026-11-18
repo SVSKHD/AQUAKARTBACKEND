@@ -18,6 +18,37 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-18
+
+### Offline payment links: CRM integration gaps
+
+- Request/problem: the Aquacrm25 CRM build for pre-invoices and payment links
+  reported three backend gaps on PR #67: the link state had no payment attempt
+  id to reconcile with, quotation responses carried only the pre-invoice id (no
+  number), and `QUOTATION_MOVED_TO_PRE_INVOICE` put `preInvoiceId` at the top
+  level instead of in `details`.
+- Changes/result:
+  - Admin link state (`GET/POST …/payment-link`) now returns `paidAttemptId`
+    (null until paid), the id for `POST /v1/crm/payments/:id/reconcile`.
+  - Moving a quotation stores `convertedToPreInvoiceNo` on it; cancelling the
+    pre-invoice (or a failed move) clears it. `QUOTATION_ALREADY_MOVED` and
+    `USE_PRE_INVOICE` details include `preInvoiceNo`.
+  - `QUOTATION_MOVED_TO_PRE_INVOICE` adds `details.preInvoiceId`/`preInvoiceNo`;
+    the top-level `preInvoiceId` stays for existing callers.
+- Files: `src/services/offlinePayments/service.js`,
+  `src/services/offlinePayments/preInvoices.js`, `src/models/crm/quotation.js`,
+  `src/controllers/crm/quotation.js`, `src/docs/offlinePayments.js`,
+  `swagger-output.json`, `test/offlinePayments.test.js`,
+  `docs/OFFLINE_PAYMENT_LINKS.md`, `docs/CHANGELOG.md`.
+- Validation: `node --check` on each changed source file passed;
+  `node --test test/offlinePayments.test.js` 28/28 passed (in-memory store,
+  fake gateway); `npm test` 367/368, the one failure being the existing
+  `invoiceViews.test.js` destinations test that also fails on `main`;
+  `npm run swagger` regenerated, diff limited to the new `paidAttemptId`.
+- Limitations/follow-up: quotations moved before this change (dev data only,
+  since PR #67 is not merged or deployed) have no `convertedToPreInvoiceNo`;
+  they get it only if moved again. Not verified against a live backend.
+
 ## 2026-11-17
 
 ### MCP: legacy product/coupon reads fixed; logo overlay on by default

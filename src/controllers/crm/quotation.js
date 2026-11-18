@@ -649,7 +649,13 @@ const convertQuotationToInvoice = async (req, res) => {
         code: "QUOTATION_MOVED_TO_PRE_INVOICE",
         message:
           "This quotation was moved to a pre-invoice; the invoice is created from the pre-invoice",
+        // Top-level preInvoiceId kept for existing callers; details matches
+        // every other offline-payment error.
         preInvoiceId: quotation.convertedToPreInvoice,
+        details: {
+          preInvoiceId: String(quotation.convertedToPreInvoice),
+          preInvoiceNo: quotation.convertedToPreInvoiceNo || null,
+        },
       });
     }
 

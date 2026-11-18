@@ -438,6 +438,9 @@ export const createOfflinePaymentService = ({
       paidAt: iso(link.paidAt),
       amountPaid: link.amountPaid ?? null,
       gatewayTransactionId: link.gatewayTransactionId || null,
+      // Payment attempt that paid this link; the id for
+      // POST /v1/crm/payments/:id/reconcile.
+      paidAttemptId: id(link.paidAttemptId),
       conversion: {
         status: link.conversion?.status || "none",
         invoiceId: id(link.conversion?.invoiceId),
@@ -474,7 +477,10 @@ export const createOfflinePaymentService = ({
           409,
           "USE_PRE_INVOICE",
           "This quotation was moved to a pre-invoice; create the payment link on the pre-invoice",
-          { preInvoiceId: id(doc.convertedToPreInvoice) },
+          {
+            preInvoiceId: id(doc.convertedToPreInvoice),
+            preInvoiceNo: doc.convertedToPreInvoiceNo || null,
+          },
         );
       const payable = adapter.isPayable(doc);
       if (!payable.ok)
