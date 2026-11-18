@@ -231,6 +231,7 @@ export const createPreInvoiceService = ({
           "This quotation already has a pre-invoice",
           {
             preInvoiceId: String(quotation.convertedToPreInvoice),
+            preInvoiceNo: quotation.convertedToPreInvoiceNo || null,
           },
         );
       if (quotation.convertedToInvoice)
@@ -302,10 +303,23 @@ export const createPreInvoiceService = ({
           "quotation",
           quotation._id,
           { convertedToPreInvoice: preInvoiceId },
-          { $set: { convertedToPreInvoice: null, status: quotation.status } },
+          {
+            $set: {
+              convertedToPreInvoice: null,
+              convertedToPreInvoiceNo: null,
+              status: quotation.status,
+            },
+          },
         );
         throw error;
       }
+      // The number is assigned on insert, so it is stored after the claim.
+      await store.updateSource(
+        "quotation",
+        quotation._id,
+        { convertedToPreInvoice: preInvoiceId },
+        { $set: { convertedToPreInvoiceNo: doc.preInvoiceNo || null } },
+      );
       const revoked = await payments.revokeActive(
         "quotation",
         quotation._id,
@@ -436,6 +450,7 @@ export const createPreInvoiceService = ({
             {
               $set: {
                 convertedToPreInvoice: null,
+                convertedToPreInvoiceNo: null,
                 status: doc.sourceQuotationStatus || "Accepted",
               },
             },

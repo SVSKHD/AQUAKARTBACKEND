@@ -51,18 +51,21 @@ PhonePe webhook / status check (server-to-server) → verified paid
 - **Moving a quotation** (`POST /v1/crm/quotations/:id/pre-invoice`) does all of
   the following:
   - copies the lines and totals
-  - links both ways (`quotation.convertedToPreInvoice`,
+  - links both ways (`quotation.convertedToPreInvoice`/`convertedToPreInvoiceNo`,
     `preInvoice.sourceQuotationId/No`)
   - sets the quotation to `Converted` and stops its WhatsApp follow-ups
   - revokes its payment link
 
   The quotation is kept. A quotation can have one active pre-invoice: a second
-  move gives `QUOTATION_ALREADY_MOVED`.
+  move gives `QUOTATION_ALREADY_MOVED` (`details.preInvoiceId`/`preInvoiceNo`).
 
 - **After a move:**
-  - Payment links are allowed only on the pre-invoice (`USE_PRE_INVOICE`).
+  - Payment links are allowed only on the pre-invoice (`USE_PRE_INVOICE`,
+    `details.preInvoiceId`/`preInvoiceNo`).
   - The existing `POST /v1/crm/quotations/:id/convert-to-invoice` returns 409
-    `QUOTATION_MOVED_TO_PRE_INVOICE`, so no second invoice can be made.
+    `QUOTATION_MOVED_TO_PRE_INVOICE`, so no second invoice can be made. The
+    pre-invoice is in `details.preInvoiceId`/`preInvoiceNo`; a top-level
+    `preInvoiceId` is also kept for earlier callers.
 - **Editing** (`PATCH`) works only while `Draft` or `Payment Pending` and unpaid.
   `status: "Cancelled"` revokes the link and frees the source quotation (its
   previous status is restored).
@@ -93,6 +96,8 @@ PhonePe webhook / status check (server-to-server) → verified paid
 - **`GET …/payment-link`** shows the latest link without its token:
   - `status`, `expiresAt`, `boundToCustomer`, `reviewFlags`
   - `conversion` (with the invoice number)
+  - `paidAttemptId`: the payment attempt that paid the link (null until paid);
+    pass it to the reconcile endpoint below
   - `matchesDocument` (false means the document changed and the link must be
     regenerated)
 - **Reconcile and retry:** `POST /v1/crm/payments/:id/reconcile` (existing,
@@ -249,7 +254,7 @@ These are read at startup.
     `paymentLinkId`. `checkoutSessionId` is now conditionally required.
   - `AquaInvoice`: `sourcePreInvoiceId`/`No`, with a partial-unique index on
     real ids only.
-  - `AquaQuotation`: `convertedToPreInvoice`.
+  - `AquaQuotation`: `convertedToPreInvoice`, `convertedToPreInvoiceNo`.
   - `AquaEcomUser`: `alternatePhone`.
 
 All changes are additive; existing documents need no migration.
