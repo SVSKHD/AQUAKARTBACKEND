@@ -13587,6 +13587,70 @@
         "tags": ["CRM / Deals"]
       }
     },
+    "/v1/crm/social-posts/": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Social Posts"]
+      }
+    },
+    "/v1/crm/social-posts/{id}": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Social Posts"]
+      },
+      "patch": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Social Posts"]
+      }
+    },
+    "/v1/crm/social-posts/{id}/approve": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Social Posts"]
+      }
+    },
+    "/v1/crm/social-posts/{id}/reject": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Social Posts"]
+      }
+    },
+    "/v1/crm/social-posts/{id}/publish": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Social Posts"]
+      }
+    },
     "/v1/crm/whatsapp/status": {
       "get": {
         "description": "",
@@ -17064,7 +17128,7 @@
       "post": {
         "tags": ["MCP"],
         "summary": "MCP endpoint (Streamable HTTP, stateless)",
-        "description": "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_get_brand_assets (any signed-in connection: official logo files and usage rules); aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image, aquakart_create_image_upload, aquakart_get_image_upload (media:upload); aquakart_import_blog_banner (blogs:write + media:upload; imports a banner from the Aquakart Google Drive folder server-side and attaches it to a draft); aquakart_publish_blog (blogs:publish); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup); aquakart_list_products, aquakart_get_product (products:read); aquakart_create_product (products:write); aquakart_list_coupons, aquakart_get_coupon (coupons:read); aquakart_create_coupon (coupons:write); aquakart_list_categories, aquakart_get_category, aquakart_list_subcategories, aquakart_get_subcategory (categories:read); aquakart_create/update/delete_category and _subcategory (categories:write); aquakart_list_seo, aquakart_get_seo, aquakart_get_seo_readiness (seo:read); aquakart_create_seo, aquakart_update_seo (seo:write). Tool errors return result.isError with the JSON error ({ ok: false, error: { code, message } }) in content[0].text; successful results also carry structuredContent. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
+        "description": "JSON-RPC 2.0 MCP requests: initialize, tools/list, tools/call. Requires `Authorization: Bearer <OAuth access token>` bound to this resource; send `Accept: application/json, text/event-stream`. Tools: aquakart_get_brand_assets (any signed-in connection: official logo files and usage rules); aquakart_list_blogs, aquakart_get_blog, aquakart_get_blog_status (blogs:read); aquakart_create_blog, aquakart_update_blog, aquakart_attach_image (blogs:write); aquakart_upload_image, aquakart_create_image_upload, aquakart_get_image_upload (media:upload); aquakart_import_blog_banner (blogs:write + media:upload; imports a banner from the Aquakart Google Drive folder server-side and attaches it to a draft); aquakart_publish_blog (blogs:publish); aquakart_list_social_drafts, aquakart_get_social_draft (social:read); aquakart_create_social_draft (social:write + media:upload), aquakart_update_social_draft (social:write); aquakart_publish_social_post (instagram:publish, approved posts only; approval is CRM-only, see docs/SOCIAL_DRAFTS.md); aquakart_get_instagram_status, aquakart_list_instagram_posts (instagram:read); aquakart_upload_instagram_image (instagram:upload); aquakart_publish_instagram (instagram:publish); aquakart_cleanup_instagram_asset (instagram:cleanup); aquakart_list_products, aquakart_get_product (products:read); aquakart_create_product (products:write); aquakart_list_coupons, aquakart_get_coupon (coupons:read); aquakart_create_coupon (coupons:write); aquakart_list_categories, aquakart_get_category, aquakart_list_subcategories, aquakart_get_subcategory (categories:read); aquakart_create/update/delete_category and _subcategory (categories:write); aquakart_list_seo, aquakart_get_seo, aquakart_get_seo_readiness (seo:read); aquakart_create_seo, aquakart_update_seo (seo:write). Tool errors return result.isError with the JSON error ({ ok: false, error: { code, message } }) in content[0].text; successful results also carry structuredContent. Body limit 12 MB; rate limit MCP_RATE_LIMIT_PER_MINUTE per grant. 503 when MCP_PUBLIC_BASE_URL is unset.",
         "security": [
           {
             "bearerAuth": []
@@ -18093,6 +18157,10 @@
     {
       "name": "CRM / SEO",
       "description": "CRM / SEO endpoints"
+    },
+    {
+      "name": "CRM / Social Posts",
+      "description": "CRM / Social Posts endpoints"
     },
     {
       "name": "CRM / Stock",

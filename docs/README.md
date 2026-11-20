@@ -7,25 +7,26 @@ Agents start with [../AGENTS.md](../AGENTS.md), then use the
 [CHANGELOG.md](CHANGELOG.md) records dated changes and verification, newest date
 first. Read only the sections relevant to the task.
 
-| Task                                                            | Read next                                                                                 |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Find code, route prefixes, startup behavior, commands           | [PROJECT_MAP.md](PROJECT_MAP.md)                                                          |
-| Understand recent changes or add a completed task record        | [CHANGELOG.md](CHANGELOG.md)                                                              |
-| Google/Firebase authentication                                  | [AUTH_GOOGLE_FIREBASE.md](AUTH_GOOGLE_FIREBASE.md)                                        |
-| Checkout, payments, coupons, referrals                          | [COMMERCE_PLATFORM_API.md](COMMERCE_PLATFORM_API.md)                                      |
-| Pre-invoices and offline payment links (`/pay/{token}`)         | [OFFLINE_PAYMENT_LINKS.md](OFFLINE_PAYMENT_LINKS.md)                                      |
-| Invoice reporting/export                                        | [INVOICE_REPORTS.md](INVOICE_REPORTS.md)                                                  |
-| Product maintenance reminders                                   | [PRODUCT_SERVICE_REMINDERS.md](PRODUCT_SERVICE_REMINDERS.md)                              |
-| Fast2SMS/WhatsApp configuration                                 | [FAST2SMS_WHATSAPP.md](FAST2SMS_WHATSAPP.md)                                              |
-| Payment-success WhatsApp/SMS (admin alert, receipts)            | [PAYMENT_NOTIFICATIONS.md](PAYMENT_NOTIFICATIONS.md)                                      |
-| Storefront AI chat: product cards, questionnaire (frontend)     | [STOREFRONT_AI_CHAT.md](STOREFRONT_AI_CHAT.md)                                            |
-| CRM AI chat history, pinning, archive, generation and streaming | [CRM_AI_CHATS.md](CRM_AI_CHATS.md)                                                        |
-| CRM customer users, their AI questions/answers, and blog drafts | [CRM_CUSTOMER_AI.md](CRM_CUSTOMER_AI.md)                                                  |
-| Runtime configuration in the DB (aqua-env), CRM /v1/crm/env     | [RUNTIME_CONFIG.md](RUNTIME_CONFIG.md)                                                    |
-| MCP server (ChatGPT/Claude): OAuth, blog and Instagram tools    | [MCP_BLOG_PUBLISHING.md](MCP_BLOG_PUBLISHING.md)                                          |
-| MCP walkthrough: logos, connecting Claude/ChatGPT, examples     | [MCP_WALKTHROUGH.md](MCP_WALKTHROUGH.md)                                                  |
-| MCP invoice audit: missing addresses, duplicates, approvals     | [MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md)                                              |
-| Products, category contracts, Swagger, CRM, AI, scheduling      | Start with the relevant row in [PROJECT_MAP.md](PROJECT_MAP.md); verify details in source |
+| Task                                                              | Read next                                                                                 |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Find code, route prefixes, startup behavior, commands             | [PROJECT_MAP.md](PROJECT_MAP.md)                                                          |
+| Understand recent changes or add a completed task record          | [CHANGELOG.md](CHANGELOG.md)                                                              |
+| Google/Firebase authentication                                    | [AUTH_GOOGLE_FIREBASE.md](AUTH_GOOGLE_FIREBASE.md)                                        |
+| Checkout, payments, coupons, referrals                            | [COMMERCE_PLATFORM_API.md](COMMERCE_PLATFORM_API.md)                                      |
+| Pre-invoices and offline payment links (`/pay/{token}`)           | [OFFLINE_PAYMENT_LINKS.md](OFFLINE_PAYMENT_LINKS.md)                                      |
+| Invoice reporting/export                                          | [INVOICE_REPORTS.md](INVOICE_REPORTS.md)                                                  |
+| Product maintenance reminders                                     | [PRODUCT_SERVICE_REMINDERS.md](PRODUCT_SERVICE_REMINDERS.md)                              |
+| Fast2SMS/WhatsApp configuration                                   | [FAST2SMS_WHATSAPP.md](FAST2SMS_WHATSAPP.md)                                              |
+| Payment-success WhatsApp/SMS (admin alert, receipts)              | [PAYMENT_NOTIFICATIONS.md](PAYMENT_NOTIFICATIONS.md)                                      |
+| Storefront AI chat: product cards, questionnaire (frontend)       | [STOREFRONT_AI_CHAT.md](STOREFRONT_AI_CHAT.md)                                            |
+| CRM AI chat history, pinning, archive, generation and streaming   | [CRM_AI_CHATS.md](CRM_AI_CHATS.md)                                                        |
+| CRM customer users, their AI questions/answers, and blog drafts   | [CRM_CUSTOMER_AI.md](CRM_CUSTOMER_AI.md)                                                  |
+| Runtime configuration in the DB (aqua-env), CRM /v1/crm/env       | [RUNTIME_CONFIG.md](RUNTIME_CONFIG.md)                                                    |
+| MCP server (ChatGPT/Claude): OAuth, blog and Instagram tools      | [MCP_BLOG_PUBLISHING.md](MCP_BLOG_PUBLISHING.md)                                          |
+| MCP walkthrough: logos, connecting Claude/ChatGPT, examples       | [MCP_WALKTHROUGH.md](MCP_WALKTHROUGH.md)                                                  |
+| MCP invoice audit: missing addresses, duplicates, approvals       | [MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md)                                              |
+| Social post drafts (Instagram/Facebook): MCP, CRM review, publish | [SOCIAL_DRAFTS.md](SOCIAL_DRAFTS.md)                                                      |
+| Products, category contracts, Swagger, CRM, AI, scheduling        | Start with the relevant row in [PROJECT_MAP.md](PROJECT_MAP.md); verify details in source |
 
 `docs/` contains human/agent guides. `src/docs/` contains executable Swagger
 customization. `swagger-output.json` is generated output served at

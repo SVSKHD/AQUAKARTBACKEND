@@ -5,6 +5,7 @@ import { toBlogToolError } from "./errors.js";
 import { IDEMPOTENCY_KEY, OBJECT_ID, SLUG } from "../../validators/mcp/blog.js";
 import { registerTaxonomySeoTools } from "./taxonomySeoSchemas.js";
 import { registerInvoiceTools } from "./invoiceSchemas.js";
+import { registerSocialTools } from "./socialSchemas.js";
 import { DRIVE_FILE_ID } from "./googleDrive.js";
 
 // Tool catalogue of the Aquakart MCP server. One McpServer is built per
@@ -437,6 +438,7 @@ export const createAquakartMcpServer = ({
   taxonomySeoTools,
   invoiceAuditTools,
   invoiceActionTools,
+  socialTools,
   auth,
   correlationId,
   resourceMetadataUrl,
@@ -446,7 +448,7 @@ export const createAquakartMcpServer = ({
     { name: "aquakart", title: "Aquakart", version: "1.0.0" },
     {
       instructions:
-        "Aquakart blogs, Instagram, product catalogue and coupons. Before creating any branded image, call aquakart_get_brand_assets: it returns the official Aquakart logo files (original for light backgrounds, white for dark) to use as references, plus the logo rules; never redraw or alter the logo, and for blog title images prefer generating without a logo and attaching with applyBrandLogo. Blogs: create a draft, upload and attach a title image (or, for a banner in the Aquakart Google Drive folder, call aquakart_import_blog_banner with its Drive file id: no file handling needed), then publish with aquakart_publish_blog. Instagram: upload a creative, then publish it with a caption. Products: upload images with aquakart_upload_image, then aquakart_create_product with their mediaIds (products go live immediately). Coupons: aquakart_create_coupon saves a draft unless status is active. Categories/subcategories: list, create, update, delete (deletes are refused while anything uses them). Page SEO: list/get/create/update (set active false to switch a page off); aquakart_get_seo_readiness reports which pages need SEO work. Invoices (separate invoices:* scopes): aquakart_audit_invoices only creates suggested actions and never changes invoices; review them with aquakart_get_invoice_action and apply one only after explicit admin approval with aquakart_execute_invoice_action (fills a missing address only; duplicates always need manual accounting review). Always send an idempotencyKey on writes and reuse it when retrying.",
+        "Aquakart blogs, Instagram, product catalogue and coupons. Before creating any branded image, call aquakart_get_brand_assets: it returns the official Aquakart logo files (original for light backgrounds, white for dark) to use as references, plus the logo rules; never redraw or alter the logo, and for blog title images prefer generating without a logo and attaching with applyBrandLogo. Blogs: create a draft, upload and attach a title image (or, for a banner in the Aquakart Google Drive folder, call aquakart_import_blog_banner with its Drive file id: no file handling needed), then publish with aquakart_publish_blog. Instagram: upload a creative, then publish it with a caption. Social drafts (social:* scopes): aquakart_create_social_draft saves an UNPUBLISHED Instagram/Facebook post (poster by mediaId or straight from the Aquakart Google Drive folder, plus caption) for staff review in the CRM; verify it with aquakart_get_social_draft. Only staff approve posts in the CRM; aquakart_publish_social_post posts an approved one. Products: upload images with aquakart_upload_image, then aquakart_create_product with their mediaIds (products go live immediately). Coupons: aquakart_create_coupon saves a draft unless status is active. Categories/subcategories: list, create, update, delete (deletes are refused while anything uses them). Page SEO: list/get/create/update (set active false to switch a page off); aquakart_get_seo_readiness reports which pages need SEO work. Invoices (separate invoices:* scopes): aquakart_audit_invoices only creates suggested actions and never changes invoices; review them with aquakart_get_invoice_action and apply one only after explicit admin approval with aquakart_execute_invoice_action (fills a missing address only; duplicates always need manual accounting review). Always send an idempotencyKey on writes and reuse it when retrying.",
     },
   );
 
@@ -1095,6 +1097,7 @@ export const createAquakartMcpServer = ({
   if (taxonomySeoTools) registerTaxonomySeoTools(register, taxonomySeoTools);
   if (invoiceAuditTools && invoiceActionTools)
     registerInvoiceTools(register, { invoiceAuditTools, invoiceActionTools });
+  if (socialTools) registerSocialTools(register, socialTools);
 
   return server;
 };

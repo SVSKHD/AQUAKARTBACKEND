@@ -11,6 +11,7 @@ import McpOperation from "../../models/mcp/mcpOperation.js";
 import McpMedia from "../../models/mcp/mcpMedia.js";
 import McpUpload from "../../models/mcp/mcpUpload.js";
 import InstagramAsset from "../../models/mcp/instagramAsset.js";
+import SocialPost from "../../models/socialPost.js";
 import { PUBLISHED_FILTER, validateTaxonomy } from "../../controllers/blog.js";
 import { INSTAGRAM_TEMP_FOLDER } from "./config.js";
 import { BlogToolError } from "./errors.js";
@@ -157,8 +158,44 @@ export const mongoStore = {
       })) ||
       (await AquaProduct.exists({ "photos.id": publicId })) ||
       (await AquaCategory.exists({ "photos.id": publicId })) ||
-      (await AquaSubCategory.exists({ "photos.id": publicId })),
+      (await AquaSubCategory.exists({ "photos.id": publicId })) ||
+      // Social posters share the MCP media store.
+      (await SocialPost.exists({ "media.publicId": publicId })),
     ),
+
+  // Social posts (AquaSocialPost)
+  createSocialPost: async (doc) => (await SocialPost.create(doc)).toObject(),
+  findSocialPost: (id) => (valid(id) ? SocialPost.findById(id).lean() : null),
+  findSocialPostByContentKey: (contentKey) =>
+    SocialPost.findOne({ contentKey }).lean(),
+  listSocialPosts: async ({ status, platform, query, skip, limit }) => {
+    const filter = {};
+    if (status) filter.status = status;
+    if (platform) filter.platforms = platform;
+    if (query) filter.title = { $regex: escapeRegex(query), $options: "i" };
+    const [items, total] = await Promise.all([
+      SocialPost.find(filter)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      SocialPost.countDocuments(filter),
+    ]);
+    return { items, total };
+  },
+  updateSocialPost: (id, condition, change) =>
+    valid(id)
+      ? SocialPost.findOneAndUpdate(
+          { _id: id, ...condition },
+          change,
+          after,
+        ).lean()
+      : null,
+  socialPostsUsingMedia: (publicId, excludeId) =>
+    SocialPost.exists({
+      "media.publicId": publicId,
+      ...(valid(excludeId) ? { _id: { $ne: excludeId } } : {}),
+    }).then(Boolean),
 
   // Categories and subcategories (existing collections)
   listCategories: ({ query }) =>

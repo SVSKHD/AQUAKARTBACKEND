@@ -23,6 +23,8 @@ export const MCP_SCOPES = {
   seoWrite: "seo:write",
   invoicesAudit: "invoices:audit",
   invoicesActions: "invoices:actions",
+  socialRead: "social:read",
+  socialWrite: "social:write",
 };
 export const MCP_SCOPE_LIST = Object.values(MCP_SCOPES);
 export const MCP_SCOPE_LABELS = {
@@ -51,6 +53,9 @@ export const MCP_SCOPE_LABELS = {
     "Scan invoices for missing addresses and possible duplicates and read the suggested fixes (reads customer names, addresses and invoice lines; never changes invoices)",
   "invoices:actions":
     "Apply or dismiss approved invoice suggestions (only fills a missing customer address; never deletes, voids or renumbers invoices)",
+  "social:read": "Read Instagram/Facebook post drafts and their review status",
+  "social:write":
+    "Create and edit Instagram/Facebook post drafts (never approves or publishes them)",
 };
 // The CRM permission a staff member needs before they can grant a scope.
 // Scopes cover blogs, Instagram, the product catalogue, categories, coupons,
@@ -80,6 +85,10 @@ export const SCOPE_PERMISSIONS = {
   // invoices.read/manage or any blog, Instagram or catalogue scope.
   "invoices:audit": "invoices.audit",
   "invoices:actions": "invoices.audit.execute",
+  // Social post drafts (AquaSocialPost). Approving needs social.review in
+  // the CRM and is never available to an MCP client.
+  "social:read": "social.read",
+  "social:write": "social.manage",
 };
 // OAuth callbacks of supported MCP clients: ChatGPT (stable RFC 9207 URI and
 // per-connector callback ids) and Claude. Claude Code and other native

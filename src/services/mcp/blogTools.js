@@ -3,9 +3,9 @@ import { BlogToolError } from "./errors.js";
 import { MCP_SCOPES } from "./config.js";
 import { readImageInput } from "./imageInput.js";
 import { hashArgs } from "./operations.js";
+import { createDriveImporter, versionOf } from "./driveImport.js";
 import {
   countWords,
-  imageDimensions,
   normalizeBlogFields,
   normalizeTitleKey,
   sniffImageType,
@@ -16,12 +16,6 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 // 32 random bytes, base64url: the capability in a one-time upload URL.
 const UPLOAD_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UPLOAD_FORMATS = ["jpg", "png", "webp"];
-// Drive MIME type -> format the bytes must actually have.
-const BANNER_MIMES = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
 const IMPORT_TOOL = "aquakart_import_blog_banner";
 
 // Blog operations behind the Aquakart MCP tools. Works on the existing
@@ -185,6 +179,7 @@ export const createBlogTools = ({
     );
 
   const hasScope = (ctx, scope) => ctx.auth.scopes.includes(scope);
+  const importer = createDriveImporter({ drive, config });
 
   // Stores verified image bytes in Cloudinary once (de-duplicated by
   // SHA-256) and records them as McpMedia. `auth` is the staff member and
@@ -236,6 +231,24 @@ export const createBlogTools = ({
     return { media: mediaView(media), deduplicated: false };
   };
 
+  // saveImage for imports: storage/network failures become a retryable
+  // IMAGE_STORAGE_FAILED instead of a generic internal error. Also used by
+  // the social draft tools (socialTools.js) for posters.
+  const storeImage = async (input, auth, meta) => {
+    try {
+      return await saveImage(input, auth, meta);
+    } catch (error) {
+      if (error instanceof BlogToolError) throw error;
+      throw Object.assign(
+        new BlogToolError(
+          "IMAGE_STORAGE_FAILED",
+          "Storing the image failed; retry with the same idempotencyKey",
+        ),
+        { retryable: true },
+      );
+    }
+  };
+
   // Raw bytes from an upload URL: size and real type (from the bytes).
   const verifyUploadBytes = (buffer) => {
     if (!Buffer.isBuffer(buffer) || !buffer.length)
@@ -258,6 +271,9 @@ export const createBlogTools = ({
   };
 
   return {
+    storeImage,
+    mediaView,
+
     // Official logo files and rules for MCP clients that generate images.
     getBrandAssets() {
       const { brand } = config;
@@ -797,43 +813,14 @@ export const createBlogTools = ({
             "VALIDATION_FAILED",
             "source.type must be google_drive",
           );
-        if (!drive?.configured || !config.drive?.configured)
-          throw new BlogToolError(
-            "DRIVE_NOT_CONFIGURED",
-            "Google Drive import is not set up on this server; staff must configure the Drive service account (see docs/MCP_BLOG_PUBLISHING.md)",
-          );
-
         // Source checks that need no blog access and no download.
-        const file = await drive.getFile(source.fileId);
-        if (file.trashed)
-          throw new BlogToolError(
-            "DRIVE_FILE_NOT_FOUND",
-            "That Drive file is in the trash",
-          );
-        await assertAllowedFolder(file);
-        if (!BANNER_MIMES[file.mimeType])
-          throw new BlogToolError(
-            "UNSUPPORTED_IMAGE_TYPE",
-            "Banner must be a JPG, PNG or WEBP image file",
-            { mimeType: file.mimeType || null },
-          );
-        if (Number(file.size) > config.imageMaxBytes)
-          throw new BlogToolError(
-            "IMAGE_TOO_LARGE",
-            `Image exceeds ${config.imageMaxBytes} bytes`,
-          );
+        const file = await importer.inspectImage(source.fileId);
         const logo = chooseLogo(logoMode, file);
-        const sourceVersion = file.md5Checksum || `v${file.version || "0"}`;
-        const sourceRef = {
-          type: "google_drive",
-          fileId: file.id,
-          version: sourceVersion,
-          name: String(file.name || "").slice(0, 200),
-        };
+        const sourceVersion = versionOf(file);
         const sourceView = {
           type: "google_drive",
           fileId: file.id,
-          name: sourceRef.name,
+          name: String(file.name || "").slice(0, 200),
           version: sourceVersion,
         };
 
@@ -901,60 +888,16 @@ export const createBlogTools = ({
                 );
             }
 
-            const buffer = await drive.download(file.id, {
-              maxBytes: config.imageMaxBytes,
+            const input = await importer.downloadImage(file, {
+              minWidth: config.bannerMinWidth,
+              minHeight: config.bannerMinHeight,
+              maxDimension: config.bannerMaxDimension,
+              label: "Banner",
             });
-            if (!buffer.length)
-              throw new BlogToolError("INVALID_IMAGE", "The file is empty");
-            const type = sniffImageType(buffer);
-            if (!type || BANNER_MIMES[file.mimeType] !== type.format)
-              throw new BlogToolError(
-                "UNSUPPORTED_IMAGE_TYPE",
-                "The file contents are not the JPG, PNG or WEBP image Drive reports",
-              );
-            const size = imageDimensions(buffer, type.format);
-            if (!size)
-              throw new BlogToolError(
-                "INVALID_IMAGE",
-                "The image header could not be read; re-export the file",
-              );
-            if (
-              size.width < config.bannerMinWidth ||
-              size.height < config.bannerMinHeight ||
-              Math.max(size.width, size.height) > config.bannerMaxDimension
-            )
-              throw new BlogToolError(
-                "IMAGE_DIMENSIONS_INVALID",
-                `Banner must be at least ${config.bannerMinWidth}x${config.bannerMinHeight} and at most ${config.bannerMaxDimension}px on a side`,
-                { width: size.width, height: size.height },
-              );
-
-            let saved;
-            try {
-              saved = await saveImage(
-                {
-                  buffer,
-                  type,
-                  sha256: sha256(buffer),
-                  source: "google-drive",
-                  sourceRef,
-                },
-                ctx.auth,
-                {
-                  operationId: operation.operationId,
-                  correlationId: ctx.correlationId,
-                },
-              );
-            } catch (error) {
-              if (error instanceof BlogToolError) throw error;
-              throw Object.assign(
-                new BlogToolError(
-                  "IMAGE_STORAGE_FAILED",
-                  "Storing the image failed; retry with the same idempotencyKey",
-                ),
-                { retryable: true },
-              );
-            }
+            const saved = await storeImage(input, ctx.auth, {
+              operationId: operation.operationId,
+              correlationId: ctx.correlationId,
+            });
             const media = await store.findMediaById(saved.media.mediaId);
             const titleImage = titleImageFor(
               media,
@@ -1178,42 +1121,6 @@ export const createBlogTools = ({
     if (tag === "original" || tag === "white")
       return { applied: true, variant: tag, decidedBy: "drive-metadata" };
     return { applied: true, variant: "original", decidedBy: "default" };
-  }
-
-  // The file must sit in (or under) an allowed Aquakart banner folder.
-  // Folders the service account cannot see end that branch of the walk.
-  async function assertAllowedFolder(file) {
-    const allowed = new Set(config.drive.folderIds);
-    const seen = new Set();
-    let frontier = file.parents || [];
-    for (
-      let depth = 0;
-      depth <= config.drive.folderDepth && frontier.length;
-      depth += 1
-    ) {
-      if (frontier.some((id) => allowed.has(id))) return;
-      const next = [];
-      for (const id of frontier) {
-        if (!seen.has(id)) {
-          seen.add(id);
-          try {
-            next.push(...((await drive.getFile(id)).parents || []));
-          } catch (error) {
-            if (
-              !["DRIVE_FILE_NOT_FOUND", "DRIVE_ACCESS_DENIED"].includes(
-                error?.code,
-              )
-            )
-              throw error;
-          }
-        }
-      }
-      frontier = next;
-    }
-    throw new BlogToolError(
-      "DRIVE_FOLDER_NOT_ALLOWED",
-      "That file is not inside the Aquakart banner folder; move it there (or share that folder with the import account) and retry",
-    );
   }
 
   async function bannerResult(blogId, media, extra) {

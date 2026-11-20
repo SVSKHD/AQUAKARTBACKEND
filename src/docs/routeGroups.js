@@ -31,6 +31,7 @@ const labels = {
   phonepegatway: "PhonePe Gateway",
   preInvoice: "Pre-invoices & Payment Links",
   offlinePayments: "Payments / Offline Links",
+  socialPosts: "Social Posts",
 };
 const humanize = (name) =>
   labels[name] ||

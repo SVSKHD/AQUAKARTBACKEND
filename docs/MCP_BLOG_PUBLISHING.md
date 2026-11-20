@@ -298,6 +298,12 @@ Category, subcategory and SEO tools:
 | `aquakart_get_seo_readiness`                                 | `seo:read`         | Every page: status, priority, score, issues, actions; `pageKey`/`entityType`/`status` filters |
 | `aquakart_create_seo`, `aquakart_update_seo`                 | `seo:write`        | CRM validation; partial updates; `active: false` switches a page off                          |
 
+Social post draft tools (`social:read` / `social:write`, publish with
+`instagram:publish`) are documented in [SOCIAL_DRAFTS.md](SOCIAL_DRAFTS.md):
+`aquakart_create_social_draft`, `aquakart_update_social_draft`,
+`aquakart_get_social_draft`, `aquakart_list_social_drafts`,
+`aquakart_publish_social_post`. Approval happens only in the CRM.
+
 Invoice audit tools (`invoices:audit` / `invoices:actions`) are documented in
 [MCP_INVOICE_AUDIT.md](MCP_INVOICE_AUDIT.md): `aquakart_audit_invoices`,
 `aquakart_list_invoice_actions`, `aquakart_get_invoice_action`,

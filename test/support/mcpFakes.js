@@ -100,6 +100,7 @@ export const createMemoryStore = (clock) => {
   const uploads = [];
   const operations = [];
   const assets = [];
+  const socialPosts = [];
   const categories = new Map();
   const products = new Set();
   const calls = { createBlog: 0, failNextAssetUpdate: null };
@@ -114,6 +115,7 @@ export const createMemoryStore = (clock) => {
     uploads,
     operations,
     assets,
+    socialPosts,
     categories,
     products,
     calls,
@@ -184,7 +186,53 @@ export const createMemoryStore = (clock) => {
         (b) =>
           b._id !== String(excludeBlogId) &&
           (b.titleImages || []).some((img) => img.id === publicId),
-      ),
+      ) || socialPosts.some((p) => p.media?.publicId === publicId),
+
+    // Social posts
+    createSocialPost: async (doc) => {
+      if (socialPosts.some((p) => p.contentKey === doc.contentKey))
+        throw duplicateKey();
+      const at = tickUpdatedAt();
+      const saved = {
+        _id: objectId(),
+        createdAt: at,
+        updatedAt: at,
+        ...clone(doc),
+      };
+      socialPosts.push(saved);
+      return clone(saved);
+    },
+    findSocialPost: async (id) =>
+      clone(socialPosts.find((p) => p._id === String(id))) || null,
+    findSocialPostByContentKey: async (key) =>
+      clone(socialPosts.find((p) => p.contentKey === key)) || null,
+    listSocialPosts: async ({ status, platform, query, skip, limit }) => {
+      const items = socialPosts
+        .filter(
+          (p) =>
+            (!status || p.status === status) &&
+            (!platform || p.platforms.includes(platform)) &&
+            (!query || p.title.toLowerCase().includes(query.toLowerCase())),
+        )
+        .reverse();
+      return {
+        items: clone(items.slice(skip, skip + limit)),
+        total: items.length,
+      };
+    },
+    updateSocialPost: async (id, condition, change) => {
+      const doc = socialPosts.find((p) => p._id === String(id));
+      if (!doc || !matches(doc, condition)) return null;
+      const next = applyUpdate(clone(doc), change);
+      if (
+        next.contentKey !== doc.contentKey &&
+        socialPosts.some((p) => p !== doc && p.contentKey === next.contentKey)
+      )
+        throw duplicateKey();
+      Object.assign(doc, next);
+      doc.updatedAt = tickUpdatedAt();
+      return clone(doc);
+    },
 
     // Media
     findMediaBySha: async (sha256) =>
