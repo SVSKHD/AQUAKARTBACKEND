@@ -1,5 +1,6 @@
 import AquaEcomUser from "../models/user.js";
 import { userRoleSlug } from "../constants/roles.js";
+import { revokeSession } from "../services/auth/sessionRevocation.js";
 
 const firstNameFrom = (name = "") => name.trim().split(/\s+/)[0] || "";
 
@@ -134,12 +135,38 @@ const me = async (req, res) =>
     user: safeUser(req.user),
   });
 
-const logout = async (req, res) =>
-  res.status(200).json({
+const bearer = (value = "") =>
+  String(value)
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+
+// Cancels this device's session token (and the X-Aquakart-Session copy the
+// pay page sends, when different) so it stops working at once. Always 200:
+// signing out must succeed even with an expired or already-cancelled token.
+const logout = async (req, res, deps = { revokeSession }) => {
+  const tokens = [
+    ...new Set(
+      [
+        bearer(req.get?.("authorization")),
+        bearer(req.get?.("x-aquakart-session")),
+      ].filter(Boolean),
+    ),
+  ];
+  try {
+    await Promise.all(tokens.map((token) => deps.revokeSession(token)));
+  } catch (error) {
+    console.error("Session revoke failed:", error?.message);
+    return res.status(503).json({
+      success: false,
+      message: "Couldn't finish signing out. Please try again.",
+    });
+  }
+  return res.status(200).json({
     success: true,
     authenticated: false,
     message: "Signed out successfully",
   });
+};
 
-export { safeUser };
+export { safeUser, logout };
 export default { googleLogin, me, logout };

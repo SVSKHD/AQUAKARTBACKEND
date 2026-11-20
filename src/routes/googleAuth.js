@@ -11,6 +11,9 @@ router.post(
   googleAuthController.googleLogin,
 );
 router.get("/auth/me", userAuth.isLoggedIn, googleAuthController.me);
-router.post("/auth/logout", userAuth.isLoggedIn, googleAuthController.logout);
+// No auth middleware: sign-out works even with an expired token.
+router.post("/auth/logout", (req, res) =>
+  googleAuthController.logout(req, res),
+);
 
 export default router;

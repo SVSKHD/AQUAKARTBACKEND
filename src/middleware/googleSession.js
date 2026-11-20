@@ -1,5 +1,9 @@
 import jwt from "jsonwebtoken";
 import AquaEcomUser from "../models/user.js";
+import {
+  isSessionRevoked,
+  REVOKED_MESSAGE,
+} from "../services/auth/sessionRevocation.js";
 
 const requireGoogleBackendSession = async (req, res, next) => {
   const sessionToken = String(req.get("x-aquakart-session") || "").trim();
@@ -13,9 +17,19 @@ const requireGoogleBackendSession = async (req, res, next) => {
   try {
     const decoded = jwt.verify(sessionToken, process.env.JWT_SECRET);
     if (!decoded?._id) throw new Error("Invalid session");
-    const user = await AquaEcomUser.findById(decoded._id).select(
-      "firebaseUid email emailVerified isEmailVerfied",
-    );
+    const [user, revoked] = await Promise.all([
+      AquaEcomUser.findById(decoded._id).select(
+        "firebaseUid email emailVerified isEmailVerfied",
+      ),
+      isSessionRevoked(sessionToken),
+    ]);
+    if (revoked) {
+      return res.status(401).json({
+        success: false,
+        code: "SESSION_REVOKED",
+        message: REVOKED_MESSAGE,
+      });
+    }
     if (
       !user ||
       !user.firebaseUid ||
