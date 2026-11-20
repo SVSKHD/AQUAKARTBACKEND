@@ -3,7 +3,15 @@ import AiInvoiceSession, {
   SESSION_TTL_MS,
 } from "../../models/crm/aiInvoiceSession.js";
 import AquaProduct from "../../models/product.js";
-import { GeminiError, THINKING_LEVELS } from "../../services/gemini.js";
+import {
+  GeminiError,
+  THINKING_LEVELS,
+  generateContent,
+} from "../../services/gemini.js";
+import {
+  QUICK_DRAFT_MAX_CHARS,
+  buildQuickDraft,
+} from "../../services/aiInvoice/quickDraft.js";
 import { runAgentTurn } from "../../services/aiInvoice/agent.js";
 import {
   MAX_ITEMS,
@@ -15,6 +23,7 @@ import {
 import {
   createInvoiceFromSession,
   emailSessionInvoice,
+  loadStock,
   searchCatalog,
   validateWithStock,
 } from "../../services/aiInvoice/tools.js";
@@ -400,6 +409,68 @@ const cancelSession = async (req, res) => {
   }
 };
 
+// Whole catalog in the small shape the quick-draft matcher needs. Cached
+// briefly: one paste may match several lines and staff paste in bursts.
+const CATALOG_TTL_MS = 5 * 60 * 1000;
+let catalogCache = { at: 0, products: null };
+
+export const loadQuickCatalog = async () => {
+  if (catalogCache.products && Date.now() - catalogCache.at < CATALOG_TTL_MS) {
+    return catalogCache.products;
+  }
+  const rows = await AquaProduct.find({})
+    .select(
+      "title brand price discountPrice discountPriceStatus slug seoSlug ShortName code sku",
+    )
+    .lean();
+  const products = rows.map((product) => ({
+    productId: String(product._id),
+    name: product.title || "",
+    shortName: product.ShortName || "",
+    brand: product.brand || "",
+    code: product.code || "",
+    sku: product.sku || "",
+    slug:
+      product.slug ||
+      product.seoSlug ||
+      product.ShortName ||
+      product.code ||
+      "",
+    sellingPrice:
+      product.discountPriceStatus && Number(product.discountPrice) > 0
+        ? Number(product.discountPrice)
+        : Number(product.price || 0),
+  }));
+  catalogCache = { at: Date.now(), products };
+  return products;
+};
+
+// Quick paste in the CRM invoice form: text -> reviewable draft. Read-only.
+const quickDraft = async (req, res) => {
+  const source = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  if (!source) return fail(res, 400, "Paste the invoice details first");
+  if (source.length > QUICK_DRAFT_MAX_CHARS) {
+    return fail(
+      res,
+      400,
+      `Keep pasted details under ${QUICK_DRAFT_MAX_CHARS} characters`,
+    );
+  }
+  try {
+    const data = await buildQuickDraft(source, {
+      generate: generateContent,
+      loadCatalog: loadQuickCatalog,
+      loadStock,
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    if (error?.statusCode && !(error instanceof GeminiError)) {
+      return fail(res, error.statusCode, error.message);
+    }
+    return sendAgentError(res, error);
+  }
+};
+
 // Product picker for the CRM draft form (same limited fields as the AI sees).
 const searchProducts = async (req, res) => {
   try {
@@ -422,6 +493,7 @@ const AIInvoiceOperations = {
   emailInvoice,
   cancelSession,
   searchProducts,
+  quickDraft,
 };
 
 export default AIInvoiceOperations;

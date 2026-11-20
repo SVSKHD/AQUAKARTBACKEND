@@ -76,6 +76,7 @@ router.post(
 const invoice = express.Router();
 invoice.use(canManageInvoices);
 invoice.get("/products", AIInvoice.searchProducts);
+invoice.post("/quick-draft", AIInvoice.quickDraft);
 invoice.get("/sessions", AIInvoice.listSessions);
 invoice.post("/sessions", AIInvoice.createSession);
 invoice.get("/sessions/:id", AIInvoice.getSession);
