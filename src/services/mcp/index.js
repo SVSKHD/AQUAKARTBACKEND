@@ -12,6 +12,7 @@ import { createInvoiceActionTools } from "./invoiceActionTools.js";
 import { mongoInvoiceStore } from "./invoiceStore.js";
 import { createOAuthProvider } from "./oauthProvider.js";
 import { createGoogleDrive } from "./googleDrive.js";
+import { createSocialTools } from "./socialTools.js";
 import { cloudinaryUploader, mongoStore } from "./store.js";
 
 // Builds the production MCP services from the environment.
@@ -41,13 +42,33 @@ export const buildMcpServices = (env = process.env) => {
     store: mongoStore,
     lockMs: config.operationLockMs,
   });
+  const drive = createGoogleDrive(config.drive);
+  const blogTools = createBlogTools({
+    store: mongoStore,
+    uploader: cloudinaryUploader,
+    drive,
+    runOperation,
+    config,
+    audit,
+  });
+  const instagramTools = createInstagramTools({
+    store: mongoStore,
+    uploader: cloudinaryUploader,
+    graph: createInstagramGraph(config.instagram),
+    runOperation,
+    config,
+    audit,
+  });
   return {
     config,
     provider: config.enabled ? createOAuthProvider({ config }) : null,
-    blogTools: createBlogTools({
+    blogTools,
+    instagramTools,
+    socialTools: createSocialTools({
       store: mongoStore,
-      uploader: cloudinaryUploader,
-      drive: createGoogleDrive(config.drive),
+      blogTools,
+      instagramTools,
+      drive,
       runOperation,
       config,
       audit,
@@ -68,14 +89,6 @@ export const buildMcpServices = (env = process.env) => {
     }),
     invoiceActionTools: createInvoiceActionTools({
       store: mongoInvoiceStore,
-      runOperation,
-      config,
-      audit,
-    }),
-    instagramTools: createInstagramTools({
-      store: mongoStore,
-      uploader: cloudinaryUploader,
-      graph: createInstagramGraph(config.instagram),
       runOperation,
       config,
       audit,

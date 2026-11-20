@@ -96,14 +96,14 @@ export const createGoogleDrive = (
     return cached.token;
   };
 
-  const request = async (fileId, params) => {
+  const request = async (fileId, params, suffix = "") => {
     if (!DRIVE_FILE_ID.test(String(fileId || ""))) {
       throw new BlogToolError(
         "DRIVE_FILE_NOT_FOUND",
         "That is not a valid Google Drive file id",
       );
     }
-    const url = `${FILES_URL}/${encodeURIComponent(fileId)}?${new URLSearchParams(
+    const url = `${FILES_URL}/${encodeURIComponent(fileId)}${suffix}?${new URLSearchParams(
       { supportsAllDrives: "true", ...params },
     )}`;
     const send = async () =>
@@ -157,34 +157,48 @@ export const createGoogleDrive = (
     },
 
     // File bytes, streamed with a hard byte cap.
-    async download(fileId, { maxBytes }) {
+    async download(fileId, { maxBytes, tooLargeCode = "IMAGE_TOO_LARGE" }) {
       const response = await request(fileId, { alt: "media" });
-      const declared = Number(response.headers.get("content-length"));
-      const tooLarge = () =>
-        new BlogToolError("IMAGE_TOO_LARGE", `Image exceeds ${maxBytes} bytes`);
-      if (declared > maxBytes) {
-        await response.body?.cancel().catch(() => {});
-        throw tooLarge();
-      }
-      const reader = response.body.getReader();
-      const chunks = [];
-      let size = 0;
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.length;
-          if (size > maxBytes) {
-            await reader.cancel().catch(() => {});
-            throw tooLarge();
-          }
-          chunks.push(value);
-        }
-      } catch (error) {
-        if (error instanceof BlogToolError) throw error;
-        throw unavailable("The Drive download was interrupted; retry");
-      }
-      return Buffer.concat(chunks);
+      return readCapped(response, maxBytes, tooLargeCode);
+    },
+
+    // A Google Doc exported as plain text (UTF-8), byte-capped.
+    async exportText(fileId, { maxBytes }) {
+      const response = await request(
+        fileId,
+        { mimeType: "text/plain" },
+        "/export",
+      );
+      return readCapped(response, maxBytes, "TEXT_TOO_LARGE");
     },
   };
 };
+
+async function readCapped(response, maxBytes, code) {
+  const declared = Number(response.headers.get("content-length"));
+  const tooLarge = () =>
+    new BlogToolError(code, `File exceeds ${maxBytes} bytes`);
+  if (declared > maxBytes) {
+    await response.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw tooLarge();
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof BlogToolError) throw error;
+    throw unavailable("The Drive download was interrupted; retry");
+  }
+  return Buffer.concat(chunks);
+}

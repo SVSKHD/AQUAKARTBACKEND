@@ -18,37 +18,20 @@ import {
   runnerFor,
   testConfig,
 } from "./support/mcpFakes.js";
+import {
+  DRIVE_ENV,
+  FOLDER,
+  OTHER_FOLDER,
+  SUBFOLDER,
+  createFakeDrive,
+  pngOf,
+} from "./support/driveFakes.js";
 
 // aquakart_import_blog_banner with in-memory MongoDB/Cloudinary fakes and
 // a scriptable Google Drive. No network.
 
-const FOLDER = "folderBanners0001";
-const SUBFOLDER = "folderBannersSub01";
-const OTHER_FOLDER = "folderSomewhereElse";
-const DRIVE_ENV = {
-  GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL:
-    "banner-importer@aquakart-test.iam.gserviceaccount.com",
-  GOOGLE_DRIVE_PRIVATE_KEY:
-    "-----BEGIN PRIVATE KEY-----\\nnot-a-real-key\\n-----END PRIVATE KEY-----",
-  GOOGLE_DRIVE_BANNER_FOLDER_IDS: FOLDER,
-};
 const WRITE = ctxFor([MCP_SCOPES.read, MCP_SCOPES.write, MCP_SCOPES.upload]);
 
-// Minimal but well-formed image headers with real dimensions.
-export const pngOf = (width, height, seed = randomBytes(8)) => {
-  const ihdr = Buffer.alloc(25);
-  ihdr.writeUInt32BE(13, 0);
-  ihdr.write("IHDR", 4, "latin1");
-  ihdr.writeUInt32BE(width, 8);
-  ihdr.writeUInt32BE(height, 12);
-  ihdr[16] = 8;
-  ihdr[17] = 2;
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    ihdr,
-    Buffer.from(seed),
-  ]);
-};
 const jpegOf = (width, height) => {
   const app0 = Buffer.from([
     0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00,
@@ -70,55 +53,6 @@ const webpVp8xOf = (width, height) => {
   buffer.writeUIntLE(width - 1, 24, 3);
   buffer.writeUIntLE(height - 1, 27, 3);
   return buffer;
-};
-
-// Scriptable Drive: files by id; unknown ids are "not found", `denied` ids
-// answer like a file the service account may not read.
-const createFakeDrive = () => {
-  const drive = {
-    configured: true,
-    shareWith: DRIVE_ENV.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL,
-    files: new Map([
-      [FOLDER, { id: FOLDER, parents: ["rootFolder000001"] }],
-      [SUBFOLDER, { id: SUBFOLDER, parents: [FOLDER] }],
-      [OTHER_FOLDER, { id: OTHER_FOLDER, parents: [] }],
-    ]),
-    bytes: new Map(),
-    denied: new Set(),
-    calls: { getFile: 0, download: 0 },
-    add(id, buffer, meta = {}) {
-      drive.files.set(id, {
-        id,
-        name: `${id}.png`,
-        mimeType: "image/png",
-        size: String(buffer.length),
-        md5Checksum: `md5-${id}-${buffer.length}`,
-        version: "3",
-        trashed: false,
-        parents: [FOLDER],
-        ...meta,
-      });
-      drive.bytes.set(id, buffer);
-    },
-    async getFile(id) {
-      drive.calls.getFile += 1;
-      if (drive.denied.has(id))
-        throw new BlogToolError("DRIVE_ACCESS_DENIED", "denied", {
-          shareWith: drive.shareWith,
-        });
-      const file = drive.files.get(id);
-      if (!file) throw new BlogToolError("DRIVE_FILE_NOT_FOUND", "not found");
-      return structuredClone(file);
-    },
-    async download(id, { maxBytes }) {
-      drive.calls.download += 1;
-      const buffer = drive.bytes.get(id);
-      if (buffer.length > maxBytes)
-        throw new BlogToolError("IMAGE_TOO_LARGE", "too large");
-      return Buffer.from(buffer);
-    },
-  };
-  return drive;
 };
 
 const setup = (envOverrides = {}) => {

@@ -221,6 +221,68 @@ test/offlinePayments.test.js test/paymentNotifications.test.js` 43/43
   URL source); no Drive search. Acceptance test from Claude Chat still to do
   after deployment, on a disposable draft.
 
+### Social post drafts: MCP create/verify, CRM review, publish after approval
+
+- Request/problem: Claude Code must upload an Instagram/Facebook poster
+  with its caption as an unpublished draft (08:30 IST automation from the
+  Google Drive content folder), retrieve and verify it; admins review drafts
+  in AQUACRM; posting happens only after approval, and until then the poster
+  stays in Aquakart's Cloudinary. There was no social collection, no draft
+  state for Instagram creatives (temp storage deleted after posting) and no
+  CRM social routes.
+- Changes/result: new `AquaSocialPost` collection (draft, approved,
+  rejected, publishing, published; review, publishing per platform, history,
+  unique content key). MCP tools `aquakart_create_social_draft`
+  (`social:write` + `media:upload`; poster by `mediaId` or from Drive with
+  caption file (.txt/.md/Google Doc) and metadata JSON; idempotent, same
+  poster + caption + platforms drafted once), `aquakart_update_social_draft`
+  (drafts/rejected only), `aquakart_get_social_draft` and
+  `aquakart_list_social_drafts` (`social:read`, with readiness checks), and
+  `aquakart_publish_social_post` (`instagram:publish`, approved posts only).
+  No MCP approve tool. CRM routes `/v1/crm/social-posts` (list, get, PATCH,
+  approve, reject with reason, publish) with new permissions `social.read`,
+  `social.manage`, `social.review`. Publishing hands the permanent poster to
+  the existing Instagram tools (temporary copy, never-twice publish,
+  verification, cleanup) with post-derived idempotency keys; failures return
+  the post to approved; concurrent publishes post once. Facebook is stored as
+  a target and reported `unsupported`. Reused the Drive banner-import code
+  by extracting `driveImport.js` (folder/type/size/dimension checks, text and
+  JSON reads); `googleDrive.js` gained Google Doc export; `blogTools`
+  exposes `storeImage`. Posters used by social posts are never deleted by
+  blog banner replacement. Blog workflow unchanged.
+- Files: `src/models/socialPost.js`, `src/services/mcp/socialTools.js`,
+  `src/services/mcp/socialSchemas.js`, `src/services/mcp/driveImport.js`,
+  `src/controllers/crm/socialPosts.js`, `src/routes/crm/socialPosts.js` (new);
+  `src/services/mcp/blogTools.js`, `src/services/mcp/googleDrive.js`,
+  `src/services/mcp/index.js`, `src/services/mcp/server.js`,
+  `src/services/mcp/store.js`, `src/services/mcp/config.js`,
+  `src/routes/mcp.js`, `src/constants/permissions.js`,
+  `src/docs/routeGroups.js`, `src/docs/mcp.js`, `app.js`,
+  `swagger-output.json`; tests `test/mcpSocialDrafts.test.js`,
+  `test/support/driveFakes.js` (new), `test/support/mcpFakes.js`,
+  `test/mcpBannerImport.test.js`; docs `docs/SOCIAL_DRAFTS.md` (new),
+  `docs/MCP_BLOG_PUBLISHING.md`, `docs/README.md`, `docs/PROJECT_MAP.md`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check` on changed files passed;
+  `node --test test/mcpSocialDrafts.test.js` 15/15 (uploaded-poster draft
+  read back, Drive image + caption + metadata, Google Doc caption, Drive
+  refusals, caption/aspect/required-field validation, duplicate and
+  concurrent creates, edit rules and stale revisions, CRM review rules,
+  publish via the real Instagram tools against fake Meta/Cloudinary
+  including failure + retry and concurrent publish, poster protection,
+  MCP scope enforcement and output schemas over an in-memory transport, CRM
+  controller HTTP mapping); a mutation check confirmed the poster-protection
+  test fails without the guard; existing MCP tests unchanged and passing;
+  `npm test` 413/414 (existing `invoiceViews.test.js` failure);
+  `npm run swagger` lists the six routes under "CRM / Social Posts". No live
+  Drive, Cloudinary, Meta or CRM request was made.
+- Limitations/follow-up: Facebook posting not implemented; AQUACRM front-end
+  screen not built (separate repo); `scheduledFor` is informational (no auto
+  posting); new scopes need existing MCP connections to re-authorize and the
+  `social.*` permissions assigned to staff roles. The original request text
+  was truncated after the data-model section; anything specified after it
+  was not implemented.
+
 ## 2026-11-18
 
 ### Offline payment links: CRM integration gaps

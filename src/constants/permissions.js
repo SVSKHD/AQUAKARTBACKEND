@@ -7,6 +7,11 @@ export const PERMISSIONS = Object.freeze([
   "ai.chats.read",
   "blogs.manage",
   "instagram.publish",
+  // Social post drafts: read, create/edit (incl. via MCP), approve/reject
+  // in the CRM. Publishing an approved post also needs instagram.publish.
+  "social.read",
+  "social.manage",
+  "social.review",
   "products.read",
   "products.manage",
   "coupons.read",

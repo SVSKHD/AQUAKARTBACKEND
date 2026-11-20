@@ -33,6 +33,7 @@ export const createMcpRouters = ({
   taxonomySeoTools,
   invoiceAuditTools,
   invoiceActionTools,
+  socialTools,
 }) => {
   const router = express.Router();
   const oauthRouter = express.Router();
@@ -271,6 +272,7 @@ export const createMcpRouters = ({
       taxonomySeoTools,
       invoiceAuditTools,
       invoiceActionTools,
+      socialTools,
       auth,
       correlationId: req.correlationId,
       resourceMetadataUrl,
