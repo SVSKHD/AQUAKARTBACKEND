@@ -260,28 +260,29 @@ Results:
 A missing scope returns `INSUFFICIENT_SCOPE` plus
 `_meta["mcp/www_authenticate"]`, which prompts the client to re-authorize.
 
-| Tool                               | Scope               | Input (main fields)                                                                                       | Output (main fields)                                                          |
-| ---------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `aquakart_get_brand_assets`        | none (any sign-in)  | none                                                                                                      | `brand` (`logos[]` original/white `url` + `previewUrl`, `overlay`, `rules`)   |
-| `aquakart_list_blogs`              | `blogs:read`        | `status` draft/published/all, `query`, `page`, `limit≤50`                                                 | `blogs[]` (id, title, slug, status, revision, publicUrl)                      |
-| `aquakart_get_blog`                | `blogs:read`        | `blogId` or `slug`                                                                                        | `blog` with HTML, SEO fields, references, images                              |
-| `aquakart_get_blog_status`         | `blogs:read`        | `blogId` or `slug`                                                                                        | `status`, `publicUrl`, `visibleOnStorefront`, `revision`                      |
-| `aquakart_create_blog`             | `blogs:write`       | `idempotencyKey`, `title` (10-120), `description` (HTML), optional slug/SEO/taxonomy fields, `modelUsed`  | `blog` (always `draft`), `warnings`                                           |
-| `aquakart_update_blog`             | `blogs:write`       | `idempotencyKey`, `blogId`, `expectedRevision?`, any content field (null clears)                          | `blog`                                                                        |
-| `aquakart_upload_image`            | `media:upload`      | `idempotencyKey`, `image` (ChatGPT file) **or** `imageBase64`                                             | `media` (`mediaId`, `publicId`, `secure_url`), `deduplicated`                 |
-| `aquakart_attach_image`            | `blogs:write`       | `idempotencyKey`, `blogId`, `mediaId`, `applyBrandLogo?`, `logoVariant?`, `expectedRevision?`             | `blog`, `titleImage` `{ id, secure_url }`                                     |
-| `aquakart_publish_blog`            | `blogs:publish`     | `idempotencyKey`, `blogId`, `expectedRevision?`                                                           | `blog`, `publicUrl`, `alreadyPublished`, `visibleOnStorefront`                |
-| `aquakart_upload_instagram_image`  | `instagram:upload`  | `idempotencyKey`, `image` or `imageBase64`                                                                | `asset` (`assetId`, status, cleanup fields), `deduplicated`                   |
-| `aquakart_publish_instagram`       | `instagram:publish` | `idempotencyKey`, `assetId`, `caption` (≤2,200 chars, ≤30 hashtags, ≤20 mentions, plain text), `altText?` | `asset` (`instagramMediaId`, `permalink`, `cleanupAfter`), `alreadyPublished` |
-| `aquakart_get_instagram_status`    | `instagram:read`    | `assetId`                                                                                                 | `asset`                                                                       |
-| `aquakart_list_instagram_posts`    | `instagram:read`    | `status?`, `page`, `limit≤50`                                                                             | `assets[]`                                                                    |
-| `aquakart_cleanup_instagram_asset` | `instagram:cleanup` | `idempotencyKey`, `assetId`                                                                               | `asset`, `cleaned`, `alreadyCleaned`                                          |
-| `aquakart_list_products`           | `products:read`     | `query?`, `category?`, `inStock?`, `page`, `limit≤50`                                                     | `products[]` (id, title, brand, price, offer price, stock, category, image)   |
-| `aquakart_get_product`             | `products:read`     | `productId`                                                                                               | `product` with description, SEO/merchant fields, photos, rating summary       |
-| `aquakart_create_product`          | `products:write`    | `idempotencyKey`, `title`, `description` (HTML), `price`, `stock`, `brand`, `mediaIds` (1-10), optional   | `product` (live immediately; `merchantEnabled` false unless asked)            |
-| `aquakart_list_coupons`            | `coupons:read`      | `status?`, `query?` (code), `page`, `limit≤50`                                                            | `coupons[]` (discount, validity, limits, usage, status, `targetedAccounts`)   |
-| `aquakart_get_coupon`              | `coupons:read`      | `couponId` or `code`                                                                                      | `coupon`                                                                      |
-| `aquakart_create_coupon`           | `coupons:write`     | `idempotencyKey`, `code`, `discountType`, `discountValue`, `endsAt`, optional limits/restrictions/status  | `coupon` (`draft` unless `status: "active"`)                                  |
+| Tool                               | Scope                          | Input (main fields)                                                                                                                        | Output (main fields)                                                                                                                                           |
+| ---------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aquakart_get_brand_assets`        | none (any sign-in)             | none                                                                                                                                       | `brand` (`logos[]` original/white `url` + `previewUrl`, `overlay`, `rules`)                                                                                    |
+| `aquakart_list_blogs`              | `blogs:read`                   | `status` draft/published/all, `query`, `page`, `limit≤50`                                                                                  | `blogs[]` (id, title, slug, status, revision, publicUrl)                                                                                                       |
+| `aquakart_get_blog`                | `blogs:read`                   | `blogId` or `slug`                                                                                                                         | `blog` with HTML, SEO fields, references, images                                                                                                               |
+| `aquakart_get_blog_status`         | `blogs:read`                   | `blogId` or `slug`                                                                                                                         | `status`, `publicUrl`, `visibleOnStorefront`, `revision`                                                                                                       |
+| `aquakart_create_blog`             | `blogs:write`                  | `idempotencyKey`, `title` (10-120), `description` (HTML), optional slug/SEO/taxonomy fields, `modelUsed`                                   | `blog` (always `draft`), `warnings`                                                                                                                            |
+| `aquakart_update_blog`             | `blogs:write`                  | `idempotencyKey`, `blogId`, `expectedRevision?`, any content field (null clears)                                                           | `blog`                                                                                                                                                         |
+| `aquakart_upload_image`            | `media:upload`                 | `idempotencyKey`, `image` (ChatGPT file) **or** `imageBase64`                                                                              | `media` (`mediaId`, `publicId`, `secure_url`), `deduplicated`                                                                                                  |
+| `aquakart_attach_image`            | `blogs:write`                  | `idempotencyKey`, `blogId`, `mediaId`, `applyBrandLogo?`, `logoVariant?`, `expectedRevision?`                                              | `blog`, `titleImage` `{ id, secure_url }`                                                                                                                      |
+| `aquakart_import_blog_banner`      | `blogs:write` + `media:upload` | `blogId`, `source` `{ type: "google_drive", fileId }`, `expectedRevision?`, `logoMode?`, `replaceExisting?`, `altText?`, `idempotencyKey?` | `mediaId`, `imageUrl`, `revision`, `blog`, `logo`, `alreadyAttached`, `verification` (see [Banner import from Google Drive](#banner-import-from-google-drive)) |
+| `aquakart_publish_blog`            | `blogs:publish`                | `idempotencyKey`, `blogId`, `expectedRevision?`                                                                                            | `blog`, `publicUrl`, `alreadyPublished`, `visibleOnStorefront`                                                                                                 |
+| `aquakart_upload_instagram_image`  | `instagram:upload`             | `idempotencyKey`, `image` or `imageBase64`                                                                                                 | `asset` (`assetId`, status, cleanup fields), `deduplicated`                                                                                                    |
+| `aquakart_publish_instagram`       | `instagram:publish`            | `idempotencyKey`, `assetId`, `caption` (≤2,200 chars, ≤30 hashtags, ≤20 mentions, plain text), `altText?`                                  | `asset` (`instagramMediaId`, `permalink`, `cleanupAfter`), `alreadyPublished`                                                                                  |
+| `aquakart_get_instagram_status`    | `instagram:read`               | `assetId`                                                                                                                                  | `asset`                                                                                                                                                        |
+| `aquakart_list_instagram_posts`    | `instagram:read`               | `status?`, `page`, `limit≤50`                                                                                                              | `assets[]`                                                                                                                                                     |
+| `aquakart_cleanup_instagram_asset` | `instagram:cleanup`            | `idempotencyKey`, `assetId`                                                                                                                | `asset`, `cleaned`, `alreadyCleaned`                                                                                                                           |
+| `aquakart_list_products`           | `products:read`                | `query?`, `category?`, `inStock?`, `page`, `limit≤50`                                                                                      | `products[]` (id, title, brand, price, offer price, stock, category, image)                                                                                    |
+| `aquakart_get_product`             | `products:read`                | `productId`                                                                                                                                | `product` with description, SEO/merchant fields, photos, rating summary                                                                                        |
+| `aquakart_create_product`          | `products:write`               | `idempotencyKey`, `title`, `description` (HTML), `price`, `stock`, `brand`, `mediaIds` (1-10), optional                                    | `product` (live immediately; `merchantEnabled` false unless asked)                                                                                             |
+| `aquakart_list_coupons`            | `coupons:read`                 | `status?`, `query?` (code), `page`, `limit≤50`                                                                                             | `coupons[]` (discount, validity, limits, usage, status, `targetedAccounts`)                                                                                    |
+| `aquakart_get_coupon`              | `coupons:read`                 | `couponId` or `code`                                                                                                                       | `coupon`                                                                                                                                                       |
+| `aquakart_create_coupon`           | `coupons:write`                | `idempotencyKey`, `code`, `discountType`, `discountValue`, `endsAt`, optional limits/restrictions/status                                   | `coupon` (`draft` unless `status: "active"`)                                                                                                                   |
 
 Category, subcategory and SEO tools:
 
@@ -320,7 +321,11 @@ Common error codes:
 - **SEO:** `SEO_NOT_FOUND`, `PAGE_KEY_TAKEN`
 - **Images:** `UNSUPPORTED_IMAGE_TYPE`, `IMAGE_TOO_LARGE`,
   `UNTRUSTED_IMAGE_SOURCE`, `IMAGE_DOWNLOAD_FAILED`, `MEDIA_NOT_FOUND`,
-  `LOGO_NOT_CONFIGURED`
+  `LOGO_NOT_CONFIGURED`, `INVALID_IMAGE`, `IMAGE_DIMENSIONS_INVALID`,
+  `IMAGE_STORAGE_FAILED` (retryable)
+- **Drive banner import:** `DRIVE_NOT_CONFIGURED`, `DRIVE_FILE_NOT_FOUND`,
+  `DRIVE_ACCESS_DENIED`, `DRIVE_FOLDER_NOT_ALLOWED`, `DRIVE_AUTH_FAILED`,
+  `DRIVE_UNAVAILABLE` (retryable), `DRIVE_REQUEST_FAILED`, `BANNER_EXISTS`
 - **Instagram:** `INSTAGRAM_NOT_CONFIGURED`, `INSTAGRAM_TOKEN_INVALID`,
   `META_TIMEOUT`, `META_RATE_LIMITED`, `CONTAINER_PROCESSING`,
   `CONTAINER_FAILED`, `PUBLISH_UNCERTAIN`, `PUBLISH_UNVERIFIED`,
@@ -511,6 +516,126 @@ are ignored. Limits:
     (`LOGO_NOT_CONFIGURED`).
   - `logoVariant: "white"` uses the white logo for dark images.
 
+## Banner import from Google Drive
+
+`aquakart_import_blog_banner` lets a chat client (Claude, ChatGPT, any MCP
+client) set a draft's banner from the Aquakart Drive folder in **one tool
+call**: no local file, no curl, no signed URL. The server reads the file
+with its own Google service account, so the client only passes the Drive
+file id (the `<id>` in `drive.google.com/file/d/<id>/view`).
+
+What the call does, in order:
+
+1. Requires `blogs:write` and `media:upload`.
+2. Reads the file's Drive metadata. Refuses trashed files, files outside
+   `GOOGLE_DRIVE_BANNER_FOLDER_IDS` (subfolders count, up to
+   `GOOGLE_DRIVE_FOLDER_DEPTH` levels), non-JPEG/PNG/WebP types and files whose
+   declared size is over `MCP_IMAGE_MAX_BYTES`. Picks the logo policy.
+3. Inside an idempotent operation: loads the blog; it must be a draft and
+   match `expectedRevision` if given. If the draft already has a banner, the
+   call fails with `BANNER_EXISTS` unless `replaceExisting: true`. If that
+   banner came from the same file version, nothing is downloaded and
+   `alreadyAttached: true` is returned instead.
+4. Downloads the bytes from Drive with a hard byte cap (streamed), checks the
+   real format against Drive's MIME type and reads width/height from the
+   image header (`MCP_BANNER_MIN_WIDTH` x `MCP_BANNER_MIN_HEIGHT` minimum,
+   `MCP_BANNER_MAX_DIMENSION` maximum). Bytes stay in memory; no temp files.
+5. Stores the image through the same pipeline as `aquakart_upload_image`
+   (`Blogs/mcp_<sha>`, de-duplicated by SHA-256, `AquaMcpMedia` with
+   `source: "google-drive"` and `sourceRef { fileId, version }`).
+6. Sets `titleImages` to exactly one entry with a revision-checked update
+   (`updatedAt` condition), so concurrent imports can never attach two
+   images. A replaced MCP banner is released as with `aquakart_attach_image`.
+7. Reads the blog back and returns `verification`
+   (`verified` when the blog has exactly one title image and it is this media).
+
+Article content and every other field are never touched. The tool never
+publishes.
+
+### Logo policy (`logoMode`)
+
+The logo is never detected from pixels.
+
+| `logoMode`          | Result                                                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` (default)    | Drive file property `aquakartLogo`: `present` → no overlay; `white` / `original` → that overlay. Otherwise the original logo (no overlay if `AQUAKART_LOGO_PUBLIC_ID=none`). |
+| `original`, `white` | That overlay; `LOGO_NOT_CONFIGURED` if overlays are off.                                                                                                                     |
+| `none`              | No overlay.                                                                                                                                                                  |
+
+`logo.decidedBy` reports `caller`, `drive-metadata`, `default` or `existing`.
+Set the property on a Drive file with the Drive API (`properties` or
+`appProperties`, key `aquakartLogo`); the Drive web UI cannot set it, so
+callers usually pass `logoMode` explicitly.
+
+### Idempotency and retries
+
+`idempotencyKey` is optional here. Without it the server derives one from
+`blogId`, file id, file version (`md5Checksum`, or `version`), `logoMode`,
+`replaceExisting`, `altText` and `expectedRevision`, so an identical retry
+replays the stored result. A retryable failure (`DRIVE_UNAVAILABLE`,
+`IMAGE_STORAGE_FAILED`) can be retried with the same call. A failed attach
+after a fresh upload removes the unused image; an upload that succeeded but
+whose operation crashed is reused on retry (same SHA-256).
+
+Logs: one `mcp.blog.import_banner` JSON line per call with `correlationId`,
+`clientId`, `blogId`, `driveFileId`, outcome code and duration (no tokens, no
+key, no URLs with credentials), plus the usual `mcp.tool` line and an audit
+entry `mcp.blog.import_banner`.
+
+### Setting up Drive access
+
+Files that Claude's or ChatGPT's own Google Drive connector can see are
+**not** automatically readable by the Aquakart backend. The backend reads
+only what is shared with its service account.
+
+1. In Google Cloud (any project the business owns), enable the **Google
+   Drive API**, create a service account (no roles needed), and create a JSON
+   key for it.
+2. Store `client_email` as `GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL` and
+   `private_key` as `GOOGLE_DRIVE_PRIVATE_KEY` in aqua-env (CRM) or Doppler.
+   `\n` escapes are accepted. Never commit the JSON file or put it in the image.
+3. In Drive, share the Aquakart banner folder with that email as **Viewer**.
+   For a shared drive, add the service account as a member (Viewer) of the
+   shared drive or of the folder.
+4. Put the folder id (from `drive.google.com/drive/folders/<id>`) in
+   `GOOGLE_DRIVE_BANNER_FOLDER_IDS` (comma-separated for several).
+5. Restart the API (MCP settings are read at startup).
+
+The service account uses the read-only scope
+`https://www.googleapis.com/auth/drive.readonly`. No Drive token or key ever
+appears in tool arguments, results, errors or logs. `DRIVE_FILE_NOT_FOUND`
+and `DRIVE_ACCESS_DENIED` include `details.shareWith` (the service-account
+email) so staff know whom to share with.
+
+### Sample chat request
+
+> Attach the banner `hard-water-dogs.png` from the Aquakart Drive folder
+> (https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view)
+> to the draft "Hard Water and Your Dog's Coat". Use the white logo.
+
+The client looks up the draft (`aquakart_list_blogs` / `aquakart_get_blog`)
+and calls:
+
+```json
+{
+  "name": "aquakart_import_blog_banner",
+  "arguments": {
+    "blogId": "6a70c1d2e3f4a5b6c7d8e9f0",
+    "source": {
+      "type": "google_drive",
+      "fileId": "1AbCdEfGhIjKlMnOpQrStUvWxYz012345"
+    },
+    "expectedRevision": "2026-11-20T06:15:02.114Z",
+    "logoMode": "white",
+    "replaceExisting": false,
+    "altText": "Golden retriever drinking softened water"
+  }
+}
+```
+
+Clients cannot search Drive through this tool; they need a file id (a Drive
+link pasted by the user, or one found with the client's own Drive connector).
+
 ## Logo references for AI-generated images
 
 - `aquakart_get_brand_assets` needs no scope; any signed-in connection can
@@ -671,8 +796,11 @@ existing job. Re-enable the job to go back to Gemini.
    create a draft on a **non-production** database.
 6. Connect ChatGPT. Upload one image and confirm the `download_url` host
    (update `MCP_TRUSTED_FILE_HOSTS`).
-7. Get explicit approval before the first real publish or Instagram post.
-8. Disable the Gemini blog job (above) only when client-side scheduled
+7. For Drive banner imports, set the `GOOGLE_DRIVE_*` variables and share the
+   banner folder (see [Setting up Drive access](#setting-up-drive-access)).
+   Test with a disposable draft; check `verification.status` is `verified`.
+8. Get explicit approval before the first real publish or Instagram post.
+9. Disable the Gemini blog job (above) only when client-side scheduled
    publishing is verified.
 
 ## Known limitations
@@ -687,3 +815,11 @@ existing job. Re-enable the job to go back to Gemini.
 - The Instagram token is not refreshed automatically.
 - The Meta API version and the ChatGPT file host still need confirming (see
   above).
+- Drive banner import accepts only Google Drive file ids (no public-URL
+  source yet) and cannot search Drive. Google Docs/Slides drawings are not
+  exported; the file must be a JPEG, PNG or WebP. The folder check walks at
+  most `GOOGLE_DRIVE_FOLDER_DEPTH` levels and needs the folders to be shared
+  with the service account, not only the file.
+- With a derived idempotency key and no `expectedRevision`, re-running the
+  exact same import after staff removed the banner replays the earlier
+  result; pass `expectedRevision` or a new `idempotencyKey` to import again.

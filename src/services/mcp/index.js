@@ -11,6 +11,7 @@ import { createInvoiceAuditTools } from "./invoiceAuditTools.js";
 import { createInvoiceActionTools } from "./invoiceActionTools.js";
 import { mongoInvoiceStore } from "./invoiceStore.js";
 import { createOAuthProvider } from "./oauthProvider.js";
+import { createGoogleDrive } from "./googleDrive.js";
 import { cloudinaryUploader, mongoStore } from "./store.js";
 
 // Builds the production MCP services from the environment.
@@ -46,6 +47,7 @@ export const buildMcpServices = (env = process.env) => {
     blogTools: createBlogTools({
       store: mongoStore,
       uploader: cloudinaryUploader,
+      drive: createGoogleDrive(config.drive),
       runOperation,
       config,
       audit,

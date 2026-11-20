@@ -224,8 +224,49 @@ export const loadMcpConfig = (env = process.env) => {
     operationLockMs: Math.trunc(
       positive(env.MCP_OPERATION_LOCK_SECONDS, 120, 3600) * 1000,
     ),
+    // Banner size bounds for aquakart_import_blog_banner (read from the
+    // image header, not from Drive metadata).
+    bannerMinWidth: Math.trunc(positive(env.MCP_BANNER_MIN_WIDTH, 600, 10000)),
+    bannerMinHeight: Math.trunc(
+      positive(env.MCP_BANNER_MIN_HEIGHT, 300, 10000),
+    ),
+    bannerMaxDimension: Math.trunc(
+      positive(env.MCP_BANNER_MAX_DIMENSION, 8000, 25000),
+    ),
+    drive: loadDriveConfig(env),
     instagram: loadInstagramConfig(env),
     invoiceAudit: loadInvoiceAuditConfig(env),
+  };
+};
+
+// Google Drive banner import (src/services/mcp/googleDrive.js). A service
+// account with the read-only Drive scope sees only files and folders that
+// were shared with its email; on top of that, imports are limited to files
+// inside GOOGLE_DRIVE_BANNER_FOLDER_IDS (directly or in subfolders). The
+// private key is used only to sign token requests, never logged or returned.
+const DRIVE_ID = /^[A-Za-z0-9_-]{10,128}$/;
+export const loadDriveConfig = (env = process.env) => {
+  const clientEmail = String(
+    env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL || "",
+  ).trim();
+  const privateKey = String(env.GOOGLE_DRIVE_PRIVATE_KEY || "")
+    .replace(/\\n/g, "\n")
+    .trim();
+  const folderIds = csv(env.GOOGLE_DRIVE_BANNER_FOLDER_IDS).filter((id) =>
+    DRIVE_ID.test(id),
+  );
+  return {
+    configured:
+      /^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/.test(clientEmail) &&
+      privateKey.includes("PRIVATE KEY") &&
+      folderIds.length > 0,
+    clientEmail,
+    privateKey,
+    folderIds,
+    folderDepth: Math.trunc(positive(env.GOOGLE_DRIVE_FOLDER_DEPTH, 5, 20)),
+    requestTimeoutMs: Math.trunc(
+      positive(env.GOOGLE_DRIVE_REQUEST_TIMEOUT_SECONDS, 20, 120) * 1000,
+    ),
   };
 };
 

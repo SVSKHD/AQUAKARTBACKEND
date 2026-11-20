@@ -5,6 +5,7 @@ import { toBlogToolError } from "./errors.js";
 import { IDEMPOTENCY_KEY, OBJECT_ID, SLUG } from "../../validators/mcp/blog.js";
 import { registerTaxonomySeoTools } from "./taxonomySeoSchemas.js";
 import { registerInvoiceTools } from "./invoiceSchemas.js";
+import { DRIVE_FILE_ID } from "./googleDrive.js";
 
 // Tool catalogue of the Aquakart MCP server. One McpServer is built per
 // HTTP request (stateless Streamable HTTP) with the caller's verified
@@ -445,7 +446,7 @@ export const createAquakartMcpServer = ({
     { name: "aquakart", title: "Aquakart", version: "1.0.0" },
     {
       instructions:
-        "Aquakart blogs, Instagram, product catalogue and coupons. Before creating any branded image, call aquakart_get_brand_assets: it returns the official Aquakart logo files (original for light backgrounds, white for dark) to use as references, plus the logo rules; never redraw or alter the logo, and for blog title images prefer generating without a logo and attaching with applyBrandLogo. Blogs: create a draft, upload and attach a title image, then publish with aquakart_publish_blog. Instagram: upload a creative, then publish it with a caption. Products: upload images with aquakart_upload_image, then aquakart_create_product with their mediaIds (products go live immediately). Coupons: aquakart_create_coupon saves a draft unless status is active. Categories/subcategories: list, create, update, delete (deletes are refused while anything uses them). Page SEO: list/get/create/update (set active false to switch a page off); aquakart_get_seo_readiness reports which pages need SEO work. Invoices (separate invoices:* scopes): aquakart_audit_invoices only creates suggested actions and never changes invoices; review them with aquakart_get_invoice_action and apply one only after explicit admin approval with aquakart_execute_invoice_action (fills a missing address only; duplicates always need manual accounting review). Always send an idempotencyKey on writes and reuse it when retrying.",
+        "Aquakart blogs, Instagram, product catalogue and coupons. Before creating any branded image, call aquakart_get_brand_assets: it returns the official Aquakart logo files (original for light backgrounds, white for dark) to use as references, plus the logo rules; never redraw or alter the logo, and for blog title images prefer generating without a logo and attaching with applyBrandLogo. Blogs: create a draft, upload and attach a title image (or, for a banner in the Aquakart Google Drive folder, call aquakart_import_blog_banner with its Drive file id: no file handling needed), then publish with aquakart_publish_blog. Instagram: upload a creative, then publish it with a caption. Products: upload images with aquakart_upload_image, then aquakart_create_product with their mediaIds (products go live immediately). Coupons: aquakart_create_coupon saves a draft unless status is active. Categories/subcategories: list, create, update, delete (deletes are refused while anything uses them). Page SEO: list/get/create/update (set active false to switch a page off); aquakart_get_seo_readiness reports which pages need SEO work. Invoices (separate invoices:* scopes): aquakart_audit_invoices only creates suggested actions and never changes invoices; review them with aquakart_get_invoice_action and apply one only after explicit admin approval with aquakart_execute_invoice_action (fills a missing address only; duplicates always need manual accounting review). Always send an idempotencyKey on writes and reuse it when retrying.",
     },
   );
 
@@ -864,6 +865,97 @@ export const createAquakartMcpServer = ({
       annotations: WRITE,
     },
     (args, ctx) => blogTools.attachImage(args, ctx),
+  );
+  register(
+    "aquakart_import_blog_banner",
+    {
+      title: "Import blog banner from Google Drive",
+      description:
+        "One call to set a DRAFT's banner from a file in the Aquakart Google Drive banner folder: the server reads the file with its own Drive account (no download, curl or upload on your side), checks the real bytes (JPEG/PNG/WebP, size and dimensions), stores it, overlays the official logo per logoMode, attaches it and reads the blog back. Pass the Drive file id (from a Drive link /file/d/<id>/). Refuses to replace an existing banner unless replaceExisting is true. Importing the same file version again returns alreadyAttached: true. Never publishes.",
+      scopes: [MCP_SCOPES.write, MCP_SCOPES.upload],
+      input: z.strictObject({
+        idempotencyKey: idempotencyKey
+          .optional()
+          .describe(
+            "Optional. Without it the server derives one from blogId, file id, file version and options, so an identical retry is a replay.",
+          ),
+        blogId: objectId,
+        source: z
+          .strictObject({
+            type: z.literal("google_drive"),
+            fileId: z
+              .string()
+              .regex(DRIVE_FILE_ID, "must be a Google Drive file id")
+              .describe(
+                "Drive file id, e.g. the <id> in drive.google.com/file/d/<id>/view",
+              ),
+          })
+          .describe("Where the banner comes from"),
+        expectedRevision,
+        logoMode: z
+          .enum(["auto", "original", "white", "none"])
+          .optional()
+          .describe(
+            "auto (default): use the Drive file's aquakartLogo property (present = already has the logo, original, white), otherwise the original logo. original/white force that overlay; none adds no logo.",
+          ),
+        replaceExisting: z
+          .boolean()
+          .optional()
+          .describe("Must be true to replace a banner the draft already has"),
+        altText: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Banner alt text; omitted keeps the current alt text"),
+      }),
+      output: envelope(
+        {
+          blogId: z.string(),
+          mediaId: z.string(),
+          imageUrl: z
+            .string()
+            .nullable()
+            .describe("Final banner URL (with the logo overlay if applied)"),
+          originalImageUrl: z.string(),
+          revision: z.string(),
+          blog: blogSummary,
+          titleImageAlt: z.string(),
+          image: z.object({
+            format: z.string().nullable(),
+            width: z.number().nullable(),
+            height: z.number().nullable(),
+            bytes: z.number().nullable(),
+          }),
+          source: z.object({
+            type: z.literal("google_drive"),
+            fileId: z.string(),
+            name: z.string(),
+            version: z.string(),
+          }),
+          logo: z.object({
+            applied: z.boolean(),
+            variant: z.enum(["original", "white"]).nullable(),
+            decidedBy: z.enum([
+              "caller",
+              "drive-metadata",
+              "default",
+              "existing",
+            ]),
+          }),
+          alreadyAttached: z.boolean(),
+          deduplicated: z.boolean(),
+          verification: z.object({
+            status: z.enum(["verified", "mismatch"]),
+            hasTitleImage: z.boolean(),
+            titleImageCount: z.number(),
+            matchesImportedMedia: z.boolean(),
+          }),
+        },
+        true,
+      ),
+      annotations: { ...WRITE, openWorldHint: true },
+    },
+    (args, ctx) => blogTools.importBlogBanner(args, ctx),
   );
   register(
     "aquakart_publish_blog",

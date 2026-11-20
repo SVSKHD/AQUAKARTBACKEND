@@ -154,6 +154,73 @@ test/offlinePayments.test.js test/paymentNotifications.test.js` 43/43
   (`LINK_RESEND_UNAVAILABLE`); regenerate them. Rotating the key has the
   same effect on existing links.
 
+### Backend dependency minor/patch update
+
+- Request/problem: update backend packages.
+- Changes/result: `npm install` to the latest in-range versions: axios
+  1.21.1, dotenv 18.0.10, express-fileupload 1.6.0, express-rate-limit
+  8.7.5, firebase-admin 14.5.1, mongoose 9.12.2, nodemailer 10.6.0,
+  sanitize-html 2.18.2; dev: lint-staged 17.6.1, prettier 3.10.1. ESLint
+  stays 8.57.1 (Airbnb config needs ESLint 8). `pnpm-lock.yaml` was not
+  touched (npm is the documented manager).
+- Files: `package.json`, `package-lock.json`, `docs/CHANGELOG.md`.
+- Validation: `npm outdated` lists only eslint; importing `app.js` succeeded;
+  `npm test` 382/383 (existing `invoiceViews.test.js` failure, unrelated).
+- Limitations/follow-up: `npm audit` reports 8 transitive advisories (1 low,
+  7 moderate, e.g. `minimatch` under `swagger-jsdoc`/Firestore); the offered
+  fix is a breaking `npm audit fix --force`, not applied.
+
+### MCP: import a blog banner from Google Drive server-side
+
+- Request/problem: chat clients (Claude Chat, ChatGPT) could only set a blog
+  banner by uploading bytes themselves (base64, ChatGPT file param or a
+  curl PUT to a signed URL). They need a single MCP call that imports a
+  banner from the Aquakart Google Drive folder and attaches it to a draft.
+- Changes/result: new tool `aquakart_import_blog_banner`
+  (`blogs:write` + `media:upload`). Reads Drive with a read-only service
+  account (signed JWT, no new dependency), restricted to
+  `GOOGLE_DRIVE_BANNER_FOLDER_IDS` and subfolders; validates trash state,
+  MIME type, declared and streamed size, real format from the bytes and
+  dimensions from the image header; stores through the existing
+  `saveImage` pipeline (SHA-256 de-duplication, `AquaMcpMedia` now records
+  `source: "google-drive"` and `sourceRef`); applies the logo by
+  `logoMode` (caller > Drive `aquakartLogo` property > default, never from
+  pixels); refuses to replace a banner without `replaceExisting`; attaches
+  with a revision-checked update (exactly one title image even under
+  concurrent calls); reads the blog back and returns `verification`.
+  Idempotent with an explicit key or one derived from blog, file id, file
+  version and options; same file version already attached returns
+  `alreadyAttached` without downloading. Retryable `DRIVE_UNAVAILABLE` /
+  `IMAGE_STORAGE_FAILED`; an unused fresh upload is released when a race is
+  lost. Structured `mcp.blog.import_banner` log line with `correlationId`;
+  no tokens, keys or signed URLs in results, errors or logs. Existing upload
+  tools unchanged (shared `titleImageFor` helper only). Not deployed.
+- Files: `src/services/mcp/googleDrive.js` (new),
+  `src/services/mcp/blogTools.js`, `src/services/mcp/server.js`,
+  `src/services/mcp/config.js`, `src/services/mcp/index.js`,
+  `src/services/mcp/errors.js`, `src/models/mcp/mcpMedia.js`,
+  `src/validators/mcp/blog.js` (`imageDimensions`), `src/docs/mcp.js`,
+  `swagger-output.json`, `test/mcpBannerImport.test.js` (new),
+  `test/mcpServer.test.js`, `.env.example`, `docs/MCP_BLOG_PUBLISHING.md`,
+  `docs/PROJECT_MAP.md`, `docs/CHANGELOG.md`.
+- Validation: `node --check` on changed files passed;
+  `node --test test/mcpBannerImport.test.js` 15/15 (mocked Drive and
+  Cloudinary: success, folder/permission refusals, invalid id, unsupported
+  format, size and dimension limits, existing banner, stale revision,
+  duplicate retry, Cloudinary failure and retry, concurrency, scope
+  enforcement through the real MCP server over an in-memory transport,
+  logo selection, header parsing, real Drive client with a fake `fetch`);
+  all MCP test files 103/103; `npm test` 397/398 (existing
+  `invoiceViews.test.js` failure); `npm run swagger` succeeded (only the MCP
+  description changed). ESLint reports only pre-existing style rules
+  (repo-wide Prettier/Airbnb conflict). No live Drive, Cloudinary or MCP
+  client test was run.
+- Limitations/follow-up: needs `GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL`,
+  `GOOGLE_DRIVE_PRIVATE_KEY`, `GOOGLE_DRIVE_BANNER_FOLDER_IDS` and the folder
+  shared with the service account before use. Drive file ids only (no public
+  URL source); no Drive search. Acceptance test from Claude Chat still to do
+  after deployment, on a disposable draft.
+
 ## 2026-11-18
 
 ### Offline payment links: CRM integration gaps
