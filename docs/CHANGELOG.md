@@ -283,6 +283,31 @@ test/offlinePayments.test.js test/paymentNotifications.test.js` 43/43
   was truncated after the data-model section; anything specified after it
   was not implemented.
 
+### Fix Docker build: lockfile out of sync for npm 10
+
+- Request/problem: Jenkins build 260 failed at `npm ci --omit=dev` in the
+  Docker image (node:22-alpine, npm 10.9.9): "Missing: gcp-metadata@7.0.1,
+  google-logging-utils@1.2.0 from lock file". The dependency update earlier
+  today regenerated `package-lock.json` with npm 11, which does not record
+  a nested copy for `mongodb@7.8.0`'s optional peer `gcp-metadata ^7.0.1`
+  (the hoisted copy is 9.2.2, from firebase-admin); npm 10 requires it.
+- Changes/result: regenerated the lockfile with npm 10.9.9
+  (`npm install --package-lock-only --ignore-scripts`). Only addition:
+  `node_modules/mongoose/node_modules/gcp-metadata` 7.0.1 and
+  `node_modules/mongoose/node_modules/google-logging-utils` 1.2.0. No
+  `package.json` change.
+- Files: `package-lock.json`, `docs/CHANGELOG.md`.
+- Validation: reproduced the exact EUSAGE error with
+  `npx npm@10.9.9 ci --omit=dev --ignore-scripts --dry-run` before the fix;
+  after it, the same command and npm 11 `npm ci --dry-run` succeed; a real
+  `npx npm@10.9.9 ci --omit=dev --ignore-scripts` installed 398 packages,
+  `app.js` imported, `node --test` 413/414 (existing `invoiceViews.test.js`
+  failure). Docker itself was not run locally (not installed); Jenkins run
+  after merge is the live check.
+- Limitations/follow-up: local npm (11) and the image's npm (10) differ;
+  regenerate lockfiles with `npx npm@10.9.9 install --package-lock-only`, or
+  align the Docker base image/npm version, to avoid a repeat.
+
 ## 2026-11-18
 
 ### Offline payment links: CRM integration gaps
