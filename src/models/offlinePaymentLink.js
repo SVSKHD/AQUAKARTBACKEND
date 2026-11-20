@@ -22,6 +22,9 @@ export const CONVERSION_STATUSES = [
 const OfflinePaymentLinkSchema = new mongoose.Schema(
   {
     tokenHash: { type: String, required: true, unique: true },
+    // Encrypted token for "Send" from the CRM (rules.js sealLinkToken). Never
+    // returned by any API; empty for links created before it existed.
+    tokenSealed: { type: String, default: "" },
     source: {
       kind: {
         type: String,

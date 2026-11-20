@@ -9,6 +9,18 @@ export const normalizeWhatsAppNumber = (value = "") => {
   return null;
 };
 
+// Fast2SMS separates variables_values with "|". Invoice and pre-invoice
+// numbers contain "|" (e.g. AQB…|20112026), which would shift every later
+// variable, so it is replaced with "/" inside each value.
+export const joinTemplateVariables = (variables = []) =>
+  variables
+    .map((value) =>
+      String(value ?? "")
+        .replace(/\|/g, "/")
+        .replace(/[\r\n]+/g, " "),
+    )
+    .join("|");
+
 export const getFast2SmsWhatsAppConfig = () => ({
   apiKey:
     process.env.FAST2SMS_API_KEY ||
@@ -28,8 +40,7 @@ export const getFast2SmsWhatsAppConfig = () => ({
 const getMissingWhatsAppConfiguration = (config, { invoice = true } = {}) => {
   const missing = [];
   if (!config.apiKey) missing.push("FAST2SMS_API_KEY");
-  if (!config.phoneNumberId)
-    missing.push("FAST2SMS_WHATSAPP_PHONE_NUMBER_ID");
+  if (!config.phoneNumberId) missing.push("FAST2SMS_WHATSAPP_PHONE_NUMBER_ID");
   if (invoice && !config.invoiceMessageId)
     missing.push("FAST2SMS_WHATSAPP_INVOICE_MESSAGE_ID");
   return missing;
@@ -122,7 +133,8 @@ export const sendFast2SmsWhatsAppTemplate = async ({
     phone_number_id: config.phoneNumberId,
     numbers: number,
   };
-  if (variables.length) params.variables_values = variables.join("|");
+  if (variables.length)
+    params.variables_values = joinTemplateVariables(variables);
   if (mediaUrl) params.media_url = mediaUrl;
   if (documentFilename) params.document_filename = documentFilename;
   udf.slice(0, 3).forEach((value, index) => {

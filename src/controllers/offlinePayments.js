@@ -69,13 +69,24 @@ const source = (kind) => (req) => ({
   sourceId: req.params.id,
   actor: req.user,
 });
+// Body is optional; { "notifyCustomer": false } skips the WhatsApp message.
+const createSource = (kind) => (req) => ({
+  ...source(kind)(req),
+  notifyCustomer: req.body?.notifyCustomer !== false,
+});
 export const createPreInvoiceLink = handle(
-  (req) => offlinePayments.createLink(source("pre_invoice")(req)),
+  (req) => offlinePayments.createLink(createSource("pre_invoice")(req)),
   201,
 );
 export const createQuotationLink = handle(
-  (req) => offlinePayments.createLink(source("quotation")(req)),
+  (req) => offlinePayments.createLink(createSource("quotation")(req)),
   201,
+);
+export const sendPreInvoiceLink = handle((req) =>
+  offlinePayments.sendLink(source("pre_invoice")(req)),
+);
+export const sendQuotationLink = handle((req) =>
+  offlinePayments.sendLink(source("quotation")(req)),
 );
 export const revokePreInvoiceLink = handle((req) =>
   offlinePayments.revokeLink(source("pre_invoice")(req)),

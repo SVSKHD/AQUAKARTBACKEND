@@ -180,6 +180,40 @@ const unavailable = error(
   ["LINK_UNAVAILABLE"],
 );
 
+const sendOp = (kind) => ({
+  post: {
+    tags: [ADMIN_TAG],
+    summary: `Send the active payment link of a ${kind} to the customer on WhatsApp`,
+    description:
+      "Permission payments.link.manage. Re-sends the same link (Fast2SMS paymentLinkRequest template) to the document's mobile and waits for the provider. At most once a minute per link.",
+    parameters: [idParam, staffAuth],
+    responses: {
+      200: {
+        description: "Sent",
+        schema: ok({
+          type: "object",
+          properties: {
+            sent: { type: "boolean", example: true },
+            channel: { type: "string", example: "whatsapp" },
+            sentAt: { type: "string", format: "date-time" },
+            link: linkState,
+          },
+        }),
+      },
+      409: error(
+        "No active link, document changed, or link created before sending was available",
+        ["NO_ACTIVE_LINK", "LINK_OUTDATED", "LINK_RESEND_UNAVAILABLE"],
+      ),
+      429: error("Sent less than a minute ago", ["ALREADY_SENT"]),
+      502: error("WhatsApp delivery failed", ["SEND_FAILED"]),
+      503: error("Payment-link template not configured", [
+        "NOTIFICATIONS_NOT_CONFIGURED",
+      ]),
+      ...staffErrors,
+    },
+  },
+});
+
 const linkOps = (kind, permission) => ({
   get: {
     tags: [ADMIN_TAG],
@@ -197,8 +231,26 @@ const linkOps = (kind, permission) => ({
   post: {
     tags: [ADMIN_TAG],
     summary: `Create or regenerate the payment link of a ${kind}`,
-    description: `Permission ${permission}. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the ${kind}'s stored total. ${kind === "quotation" ? "Refused with USE_PRE_INVOICE once the quotation was moved to a pre-invoice." : ""}`,
-    parameters: [idParam, staffAuth],
+    description: `Permission ${permission}. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the ${kind}'s stored total. The link is also sent to the customer's mobile on WhatsApp (Fast2SMS paymentLinkRequest template) unless the body has notifyCustomer: false; customerNotification says whether it was queued. ${kind === "quotation" ? "Refused with USE_PRE_INVOICE once the quotation was moved to a pre-invoice." : ""}`,
+    parameters: [
+      idParam,
+      staffAuth,
+      {
+        name: "body",
+        in: "body",
+        required: false,
+        schema: {
+          type: "object",
+          properties: {
+            notifyCustomer: {
+              type: "boolean",
+              default: true,
+              description: "false: do not send the link on WhatsApp",
+            },
+          },
+        },
+      },
+    ],
     responses: {
       201: {
         description: "Link created",
@@ -210,6 +262,12 @@ const linkOps = (kind, permission) => ({
               example: "https://aquakart.co.in/pay/{token}",
             },
             ...linkState.properties,
+            customerNotification: {
+              type: "string",
+              enum: ["queued", "not_configured", "disabled"],
+              description:
+                "queued: WhatsApp send started (see NotificationLog); not_configured: template ID unset; disabled: notifyCustomer was false",
+            },
           },
         }),
       },
@@ -357,6 +415,9 @@ export const applyOfflinePaymentDocs = (doc) => {
     "pre-invoice",
     "payments.link.manage",
   );
+  doc.paths["/v1/crm/pre-invoices/{id}/payment-link/send"] =
+    sendOp("pre-invoice");
+  doc.paths["/v1/crm/quotations/{id}/payment-link/send"] = sendOp("quotation");
   doc.paths["/v1/crm/quotations/{id}/payment-link"] = linkOps(
     "quotation",
     "payments.link.manage",

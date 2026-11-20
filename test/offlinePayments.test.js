@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createOfflinePaymentService } from "../src/services/offlinePayments/service.js";
+import { deriveLinkTokenKey } from "../src/services/offlinePayments/rules.js";
 import { createPreInvoiceService } from "../src/services/offlinePayments/preInvoices.js";
 import { hashLinkToken } from "../src/services/offlinePayments/rules.js";
 import { validateInvoicePayload } from "../src/controllers/crm/invoice.js";
@@ -179,9 +180,10 @@ const createStore = (clock) => {
   };
 };
 
-const setup = () => {
+const setup = ({ tokenKey = deriveLinkTokenKey("test-secret") } = {}) => {
   const clock = createClock("2026-11-18T05:00:00.000Z");
   const store = createStore(clock);
+  const notifications = [];
   const audits = [];
   const gateway = {
     created: [],
@@ -251,8 +253,18 @@ const setup = () => {
       publicBaseUrl: "https://aquakart.co.in",
       linkTtlHours: 72,
       attemptTtlMinutes: 15,
+      tokenKey,
     },
     audit: async (entry) => audits.push(clone(entry)),
+    notifier: {
+      linkCreated: async (payload) => {
+        notifications.push(["linkCreated", payload]);
+        return env.sendResult || { sent: true, channel: "whatsapp" };
+      },
+      linkPaid: async (payload) => notifications.push(["linkPaid", payload]),
+      invoiceReady: async (payload) =>
+        notifications.push(["invoiceReady", payload]),
+    },
     now: clock.now,
     log: { error() {} },
   });
@@ -263,7 +275,7 @@ const setup = () => {
     now: clock.now,
   });
   const admin = { _id: "a00000000000000000000001" };
-  return {
+  const env = {
     clock,
     store,
     gateway,
@@ -272,7 +284,10 @@ const setup = () => {
     preInvoices,
     audits,
     admin,
+    notifications,
+    sendResult: null,
   };
+  return env;
 };
 
 const addQuotation = (env, extra = {}) => {
@@ -1193,4 +1208,119 @@ test("existing quotation convert-to-invoice refuses a quotation moved to a pre-i
   } finally {
     AquaQuotation.findById = original;
   }
+});
+
+test("payment notifications: admin alert on paid, receipt once the invoice exists", async () => {
+  const env = setup();
+  const quotation = addQuotation(env);
+  const { token, user } = await payReady(env, "quotation", quotation);
+  await env.payments.initiate(token, { _id: user._id });
+  await webhook(env, "pending");
+  assert.ok(!env.notifications.some(([name]) => name !== "linkCreated"));
+  await webhook(env, "paid");
+  await new Promise((resolve) => setImmediate(resolve));
+  const names = env.notifications.map(([name]) => name);
+  assert.ok(names.includes("linkPaid"));
+  assert.ok(names.includes("invoiceReady"));
+  const [, paid] = env.notifications.find(([name]) => name === "linkPaid");
+  assert.equal(paid.link.status, "paid");
+  assert.equal(paid.doc.customerDetails.name, "Ravi Kumar");
+  const [, ready] = env.notifications.find(([name]) => name === "invoiceReady");
+  assert.equal(String(ready.invoice._id), String(env.store.db.invoices[0]._id));
+});
+
+test("stock short: admin is alerted, customer receipt waits for the invoice", async () => {
+  const env = setup();
+  const quotation = addQuotation(env);
+  const { token, user } = await payReady(env, "quotation", quotation);
+  await env.payments.initiate(token, { _id: user._id });
+  env.writer.outOfStock = true;
+  await webhook(env, "paid");
+  await new Promise((resolve) => setImmediate(resolve));
+  const names = env.notifications.map(([name]) => name);
+  assert.ok(names.includes("linkPaid"));
+  assert.ok(!names.includes("invoiceReady"));
+});
+
+test("payment link request: link sent to the customer unless notifyCustomer is false", async () => {
+  const env = setup();
+  const quotation = addQuotation(env);
+  const created = await linkFor(env, "quotation", quotation);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(created.customerNotification, "queued");
+  const sent = env.notifications.filter(([name]) => name === "linkCreated");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0][1].url, created.url);
+  assert.equal(sent[0][1].doc.customerDetails.name, "Ravi Kumar");
+  assert.equal(String(sent[0][1].link._id), created.linkId);
+
+  const silent = await env.payments.createLink({
+    kind: "quotation",
+    sourceId: quotation._id,
+    actor: env.admin,
+    notifyCustomer: false,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(silent.customerNotification, "disabled");
+  assert.equal(
+    env.notifications.filter(([name]) => name === "linkCreated").length,
+    1,
+  );
+});
+
+test("CRM send: re-sends the same link, never exposes the token, needs an active current link", async () => {
+  const env = setup();
+  const quotation = addQuotation(env);
+  const created = await linkFor(env, "quotation", quotation);
+  assert.ok(env.store.db.links[0].tokenSealed);
+  assert.ok(!env.store.db.links[0].tokenSealed.includes(tokenOf(created.url)));
+
+  const result = await env.payments.sendLink({
+    kind: "quotation",
+    sourceId: quotation._id,
+    actor: env.admin,
+  });
+  assert.equal(result.sent, true);
+  assert.equal(result.channel, "whatsapp");
+  assert.equal(result.link.linkId, created.linkId);
+  assert.ok(!JSON.stringify(result).includes(tokenOf(created.url)));
+  const sends = env.notifications.filter(([name]) => name === "linkCreated");
+  assert.equal(sends.at(-1)[1].url, created.url);
+  assert.match(sends.at(-1)[1].dedupeKey, /:resend:\d+$/);
+  assert.ok(env.audits.some((a) => a.action === "payment_link.sent"));
+
+  env.sendResult = { sent: false, duplicate: true };
+  await rejects(
+    env.payments.sendLink({ kind: "quotation", sourceId: quotation._id }),
+    "ALREADY_SENT",
+  );
+  env.sendResult = {
+    sent: false,
+    errors: [{ code: "FAST2SMS_REJECTED", message: "Template paused" }],
+  };
+  await rejects(
+    env.payments.sendLink({ kind: "quotation", sourceId: quotation._id }),
+    "SEND_FAILED",
+  );
+
+  await env.payments.revokeLink({
+    kind: "quotation",
+    sourceId: quotation._id,
+    actor: env.admin,
+  });
+  await rejects(
+    env.payments.sendLink({ kind: "quotation", sourceId: quotation._id }),
+    "NO_ACTIVE_LINK",
+  );
+});
+
+test("CRM send: links without a sealed token ask for a new link", async () => {
+  const env = setup({ tokenKey: null });
+  const quotation = addQuotation(env);
+  await linkFor(env, "quotation", quotation);
+  assert.ok(!env.store.db.links[0].tokenSealed);
+  await rejects(
+    env.payments.sendLink({ kind: "quotation", sourceId: quotation._id }),
+    "LINK_RESEND_UNAVAILABLE",
+  );
 });

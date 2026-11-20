@@ -31,6 +31,48 @@ export const hashLinkToken = (token) =>
     .digest("hex");
 export const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
+// The token is also kept sealed (AES-256-GCM) so staff can re-send the same
+// link from the CRM. Lookup still uses only the hash. The key is derived from
+// PAYMENT_LINK_TOKEN_KEY (or JWT_SECRET); without a key nothing is sealed and
+// re-sending is unavailable.
+export const deriveLinkTokenKey = (secret) =>
+  secret
+    ? crypto
+        .createHash("sha256")
+        .update(`aquakart:payment-link-token:${secret}`)
+        .digest()
+    : null;
+export const sealLinkToken = (token, key) => {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const sealed = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [
+    "v1",
+    iv.toString("base64url"),
+    sealed.toString("base64url"),
+    cipher.getAuthTag().toString("base64url"),
+  ].join(".");
+};
+export const openLinkToken = (value, key) => {
+  try {
+    const [version, iv, sealed, tag] = String(value || "").split(".");
+    if (version !== "v1" || !key) return null;
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      key,
+      Buffer.from(iv, "base64url"),
+    );
+    decipher.setAuthTag(Buffer.from(tag, "base64url"));
+    const token = Buffer.concat([
+      decipher.update(Buffer.from(sealed, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+    return TOKEN_PATTERN.test(token) ? token : null;
+  } catch (_error) {
+    return null;
+  }
+};
+
 export const toPaise = (value) => Math.round(Number(value || 0) * 100);
 export const money = (value) => toPaise(value) / 100;
 

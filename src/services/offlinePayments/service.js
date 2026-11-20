@@ -7,8 +7,10 @@ import {
   formatAddress,
   hashLinkToken,
   isStockError,
+  openLinkToken,
   paymentModes,
   sameAddress,
+  sealLinkToken,
   snapshotHash,
   toPaise,
   validateCustomerDetails,
@@ -44,9 +46,24 @@ export const createOfflinePaymentService = ({
   invoiceWriter,
   config,
   audit = async () => {},
+  // Payment notifications (admin alert, payment receipt + invoice link).
+  // Called without awaiting; a notification never fails a payment.
+  notifier = {},
   now = () => new Date(),
   log = console,
 }) => {
+  const notify = (name, payload) => {
+    if (typeof notifier[name] !== "function") return;
+    Promise.resolve()
+      .then(() => notifier[name](payload))
+      .catch((error) =>
+        log.error("Offline payment notification failed", {
+          name,
+          code: error?.code,
+          message: error?.message,
+        }),
+      );
+  };
   const adapters = createSourceAdapters({ store, now });
   const adapterFor = (kind) => {
     const adapter = adapters[kind];
@@ -210,6 +227,7 @@ export const createOfflinePaymentService = ({
       }
       await adapter.attachInvoice(doc, invoice);
       await linkInvoiceToCustomer(claimed, invoice);
+      notify("invoiceReady", { link: claimed, invoice });
       await audit({
         action: "payment_link.invoice_created",
         resourceType: "payment_link",
@@ -366,6 +384,7 @@ export const createOfflinePaymentService = ({
     const adapter = adapterFor(link.source.kind);
     const modes = paymentModes(verification.paymentInstrumentType);
     let doc = await adapter.load(link.source.id);
+    notify("linkPaid", { link, doc });
     if (doc && doc.payment?.status !== "Paid") {
       // The document must still charge exactly what was paid.
       if (
@@ -463,7 +482,7 @@ export const createOfflinePaymentService = ({
     revokeActive,
     linkSummary,
 
-    async createLink({ kind, sourceId, actor }) {
+    async createLink({ kind, sourceId, actor, notifyCustomer = true }) {
       const adapter = adapterFor(kind);
       const doc = await adapter.load(sourceId);
       if (!doc)
@@ -509,6 +528,9 @@ export const createOfflinePaymentService = ({
         const token = createLinkToken();
         const link = await store.createLink({
           tokenHash: hashLinkToken(token),
+          ...(config.tokenKey
+            ? { tokenSealed: sealLinkToken(token, config.tokenKey) }
+            : {}),
           source: { kind, id: doc._id, number: snapshot.number },
           phoneNormalized: snapshot.phone,
           amount: snapshot.total,
@@ -541,10 +563,103 @@ export const createOfflinePaymentService = ({
           amount: snapshot.total,
         },
       });
+      const url = payUrl(created.token);
+      // Send the link to the customer on WhatsApp (in the background).
+      let customerNotification = "disabled";
+      if (notifyCustomer !== false) {
+        customerNotification =
+          typeof notifier.linkCreated === "function" &&
+          notifier.linkCreatedConfigured?.() !== false
+            ? "queued"
+            : "not_configured";
+        if (customerNotification === "queued")
+          notify("linkCreated", { link: created.link, doc, url });
+      }
       return {
         // Shown once: only its hash is stored.
-        url: payUrl(created.token),
+        url,
         ...linkSummary(created.link),
+        customerNotification,
+      };
+    },
+
+    // CRM "Send": re-sends the active link (same URL) to the customer on
+    // WhatsApp and waits for the provider, so staff see the real outcome.
+    async sendLink({ kind, sourceId, actor }) {
+      const adapter = adapterFor(kind);
+      const link = await store.findLatestLink(kind, sourceId);
+      if (!link || effectiveStatus(link) !== "active")
+        throw new OfflinePaymentError(
+          409,
+          "NO_ACTIVE_LINK",
+          "There is no active payment link to send. Create a new link.",
+        );
+      const doc = await adapter.load(sourceId);
+      if (
+        !doc ||
+        snapshotHash(adapter.payableSnapshot(doc)) !== link.snapshotHash
+      )
+        throw new OfflinePaymentError(
+          409,
+          "LINK_OUTDATED",
+          "The document changed after this link was made. Create a new link.",
+        );
+      const token =
+        config.tokenKey && link.tokenSealed
+          ? openLinkToken(link.tokenSealed, config.tokenKey)
+          : null;
+      if (!token || hashLinkToken(token) !== link.tokenHash)
+        throw new OfflinePaymentError(
+          409,
+          "LINK_RESEND_UNAVAILABLE",
+          "This link can't be re-sent (it was created before sending was available). Create a new link; it is sent automatically.",
+        );
+      if (
+        typeof notifier.linkCreated !== "function" ||
+        notifier.linkCreatedConfigured?.() === false
+      )
+        throw new OfflinePaymentError(
+          503,
+          "NOTIFICATIONS_NOT_CONFIGURED",
+          "The WhatsApp payment-link template is not configured on the server.",
+        );
+      const minute = Math.floor(now().getTime() / 60000);
+      const result = await notifier.linkCreated({
+        link,
+        doc,
+        url: payUrl(token),
+        dedupeKey: `payment-link:${id(link._id)}:resend:${minute}`,
+      });
+      if (result?.duplicate)
+        throw new OfflinePaymentError(
+          429,
+          "ALREADY_SENT",
+          "The link was just sent. Wait a minute before sending it again.",
+        );
+      if (!result?.sent)
+        throw new OfflinePaymentError(
+          502,
+          "SEND_FAILED",
+          result?.errors?.at(-1)?.message ||
+            "WhatsApp delivery failed. Try again or share the link manually.",
+          { reason: result?.skipped || result?.errors?.at(-1)?.code || null },
+        );
+      await audit({
+        action: "payment_link.sent",
+        adminUserId: actor?._id,
+        resourceType: "payment_link",
+        resourceId: link._id,
+        metadata: {
+          sourceKind: kind,
+          sourceNumber: link.source.number,
+          channel: result.channel,
+        },
+      });
+      return {
+        sent: true,
+        channel: result.channel || "whatsapp",
+        sentAt: iso(now()),
+        link: linkSummary(link, { matchesDocument: true }),
       };
     },
 

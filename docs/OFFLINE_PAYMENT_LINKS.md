@@ -81,6 +81,8 @@ PhonePe webhook / status check (server-to-server) → verified paid
 | `POST /v1/crm/quotations/:id/pre-invoice`                        | `preinvoices.manage`   |
 | `GET/POST/DELETE /v1/crm/pre-invoices/:id/payment-link`          | `payments.link.manage` |
 | `GET/POST/DELETE /v1/crm/quotations/:id/payment-link`            | `payments.link.manage` |
+| `POST /v1/crm/pre-invoices/:id/payment-link/send`                | `payments.link.manage` |
+| `POST /v1/crm/quotations/:id/payment-link/send`                  | `payments.link.manage` |
 
 - **Permissions:** the three permissions are new and assigned to no role. Only
   super-admin and legacy role 1 have them until someone assigns them in CRM
@@ -90,6 +92,11 @@ PhonePe webhook / status check (server-to-server) → verified paid
   `Expired`, have a zero total, are not in INR, have no valid Indian mobile, or
   when the gateway is disabled.
   - It revokes any active link and creates a new one.
+  - It sends the link to the document's mobile on WhatsApp (Fast2SMS
+    `paymentLinkRequest` template) unless the body has
+    `"notifyCustomer": false`. The response field `customerNotification`
+    is `queued`, `not_configured` or `disabled`
+    ([PAYMENT_NOTIFICATIONS.md](PAYMENT_NOTIFICATIONS.md)).
   - It returns `url` (`https://aquakart.co.in/pay/{token}`) **once**; only the
     SHA-256 of the 32-byte token is stored.
   - It sets a Draft/Sent/Accepted document to `Payment Pending`.
@@ -100,6 +107,18 @@ PhonePe webhook / status check (server-to-server) → verified paid
     pass it to the reconcile endpoint below
   - `matchesDocument` (false means the document changed and the link must be
     regenerated)
+- **`POST …/payment-link/send`** (the CRM "Send" button) re-sends the
+  **same** active link to the document's mobile on WhatsApp and waits for
+  Fast2SMS. It returns `{ sent, channel, sentAt, link }` and never the URL.
+  Errors: `409 NO_ACTIVE_LINK`, `409 LINK_OUTDATED` (document changed),
+  `409 LINK_RESEND_UNAVAILABLE` (link made before this feature: create a new
+  one), `429 ALREADY_SENT` (once a minute per link), `502 SEND_FAILED`,
+  `503 NOTIFICATIONS_NOT_CONFIGURED`.
+  - To make this possible the token is also stored sealed (AES-256-GCM,
+    `tokenSealed`) with a key from `PAYMENT_LINK_TOKEN_KEY`, or derived from
+    `JWT_SECRET`. Lookup still uses only the SHA-256 hash, and no API
+    returns the sealed value. Changing the key makes existing links
+    un-sendable (they still work for the customer).
 - **Reconcile and retry:** `POST /v1/crm/payments/:id/reconcile` (existing,
   `payments.reconcile`) also handles offline attempts. It re-checks with
   PhonePe and retries a missing invoice (for example after stock was short).
@@ -208,7 +227,10 @@ itself as success.
      marked: the link gets `needs_review` and `AMOUNT_CHANGED_AFTER_PAYMENT`.
   4. The final invoice is created exactly once:
      - Through the existing `persistInvoice`, which consumes stock and sends the
-       invoice on WhatsApp, as a CRM conversion does.
+       invoice on WhatsApp, as a CRM conversion does. When the
+       `paymentReceived` template is configured, the customer gets that
+       receipt with the invoice link instead, and the admin is alerted as soon
+       as the payment is verified ([PAYMENT_NOTIFICATIONS.md](PAYMENT_NOTIFICATIONS.md)).
      - **A quotation paid directly** becomes `Sold` with `convertedToInvoice`,
        like the CRM conversion.
      - **A pre-invoice** gets `invoice.sourcePreInvoiceId` (unique index), plus

@@ -13,6 +13,11 @@ import { writeAudit } from "../services/audit.js";
 import { installationFrom } from "../services/checkout.js";
 import { qualifyReferralForPaidOrder } from "../services/referrals.js";
 import { offlinePayments } from "../services/offlinePayments/index.js";
+import AquaEcomUser from "../models/user.js";
+import {
+  fireAndForget,
+  notifyStorefrontOrderPaid,
+} from "../services/notifications/paymentNotifications.js";
 
 // Attempts from admin-created payment links (source CRM_OFFLINE) have no
 // order or checkout session; their verification is handled by the offline
@@ -195,6 +200,7 @@ const finalize = async (attempt, verification, source) => {
     Number(verification.amount.toFixed(2)) !== Number(attempt.amount.toFixed(2))
   )
     throw new Error("Gateway amount mismatch");
+  const newlyPaid = verification.status === "paid" && attempt.status !== "paid";
   attempt.status = verification.status;
   attempt.gatewayResponse = verification.raw;
   attempt.statusHistory.push({ status: verification.status, source });
@@ -244,6 +250,16 @@ const finalize = async (attempt, verification, source) => {
       orderId: attempt.orderId,
       amount: attempt.amount,
     });
+    // Admin alert + order confirmation; deduplicated, never blocks.
+    if (newlyPaid)
+      fireAndForget("Storefront order paid", async () => {
+        const order = await Order.findById(attempt.orderId).lean();
+        if (!order) return;
+        const user = await AquaEcomUser.findById(order.user)
+          .select("firstName lastName phone alternatePhone")
+          .lean();
+        await notifyStorefrontOrderPaid({ order, user });
+      });
   }
   return attempt;
 };

@@ -11,6 +11,10 @@ const NotificationLogSchema = new mongoose.Schema(
     },
     recipientMasked: String,
     template: String,
+    // Payment notifications (services/notifications/paymentNotifications.js):
+    // adminOrderAlert, orderConfirmed, paymentReceived.
+    event: String,
+    reference: String,
     providerMessageId: String,
     firebaseUid: String,
     requestIpHash: String,
