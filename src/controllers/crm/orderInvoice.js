@@ -3,6 +3,8 @@ import { nanoid } from "nanoid";
 import AquaInvoice from "../../models/crm/invoice.js";
 import AquaOrder from "../../models/orders.js";
 import { buildInvoiceViewLinks } from "../../utils/invoiceViews.js";
+import { deliverInvoiceWithSmsFallback } from "../../services/invoiceSharing/invoiceDelivery.js";
+import { fireAndForget } from "../../services/notifications/paymentNotifications.js";
 
 const normalizeIndianPhone = (phone) =>
   String(phone || "")
@@ -169,6 +171,17 @@ const createInvoiceFromEcommerceOrder = async (req, res) => {
       aquakartOnlineUser: true,
       invoiceCreatedAt: new Date(),
     });
+
+    // Send the purchaser their invoice link (same template and dedupe key
+    // as a CRM-created invoice). Never blocks or fails this response.
+    const invoiceForDelivery = savedInvoice.toObject();
+    fireAndForget("Order invoice delivery", () =>
+      deliverInvoiceWithSmsFallback({
+        invoice: invoiceForDelivery,
+        trigger: "order-invoice-created",
+        dedupePrefix: `invoice:${invoiceForDelivery._id}:whatsapp:auto-create`,
+      }),
+    );
 
     return res.status(201).json({
       status: true,

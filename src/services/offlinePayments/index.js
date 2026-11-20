@@ -9,9 +9,17 @@ import {
   persistInvoice,
   validateInvoicePayload,
 } from "../../controllers/crm/invoice.js";
+import { deliverInvoiceWithSmsFallback } from "../invoiceSharing/invoiceDelivery.js";
+import {
+  isPaymentTemplateConfigured,
+  notifyPaymentLinkCreated,
+  notifyPaymentLinkInvoiceReady,
+  notifyPaymentLinkPaid,
+} from "../notifications/paymentNotifications.js";
 import { mongoOfflinePaymentStore } from "./mongoStore.js";
 import { createOfflinePaymentService } from "./service.js";
 import { createPreInvoiceService } from "./preInvoices.js";
+import { deriveLinkTokenKey } from "./rules.js";
 
 // Production wiring for offline payment links and pre-invoices.
 
@@ -40,6 +48,9 @@ export const loadOfflinePaymentConfig = (env = process.env) => ({
     "https://aquakart.co.in",
   linkTtlHours: bounded(env.OFFLINE_PAYMENT_LINK_TTL_HOURS, 72, 24 * 30),
   attemptTtlMinutes: bounded(env.OFFLINE_PAYMENT_ATTEMPT_TTL_MINUTES, 15, 120),
+  tokenKey: deriveLinkTokenKey(
+    env.PAYMENT_LINK_TOKEN_KEY || env.JWT_SECRET || "",
+  ),
 });
 
 const audit = ({ action, adminUserId, resourceType, resourceId, metadata }) =>
@@ -60,11 +71,34 @@ export const offlinePayments = createOfflinePaymentService({
   },
   invoiceWriter: {
     validate: (payload) => validateInvoicePayload(payload),
-    persist: (payload) => persistInvoice(payload),
+    // With the payment-received template configured, the customer gets that
+    // (receipt + invoice link) instead of the generic invoice message.
+    persist: (payload) =>
+      persistInvoice(payload, {
+        autoDeliver: !isPaymentTemplateConfigured("paymentReceived"),
+      }),
     assertStock: (products) => assertInvoiceStock(products),
   },
   config: loadOfflinePaymentConfig(),
   audit,
+  notifier: {
+    linkCreated: notifyPaymentLinkCreated,
+    linkCreatedConfigured: () =>
+      isPaymentTemplateConfigured("paymentLinkRequest"),
+    linkPaid: notifyPaymentLinkPaid,
+    invoiceReady: ({ link, invoice }) =>
+      notifyPaymentLinkInvoiceReady({
+        link,
+        invoice,
+        // Same dedupe key as persistInvoice's own send, so it goes once.
+        fallback: () =>
+          deliverInvoiceWithSmsFallback({
+            invoice,
+            trigger: "payment-link-fallback",
+            dedupePrefix: `invoice:${invoice._id}:whatsapp:auto-create`,
+          }),
+      }),
+  },
 });
 
 export const preInvoices = createPreInvoiceService({

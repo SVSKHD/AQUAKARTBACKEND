@@ -18,6 +18,142 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-20
+
+### Payment-success notifications: admin order alert, order confirmation, payment receipt
+
+- Request/problem: after a successful payment nobody was alerted at the
+  store, storefront checkout customers got no confirmation, and payment-link
+  customers only got the generic invoice message. The admin number
+  9014774667 should hear about every paid order, and purchasers should get
+  their order or invoice link, all through Fast2SMS templates.
+- Changes/result:
+  - New `src/services/notifications/paymentNotifications.js` with three
+    events (`adminOrderAlert`, `orderConfirmed`, `paymentReceived`): Fast2SMS
+    WhatsApp template first, DLT SMS fallback, template IDs from env, skipped
+    when unconfigured, deduplicated through `NotificationLog.dedupeKey` (a
+    failed send is retried by a later call), run in the background so it never
+    blocks or fails a payment.
+  - Storefront checkout `finalize` and the legacy PhonePe callback send the
+    admin alert and the order confirmation (with `/order/<transactionId>`)
+    once an order is newly paid. The legacy free-text whatsera message is sent
+    only while the order-confirmed template is unset.
+  - Payment links: admin alert when the link is verified paid (even if stock
+    blocks the invoice); receipt with invoice link once the invoice exists.
+    With that template set, `persistInvoice(payload, { autoDeliver: false })`
+    skips the generic invoice message; if the receipt fails, the generic
+    invoice template is sent under its usual dedupe key.
+  - CRM "create invoice from e-commerce order" now sends the customer the
+    existing invoice template (same dedupe key as other auto-sent invoices).
+  - Fix: template variables containing `|` (invoice and pre-invoice numbers)
+    shifted all later Fast2SMS variables; `joinTemplateVariables` now replaces
+    `|` with `/` for WhatsApp and SMS, including the existing invoice template.
+  - `NotificationLog` gains `event` and `reference` (additive).
+- Files: `src/services/notifications/paymentNotifications.js`,
+  `src/services/notifications/fast2SmsWhatsApp.js`,
+  `src/services/notifications/fast2SmsSms.js`, `src/models/crm/notificationLog.js`,
+  `src/controllers/payments.js`, `src/controllers/phonepeGateway.js`,
+  `src/services/offlinePayments/service.js`, `src/services/offlinePayments/index.js`,
+  `src/controllers/crm/invoice.js`, `src/controllers/crm/orderInvoice.js`,
+  `test/paymentNotifications.test.js`, `test/offlinePayments.test.js`,
+  `.env.example`, `docs/PAYMENT_NOTIFICATIONS.md`, `docs/FAST2SMS_WHATSAPP.md`,
+  `docs/OFFLINE_PAYMENT_LINKS.md`, `docs/README.md`, `docs/PROJECT_MAP.md`,
+  `docs/CHANGELOG.md`.
+- Validation: `node --check` on each changed source file passed;
+  `node --test test/paymentNotifications.test.js test/offlinePayments.test.js
+test/fast2SmsSms.test.js test/fast2SmsWhatsApp.test.js` 45/45 passed (fake
+  providers and in-memory stores); `npm test` 378/379, the one failure being
+  the existing `invoiceViews.test.js` destinations test. No live Fast2SMS send
+  was made. No API contract changed, so Swagger was not regenerated.
+- Limitations/follow-up: the six templates must be created and approved in
+  Fast2SMS (texts in `docs/PAYMENT_NOTIFICATIONS.md`) and their IDs set in the
+  deployment environment; until then only the existing behaviour runs. The
+  admin number must accept WhatsApp templates from the business number.
+  Storefront orders still get their invoice only when CRM generates it.
+
+### Payment notification template formats
+
+- Request/problem: the Fast2SMS templates for the payment notifications
+  needed submission-ready formats.
+- Changes/result: `docs/PAYMENT_NOTIFICATIONS.md` now gives, for each of the
+  three events, the WhatsApp template name, category, language, header, body,
+  footer and a sample value per variable, and the DLT SMS text with its
+  content type, plus Meta/DLT approval notes (URL whitelisting, 30-character
+  DLT variables). Variable order is unchanged and matches
+  `src/services/notifications/paymentNotifications.js`.
+- Files: `docs/PAYMENT_NOTIFICATIONS.md`, `docs/CHANGELOG.md`.
+- Validation: static review of each template's variable order against the
+  service and `test/paymentNotifications.test.js`. No code changed; nothing
+  was submitted to Fast2SMS or Meta.
+- Limitations/follow-up: templates still need to be created and approved, and
+  their IDs set in the environment.
+
+### Payment link request notification and template list
+
+- Request/problem: payment links created in the CRM were only returned to
+  staff, who had to forward them by hand; the user asked for a Fast2SMS
+  template for the payment-link request and a list of all templates.
+- Changes/result:
+  - New `paymentLinkRequest` event (WhatsApp only, since the 43-character
+    `/pay/{token}` cannot fit a 30-character DLT variable). Creating or
+    regenerating a pre-invoice/quotation payment link sends the customer name,
+    document number, amount, link and India-time expiry to the document's
+    mobile, once per link id, in the background.
+  - `POST /v1/crm/pre-invoices/:id/payment-link` and
+    `POST /v1/crm/quotations/:id/payment-link` accept an optional body
+    `{ "notifyCustomer": false }` and return `customerNotification`
+    (`queued`, `not_configured`, `disabled`). Swagger updated.
+  - Docs: template 4 format and a template list (4 WhatsApp + 3 DLT SMS new
+    templates, plus the existing invoice template).
+- Files: `src/services/notifications/paymentNotifications.js`,
+  `src/services/offlinePayments/service.js`, `src/services/offlinePayments/index.js`,
+  `src/controllers/offlinePayments.js`, `src/docs/offlinePayments.js`,
+  `swagger-output.json`, `test/paymentNotifications.test.js`,
+  `test/offlinePayments.test.js`, `.env.example`, `docs/PAYMENT_NOTIFICATIONS.md`,
+  `docs/OFFLINE_PAYMENT_LINKS.md`, `docs/CHANGELOG.md`.
+- Validation: `node --check` on changed source files passed; `node --test
+test/paymentNotifications.test.js test/offlinePayments.test.js
+test/fast2SmsSms.test.js test/fast2SmsWhatsApp.test.js` 47/47 passed; `npm
+test` 380/381, the one failure being the existing `invoiceViews.test.js`
+  destinations test; `npm run swagger` succeeded and the payment-link POST
+  shows the optional body and `customerNotification` (`swagger-output.json`
+  already had uncommitted changes before this task). No live Fast2SMS send.
+- Limitations/follow-up: the template must be approved and
+  `FAST2SMS_WHATSAPP_PAYMENT_LINK_MESSAGE_ID` set; until then the response
+  says `not_configured` and staff share the URL as before. The CRM can show
+  `customerNotification` and offer a "don't send" option.
+
+### Payment link "Send" endpoint for the CRM
+
+- Request/problem: the CRM needs a Send button that delivers an existing
+  payment link to the customer, in addition to the automatic send on
+  create. Only the token hash was stored, so the link could not be rebuilt.
+- Changes/result:
+  - New `POST /v1/crm/pre-invoices/:id/payment-link/send` and
+    `POST /v1/crm/quotations/:id/payment-link/send` (`payments.link.manage`):
+    re-send the same active link on WhatsApp (`paymentLinkRequest`), wait
+    for Fast2SMS, return `{ sent, channel, sentAt, link }`; errors
+    `NO_ACTIVE_LINK`, `LINK_OUTDATED`, `LINK_RESEND_UNAVAILABLE`,
+    `ALREADY_SENT` (429, once a minute per link), `SEND_FAILED` (502),
+    `NOTIFICATIONS_NOT_CONFIGURED` (503). Audited as `payment_link.sent`.
+  - New links store the token sealed with AES-256-GCM (`tokenSealed`), key
+    from `PAYMENT_LINK_TOKEN_KEY` or derived from `JWT_SECRET`. Lookup still
+    uses the hash; no API returns the sealed value.
+- Files: `src/services/offlinePayments/rules.js`,
+  `src/services/offlinePayments/service.js`, `src/services/offlinePayments/index.js`,
+  `src/models/offlinePaymentLink.js`, `src/services/notifications/paymentNotifications.js`,
+  `src/controllers/offlinePayments.js`, `src/routes/crm/preInvoice.js`,
+  `src/docs/offlinePayments.js`, `swagger-output.json`,
+  `test/offlinePayments.test.js`, `.env.example`,
+  `docs/OFFLINE_PAYMENT_LINKS.md`, `docs/PAYMENT_NOTIFICATIONS.md`, `docs/CHANGELOG.md`.
+- Validation: `node --check` on changed files passed; `node --test
+test/offlinePayments.test.js test/paymentNotifications.test.js` 43/43
+  passed; `npm test` 382/383 (existing `invoiceViews.test.js` failure);
+  `npm run swagger` shows both `/send` operations. No live send.
+- Limitations/follow-up: links created before this deploy cannot be re-sent
+  (`LINK_RESEND_UNAVAILABLE`); regenerate them. Rotating the key has the
+  same effect on existing links.
+
 ## 2026-11-18
 
 ### Offline payment links: CRM integration gaps

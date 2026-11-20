@@ -9690,7 +9690,7 @@
       "post": {
         "tags": ["CRM / Pre-invoices & Payment Links"],
         "summary": "Create or regenerate the payment link of a pre-invoice",
-        "description": "Permission payments.link.manage. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the pre-invoice's stored total. ",
+        "description": "Permission payments.link.manage. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the pre-invoice's stored total. The link is also sent to the customer's mobile on WhatsApp (Fast2SMS paymentLinkRequest template) unless the body has notifyCustomer: false; customerNotification says whether it was queued. ",
         "parameters": [
           {
             "name": "id",
@@ -9705,6 +9705,21 @@
             "type": "string",
             "required": true,
             "description": "Bearer <CRM staff JWT>"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "notifyCustomer": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "false: do not send the link on WhatsApp"
+                }
+              }
+            }
           }
         ],
         "responses": {
@@ -9808,6 +9823,11 @@
                     "matchesDocument": {
                       "type": "boolean",
                       "description": "GET only: false when the document changed and the link must be regenerated"
+                    },
+                    "customerNotification": {
+                      "type": "string",
+                      "enum": ["queued", "not_configured", "disabled"],
+                      "description": "queued: WhatsApp send started (see NotificationLog); not_configured: template ID unset; disabled: notifyCustomer was false"
                     }
                   }
                 }
@@ -10102,6 +10122,308 @@
         }
       }
     },
+    "/v1/crm/pre-invoices/{id}/payment-link/send": {
+      "post": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Send the active payment link of a pre-invoice to the customer on WhatsApp",
+        "description": "Permission payments.link.manage. Re-sends the same link (Fast2SMS paymentLinkRequest template) to the document's mobile and waits for the provider. At most once a minute per link.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "sent": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "channel": {
+                      "type": "string",
+                      "example": "whatsapp"
+                    },
+                    "sentAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "linkId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["active", "revoked", "expired", "paid"]
+                        },
+                        "source": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["pre_invoice", "quotation"]
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "number": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "amount": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "boundToCustomer": {
+                          "type": "boolean"
+                        },
+                        "reviewFlags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "paidAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "amountPaid": {
+                          "type": "number"
+                        },
+                        "gatewayTransactionId": {
+                          "type": "string"
+                        },
+                        "paidAttemptId": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Payment attempt that paid this link; use it with POST /v1/crm/payments/{id}/reconcile"
+                        },
+                        "conversion": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "in_progress",
+                                "done",
+                                "failed",
+                                "blocked_stock",
+                                "needs_review"
+                              ]
+                            },
+                            "invoiceId": {
+                              "type": "string"
+                            },
+                            "invoiceNo": {
+                              "type": "string"
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "matchesDocument": {
+                          "type": "boolean",
+                          "description": "GET only: false when the document changed and the link must be regenerated"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No active link, document changed, or link created before sending was available",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "NO_ACTIVE_LINK",
+                    "LINK_OUTDATED",
+                    "LINK_RESEND_UNAVAILABLE"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sent less than a minute ago",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["ALREADY_SENT"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "WhatsApp delivery failed",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SEND_FAILED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Payment-link template not configured",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["NOTIFICATIONS_NOT_CONFIGURED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/crm/quotations/{id}/payment-link": {
       "get": {
         "tags": ["CRM / Pre-invoices & Payment Links"],
@@ -10302,7 +10624,7 @@
       "post": {
         "tags": ["CRM / Pre-invoices & Payment Links"],
         "summary": "Create or regenerate the payment link of a quotation",
-        "description": "Permission payments.link.manage. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the quotation's stored total. Refused with USE_PRE_INVOICE once the quotation was moved to a pre-invoice.",
+        "description": "Permission payments.link.manage. Revokes the previous active link and returns the new URL once (only a hash is stored). The amount is the quotation's stored total. The link is also sent to the customer's mobile on WhatsApp (Fast2SMS paymentLinkRequest template) unless the body has notifyCustomer: false; customerNotification says whether it was queued. Refused with USE_PRE_INVOICE once the quotation was moved to a pre-invoice.",
         "parameters": [
           {
             "name": "id",
@@ -10317,6 +10639,21 @@
             "type": "string",
             "required": true,
             "description": "Bearer <CRM staff JWT>"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "notifyCustomer": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "false: do not send the link on WhatsApp"
+                }
+              }
+            }
           }
         ],
         "responses": {
@@ -10420,6 +10757,11 @@
                     "matchesDocument": {
                       "type": "boolean",
                       "description": "GET only: false when the document changed and the link must be regenerated"
+                    },
+                    "customerNotification": {
+                      "type": "string",
+                      "enum": ["queued", "not_configured", "disabled"],
+                      "description": "queued: WhatsApp send started (see NotificationLog); not_configured: template ID unset; disabled: notifyCustomer was false"
                     }
                   }
                 }
@@ -10701,6 +11043,308 @@
                 "code": {
                   "type": "string",
                   "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crm/quotations/{id}/payment-link/send": {
+      "post": {
+        "tags": ["CRM / Pre-invoices & Payment Links"],
+        "summary": "Send the active payment link of a quotation to the customer on WhatsApp",
+        "description": "Permission payments.link.manage. Re-sends the same link (Fast2SMS paymentLinkRequest template) to the document's mobile and waits for the provider. At most once a minute per link.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "type": "string",
+            "required": true,
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "type": "string",
+            "required": true,
+            "description": "Bearer <CRM staff JWT>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "sent": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "channel": {
+                      "type": "string",
+                      "example": "whatsapp"
+                    },
+                    "sentAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "linkId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["active", "revoked", "expired", "paid"]
+                        },
+                        "source": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": ["pre_invoice", "quotation"]
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "number": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "amount": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "boundToCustomer": {
+                          "type": "boolean"
+                        },
+                        "reviewFlags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "paidAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "amountPaid": {
+                          "type": "number"
+                        },
+                        "gatewayTransactionId": {
+                          "type": "string"
+                        },
+                        "paidAttemptId": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Payment attempt that paid this link; use it with POST /v1/crm/payments/{id}/reconcile"
+                        },
+                        "conversion": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "in_progress",
+                                "done",
+                                "failed",
+                                "blocked_stock",
+                                "needs_review"
+                              ]
+                            },
+                            "invoiceId": {
+                              "type": "string"
+                            },
+                            "invoiceNo": {
+                              "type": "string"
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "matchesDocument": {
+                          "type": "boolean",
+                          "description": "GET only: false when the document changed and the link must be regenerated"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid staff token",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["AUTH"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing permission",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No active link, document changed, or link created before sending was available",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "NO_ACTIVE_LINK",
+                    "LINK_OUTDATED",
+                    "LINK_RESEND_UNAVAILABLE"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sent less than a minute ago",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["ALREADY_SENT"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SERVER_ERROR"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "WhatsApp delivery failed",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["SEND_FAILED"]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Payment-link template not configured",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "enum": ["NOTIFICATIONS_NOT_CONFIGURED"]
                 },
                 "message": {
                   "type": "string"

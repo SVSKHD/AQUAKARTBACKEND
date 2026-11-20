@@ -11,6 +11,8 @@ import {
   moveQuotationToPreInvoice,
   revokePreInvoiceLink,
   revokeQuotationLink,
+  sendPreInvoiceLink,
+  sendQuotationLink,
   updatePreInvoice,
 } from "../../controllers/offlinePayments.js";
 
@@ -54,6 +56,11 @@ router.post(
   ...requirePermission("payments.link.manage"),
   createPreInvoiceLink,
 );
+router.post(
+  "/pre-invoices/:id/payment-link/send",
+  ...requirePermission("payments.link.manage"),
+  sendPreInvoiceLink,
+);
 router.delete(
   "/pre-invoices/:id/payment-link",
   ...requirePermission("payments.link.manage"),
@@ -68,6 +75,11 @@ router.post(
   "/quotations/:id/payment-link",
   ...requirePermission("payments.link.manage"),
   createQuotationLink,
+);
+router.post(
+  "/quotations/:id/payment-link/send",
+  ...requirePermission("payments.link.manage"),
+  sendQuotationLink,
 );
 router.delete(
   "/quotations/:id/payment-link",

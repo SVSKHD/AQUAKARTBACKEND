@@ -1,5 +1,8 @@
 import axios from "axios";
-import { normalizeWhatsAppNumber } from "./fast2SmsWhatsApp.js";
+import {
+  joinTemplateVariables,
+  normalizeWhatsAppNumber,
+} from "./fast2SmsWhatsApp.js";
 
 const DEFAULT_BASE_URL = "https://www.fast2sms.com";
 
@@ -65,7 +68,7 @@ export const sendFast2SmsDlt = async ({ to, messageId, variables = [] }) => {
         route: config.route,
         sender_id: config.senderId,
         message: messageId,
-        variables_values: variables.join("|"),
+        variables_values: joinTemplateVariables(variables),
         flash: 0,
         numbers: number,
       },

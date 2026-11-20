@@ -8,6 +8,11 @@ import sendWhatsAppMessage from "../utils/sendWhatsApp.js";
 import formatCurrencyINR from "../utils/currency.js";
 import formattedDeliveryDate from "../utils/date.js";
 import { legacyOrderFields } from "./order.js";
+import {
+  fireAndForget,
+  isPaymentTemplateConfigured,
+  notifyStorefrontOrderPaid,
+} from "../services/notifications/paymentNotifications.js";
 
 // PhonePe merchantTransactionId: 1-38 chars, letters, digits, _ and -.
 const TRANSACTION_ID = /^[A-Za-z0-9_-]{6,38}$/;
@@ -200,10 +205,16 @@ const handlePhoneOrderCheck = async (req, res) => {
         paymentStatus === "Paid"
           ? await AquaEcomUser.findById(updatedOrder.user)
           : null;
+      if (paymentStatus === "Paid")
+        fireAndForget("Legacy order paid", () =>
+          notifyStorefrontOrderPaid({ order: updatedOrder, user }),
+        );
       if (user) {
         const { phone } = user;
         const { email } = user;
-        if (phone) {
+        // The Fast2SMS order-confirmed template replaces this free-text
+        // message once it is configured.
+        if (phone && !isPaymentTemplateConfigured("orderConfirmed")) {
           const message = `Welcome to Aquakart Family, We have successfully received the order "${updatedOrder.orderId}"`;
           sendWhatsAppMessage(phone, message);
         }

@@ -48,3 +48,11 @@ At 08:00 Asia/Kolkata, the backend retries invoices that are not yet linked to a
 verified customer (`firebaseUid` is empty). A per-invoice, per-day dedupe key
 prevents duplicate sends after restarts. Set `INVOICE_REMINDER_ENABLED=false`
 to pause the job.
+
+## Payment-success templates
+
+Admin order alerts (default 9014774667), storefront order confirmations and
+payment-link receipts with the invoice link use their own templates; see
+[PAYMENT_NOTIFICATIONS.md](PAYMENT_NOTIFICATIONS.md). Every template variable
+has `|` replaced with `/` before sending, because Fast2SMS uses `|` as the
+variable separator and invoice numbers contain it.

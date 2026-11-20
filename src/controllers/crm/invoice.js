@@ -239,7 +239,9 @@ const deliverInvoiceWhatsApp = async ({
 // Consumes stock, saves the invoice and sends it on WhatsApp. Shared by the
 // CRM create endpoint and the AI invoice assistant. The payload must already
 // pass validateInvoicePayload. Throws errors carrying statusCode/errors.
-export const persistInvoice = async (payload) => {
+// options.autoDeliver=false skips the automatic invoice message (the payment
+// link flow sends its own payment-received template instead).
+export const persistInvoice = async (payload, { autoDeliver = true } = {}) => {
   const body = { ...payload };
   const stockChanges = buildStockChanges(body.products, []);
   await assertStockAvailable(stockChanges);
@@ -267,6 +269,12 @@ export const persistInvoice = async (payload) => {
     await rollbackStockChanges(stockChanges);
     throw error;
   }
+
+  if (!autoDeliver)
+    return {
+      invoice,
+      whatsappDelivery: { attempted: false, reason: "DEFERRED_TO_CALLER" },
+    };
 
   let whatsappDelivery;
   try {
