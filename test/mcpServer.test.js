@@ -353,6 +353,7 @@ test("ChatGPT-style OAuth + MCP flow: discovery, consent, tools and scope enforc
     "aquakart_get_brand_assets",
     "aquakart_get_image_upload",
     "aquakart_get_instagram_status",
+    "aquakart_import_blog_banner",
     "aquakart_list_blogs",
     "aquakart_list_instagram_posts",
     "aquakart_publish_blog",

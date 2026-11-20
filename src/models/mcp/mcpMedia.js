@@ -14,7 +14,19 @@ const McpMediaSchema = new mongoose.Schema(
     bytes: Number,
     width: Number,
     height: Number,
-    source: { type: String, enum: ["chatgpt-file", "base64", "upload-url"] },
+    source: {
+      type: String,
+      enum: ["chatgpt-file", "base64", "upload-url", "google-drive"],
+    },
+    // Where an imported image came from (aquakart_import_blog_banner), so a
+    // repeated import of the same file version is recognised without
+    // downloading it again.
+    sourceRef: {
+      type: { type: String, enum: ["google_drive"] },
+      fileId: String,
+      version: String,
+      name: String,
+    },
     clientId: String,
     adminUser: { type: mongoose.Schema.Types.ObjectId, ref: "AquaAdminUser" },
     blog: {

@@ -195,3 +195,67 @@ export const sniffImageType = (buffer) => {
   }
   return null;
 };
+
+// JPEG start-of-frame markers that carry the frame size (not DHT C4, JPG
+// C8 or DAC CC).
+const JPEG_SOF = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+]);
+
+// Width and height read from the image header itself (never from declared
+// metadata). Returns null when the header is truncated or malformed.
+export const imageDimensions = (buffer, format) => {
+  try {
+    if (format === "png") {
+      if (buffer.length < 24 || buffer.toString("latin1", 12, 16) !== "IHDR")
+        return null;
+      return {
+        width: buffer.readUInt32BE(16),
+        height: buffer.readUInt32BE(20),
+      };
+    }
+    if (format === "jpg") {
+      let i = 2;
+      while (i + 9 < buffer.length) {
+        if (buffer[i] !== 0xff) return null;
+        const marker = buffer[i + 1];
+        if (marker === 0xff) {
+          i += 1; // fill byte
+        } else if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+          i += 2; // standalone marker, no length
+        } else if (JPEG_SOF.has(marker)) {
+          return {
+            height: buffer.readUInt16BE(i + 5),
+            width: buffer.readUInt16BE(i + 7),
+          };
+        } else {
+          i += 2 + buffer.readUInt16BE(i + 2);
+        }
+      }
+      return null;
+    }
+    if (format === "webp") {
+      const chunk = buffer.toString("latin1", 12, 16);
+      if (chunk === "VP8 " && buffer.length >= 30)
+        return {
+          width: buffer.readUInt16LE(26) & 0x3fff,
+          height: buffer.readUInt16LE(28) & 0x3fff,
+        };
+      if (chunk === "VP8L" && buffer.length >= 25) {
+        const [b0, b1, b2, b3] = buffer.subarray(21, 25);
+        return {
+          width: 1 + (((b1 & 0x3f) << 8) | b0),
+          height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6)),
+        };
+      }
+      if (chunk === "VP8X" && buffer.length >= 30)
+        return {
+          width: 1 + buffer.readUIntLE(24, 3),
+          height: 1 + buffer.readUIntLE(27, 3),
+        };
+    }
+  } catch (_error) {
+    return null;
+  }
+  return null;
+};

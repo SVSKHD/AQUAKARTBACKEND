@@ -2,8 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { BlogToolError } from "./errors.js";
 import { MCP_SCOPES } from "./config.js";
 import { readImageInput } from "./imageInput.js";
+import { hashArgs } from "./operations.js";
 import {
   countWords,
+  imageDimensions,
   normalizeBlogFields,
   normalizeTitleKey,
   sniffImageType,
@@ -14,6 +16,13 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 // 32 random bytes, base64url: the capability in a one-time upload URL.
 const UPLOAD_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UPLOAD_FORMATS = ["jpg", "png", "webp"];
+// Drive MIME type -> format the bytes must actually have.
+const BANNER_MIMES = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+const IMPORT_TOOL = "aquakart_import_blog_banner";
 
 // Blog operations behind the Aquakart MCP tools. Works on the existing
 // AquaBlog documents (no parallel collection) through an injected `store`,
@@ -42,10 +51,12 @@ const idOf = (value) =>
 export const createBlogTools = ({
   store,
   uploader,
+  drive = null,
   runOperation,
   config,
   now = () => new Date(),
   audit = async () => {},
+  log = console,
 }) => {
   const blogUrl = (blog) =>
     `${config.storefrontUrl}/blog/${encodeURIComponent(blog.slug || String(blog._id))}`;
@@ -181,6 +192,10 @@ export const createBlogTools = ({
   const saveImage = async (input, auth, meta) => {
     const existing = await store.findMediaBySha(input.sha256);
     if (existing?.status === "active") {
+      // Same bytes uploaded earlier another way: remember the Drive source
+      // too, so the next import of this file is recognised up front.
+      if (input.sourceRef && !existing.sourceRef?.fileId)
+        await store.updateMedia(existing._id, { sourceRef: input.sourceRef });
       return { media: mediaView(existing), deduplicated: true };
     }
     const uploaded = await uploader.uploadImage(input.buffer, {
@@ -195,6 +210,7 @@ export const createBlogTools = ({
       width: uploaded.width,
       height: uploaded.height,
       source: input.source,
+      ...(input.sourceRef ? { sourceRef: input.sourceRef } : {}),
       clientId: auth.clientId,
       adminUser: auth.adminUserId,
       status: "active",
@@ -707,16 +723,10 @@ export const createBlogTools = ({
               "Logo overlays are turned off (AQUAKART_LOGO_PUBLIC_ID=none)",
             );
           }
-          const titleImage = {
-            id: media.publicId,
-            secure_url: applyLogo
-              ? uploader.brandedUrl(
-                  media.publicId,
-                  config,
-                  args.logoVariant || "original",
-                )
-              : media.secureUrl,
-          };
+          const titleImage = titleImageFor(
+            media,
+            applyLogo ? args.logoVariant || "original" : null,
+          );
           const previous = blog.titleImages?.[0];
           const set = { titleImages: [titleImage] };
           if (args.altText !== undefined)
@@ -753,6 +763,272 @@ export const createBlogTools = ({
         operationId: outcome.operationId,
         replayed: outcome.replayed,
       };
+    },
+
+    // aquakart_import_blog_banner: fetch an image from the Aquakart Google
+    // Drive folder server-side, store it through the normal media pipeline
+    // and set it as a DRAFT's banner, all in one tool call (no client-side
+    // files, curl or signed URLs).
+    async importBlogBanner(args, ctx) {
+      const {
+        blogId,
+        source,
+        logoMode = "auto",
+        replaceExisting = false,
+        altText,
+        expectedRevision,
+      } = args;
+      const started = Date.now();
+      const logEvent = (fields) =>
+        log.log(
+          JSON.stringify({
+            event: "mcp.blog.import_banner",
+            correlationId: ctx.correlationId,
+            clientId: ctx.auth.clientId,
+            blogId,
+            driveFileId: source?.fileId,
+            durationMs: Date.now() - started,
+            ...fields,
+          }),
+        );
+      try {
+        if (source?.type !== "google_drive")
+          throw new BlogToolError(
+            "VALIDATION_FAILED",
+            "source.type must be google_drive",
+          );
+        if (!drive?.configured || !config.drive?.configured)
+          throw new BlogToolError(
+            "DRIVE_NOT_CONFIGURED",
+            "Google Drive import is not set up on this server; staff must configure the Drive service account (see docs/MCP_BLOG_PUBLISHING.md)",
+          );
+
+        // Source checks that need no blog access and no download.
+        const file = await drive.getFile(source.fileId);
+        if (file.trashed)
+          throw new BlogToolError(
+            "DRIVE_FILE_NOT_FOUND",
+            "That Drive file is in the trash",
+          );
+        await assertAllowedFolder(file);
+        if (!BANNER_MIMES[file.mimeType])
+          throw new BlogToolError(
+            "UNSUPPORTED_IMAGE_TYPE",
+            "Banner must be a JPG, PNG or WEBP image file",
+            { mimeType: file.mimeType || null },
+          );
+        if (Number(file.size) > config.imageMaxBytes)
+          throw new BlogToolError(
+            "IMAGE_TOO_LARGE",
+            `Image exceeds ${config.imageMaxBytes} bytes`,
+          );
+        const logo = chooseLogo(logoMode, file);
+        const sourceVersion = file.md5Checksum || `v${file.version || "0"}`;
+        const sourceRef = {
+          type: "google_drive",
+          fileId: file.id,
+          version: sourceVersion,
+          name: String(file.name || "").slice(0, 200),
+        };
+        const sourceView = {
+          type: "google_drive",
+          fileId: file.id,
+          name: sourceRef.name,
+          version: sourceVersion,
+        };
+
+        // Same blog + same file version + same options => same operation,
+        // so retries without an explicit key are still idempotent.
+        const identity = {
+          blogId,
+          fileId: file.id,
+          sourceVersion,
+          logoMode,
+          replaceExisting,
+          altText,
+          expectedRevision,
+        };
+        const idempotencyKey =
+          args.idempotencyKey ||
+          `drive-banner:${hashArgs(IMPORT_TOOL, identity).slice(0, 48)}`;
+
+        const outcome = await runOperation(
+          {
+            clientId: ctx.auth.clientId,
+            adminUserId: ctx.auth.adminUserId,
+            tool: IMPORT_TOOL,
+            idempotencyKey,
+            args: identity,
+            correlationId: ctx.correlationId,
+          },
+          async (operation) => {
+            const blog = await loadBlog({ blogId });
+            if (statusOf(blog) !== "draft")
+              throw new BlogToolError(
+                "BLOG_NOT_DRAFT",
+                "Banners can only be imported into drafts",
+              );
+            checkRevision(blog, expectedRevision);
+
+            const current = blog.titleImages?.[0];
+            if (current?.id) {
+              const currentMedia = await store.findMediaByPublicId(current.id);
+              const ref = currentMedia?.sourceRef;
+              if (
+                blog.titleImages.length === 1 &&
+                ref?.fileId === file.id &&
+                ref?.version === sourceVersion
+              ) {
+                return {
+                  result: await bannerResult(blogId, currentMedia, {
+                    source: sourceView,
+                    logo: {
+                      applied: current.secure_url !== currentMedia.secureUrl,
+                      variant: null,
+                      decidedBy: "existing",
+                    },
+                    alreadyAttached: true,
+                    deduplicated: true,
+                  }),
+                  blogId,
+                };
+              }
+              if (!replaceExisting)
+                throw new BlogToolError(
+                  "BANNER_EXISTS",
+                  "This draft already has a banner; pass replaceExisting: true to replace it",
+                  { currentImageId: current.id },
+                );
+            }
+
+            const buffer = await drive.download(file.id, {
+              maxBytes: config.imageMaxBytes,
+            });
+            if (!buffer.length)
+              throw new BlogToolError("INVALID_IMAGE", "The file is empty");
+            const type = sniffImageType(buffer);
+            if (!type || BANNER_MIMES[file.mimeType] !== type.format)
+              throw new BlogToolError(
+                "UNSUPPORTED_IMAGE_TYPE",
+                "The file contents are not the JPG, PNG or WEBP image Drive reports",
+              );
+            const size = imageDimensions(buffer, type.format);
+            if (!size)
+              throw new BlogToolError(
+                "INVALID_IMAGE",
+                "The image header could not be read; re-export the file",
+              );
+            if (
+              size.width < config.bannerMinWidth ||
+              size.height < config.bannerMinHeight ||
+              Math.max(size.width, size.height) > config.bannerMaxDimension
+            )
+              throw new BlogToolError(
+                "IMAGE_DIMENSIONS_INVALID",
+                `Banner must be at least ${config.bannerMinWidth}x${config.bannerMinHeight} and at most ${config.bannerMaxDimension}px on a side`,
+                { width: size.width, height: size.height },
+              );
+
+            let saved;
+            try {
+              saved = await saveImage(
+                {
+                  buffer,
+                  type,
+                  sha256: sha256(buffer),
+                  source: "google-drive",
+                  sourceRef,
+                },
+                ctx.auth,
+                {
+                  operationId: operation.operationId,
+                  correlationId: ctx.correlationId,
+                },
+              );
+            } catch (error) {
+              if (error instanceof BlogToolError) throw error;
+              throw Object.assign(
+                new BlogToolError(
+                  "IMAGE_STORAGE_FAILED",
+                  "Storing the image failed; retry with the same idempotencyKey",
+                ),
+                { retryable: true },
+              );
+            }
+            const media = await store.findMediaById(saved.media.mediaId);
+            const titleImage = titleImageFor(
+              media,
+              logo.applied ? logo.variant : null,
+            );
+            const set = { titleImages: [titleImage] };
+            if (altText !== undefined)
+              set.titleImageAlt = String(altText).trim();
+            const updated = await store.updateBlog(
+              blogId,
+              { status: "draft", updatedAt: blog.updatedAt ?? null },
+              { $set: set },
+            );
+            if (!updated) {
+              // Lost a race. If the winner attached this same image, the
+              // goal is met; otherwise drop our unused upload and report.
+              const latest = await loadBlog({ blogId });
+              const images = latest.titleImages || [];
+              if (images.length === 1 && images[0].id === media.publicId) {
+                return {
+                  result: await bannerResult(blogId, media, {
+                    source: sourceView,
+                    logo,
+                    alreadyAttached: true,
+                    deduplicated: saved.deduplicated,
+                  }),
+                  blogId,
+                };
+              }
+              if (!saved.deduplicated)
+                await releasePrevious(media.publicId, blogId);
+              throw new BlogToolError(
+                "REVISION_CONFLICT",
+                "The draft changed while the banner was being attached; read it again and retry",
+                { currentRevision: revisionOf(latest) },
+              );
+            }
+            await store.updateMedia(media._id, { blog: blog._id });
+            if (current?.id && current.id !== media.publicId)
+              await releasePrevious(current.id, blog._id);
+            await audited("mcp.blog.import_banner", ctx, operation, blogId, {
+              mediaId: String(media._id),
+              driveFileId: file.id,
+              sourceVersion,
+              logo: logo.applied ? logo.variant : "none",
+            });
+            return {
+              result: await bannerResult(blogId, media, {
+                source: sourceView,
+                logo,
+                alreadyAttached: false,
+                deduplicated: saved.deduplicated,
+              }),
+              blogId,
+            };
+          },
+        );
+        logEvent({
+          ok: true,
+          operationId: outcome.operationId,
+          replayed: outcome.replayed,
+          mediaId: outcome.result.mediaId,
+          alreadyAttached: outcome.result.alreadyAttached,
+          verification: outcome.result.verification.status,
+        });
+        return {
+          ...outcome.result,
+          operationId: outcome.operationId,
+          replayed: outcome.replayed,
+        };
+      } catch (error) {
+        logEvent({ ok: false, code: error?.code || "INTERNAL_ERROR" });
+        throw error;
+      }
     },
 
     async publishBlog(args, ctx) {
@@ -862,6 +1138,109 @@ export const createBlogTools = ({
       publicUrl: blogUrl(blog),
       visibleOnStorefront:
         Boolean(blog.slug) && String(firstId) === String(blog._id),
+    };
+  }
+
+  // A blog titleImages entry for stored media; `variant` composites the
+  // official logo (Cloudinary overlay), null keeps the image as uploaded.
+  function titleImageFor(media, variant) {
+    return {
+      id: media.publicId,
+      secure_url: variant
+        ? uploader.brandedUrl(media.publicId, config, variant)
+        : media.secureUrl,
+    };
+  }
+
+  // Logo policy for an imported banner. Never inferred from pixels:
+  // the caller's logoMode wins; with "auto", the Drive file's
+  // `aquakartLogo` property (present | original | white) decides, else the
+  // configured default (original logo when overlays are on).
+  function chooseLogo(mode, file) {
+    if (mode === "none")
+      return { applied: false, variant: null, decidedBy: "caller" };
+    if (mode === "original" || mode === "white") {
+      if (!config.logoPublicId)
+        throw new BlogToolError(
+          "LOGO_NOT_CONFIGURED",
+          "Logo overlays are turned off (AQUAKART_LOGO_PUBLIC_ID=none)",
+        );
+      return { applied: true, variant: mode, decidedBy: "caller" };
+    }
+    const meta = { ...(file.properties || {}), ...(file.appProperties || {}) };
+    const tag = String(meta.aquakartLogo || "")
+      .trim()
+      .toLowerCase();
+    if (tag === "present")
+      return { applied: false, variant: null, decidedBy: "drive-metadata" };
+    if (!config.logoPublicId)
+      return { applied: false, variant: null, decidedBy: "default" };
+    if (tag === "original" || tag === "white")
+      return { applied: true, variant: tag, decidedBy: "drive-metadata" };
+    return { applied: true, variant: "original", decidedBy: "default" };
+  }
+
+  // The file must sit in (or under) an allowed Aquakart banner folder.
+  // Folders the service account cannot see end that branch of the walk.
+  async function assertAllowedFolder(file) {
+    const allowed = new Set(config.drive.folderIds);
+    const seen = new Set();
+    let frontier = file.parents || [];
+    for (
+      let depth = 0;
+      depth <= config.drive.folderDepth && frontier.length;
+      depth += 1
+    ) {
+      if (frontier.some((id) => allowed.has(id))) return;
+      const next = [];
+      for (const id of frontier) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          try {
+            next.push(...((await drive.getFile(id)).parents || []));
+          } catch (error) {
+            if (
+              !["DRIVE_FILE_NOT_FOUND", "DRIVE_ACCESS_DENIED"].includes(
+                error?.code,
+              )
+            )
+              throw error;
+          }
+        }
+      }
+      frontier = next;
+    }
+    throw new BlogToolError(
+      "DRIVE_FOLDER_NOT_ALLOWED",
+      "That file is not inside the Aquakart banner folder; move it there (or share that folder with the import account) and retry",
+    );
+  }
+
+  async function bannerResult(blogId, media, extra) {
+    const blog = await loadBlog({ blogId });
+    const images = blog.titleImages || [];
+    const matches = images.length === 1 && images[0].id === media.publicId;
+    return {
+      blogId: String(blog._id),
+      mediaId: String(media._id),
+      imageUrl: images[0]?.secure_url || null,
+      originalImageUrl: media.secureUrl,
+      revision: revisionOf(blog),
+      blog: summary(blog),
+      titleImageAlt: blog.titleImageAlt || "",
+      image: {
+        format: media.format || null,
+        width: media.width ?? null,
+        height: media.height ?? null,
+        bytes: media.bytes ?? null,
+      },
+      ...extra,
+      verification: {
+        status: matches ? "verified" : "mismatch",
+        hasTitleImage: images.length > 0,
+        titleImageCount: images.length,
+        matchesImportedMedia: matches,
+      },
     };
   }
 
