@@ -56,6 +56,14 @@ router.post(
 // Before "/:id" so "mine" isn't read as an invoice id. Signed-in customer only.
 router.get("/mine", userAuth.isLoggedIn, publicInvoiceController.listMine);
 router.get("/", requireInvoiceAccess, publicInvoiceController.list);
+// Logged-out quick view for the sign-in screen; no access token needed.
+// The storefront proxies these from one server IP (and limits each visitor
+// itself), so this cap is per caller IP and mainly stops bulk scraping.
+router.get(
+  "/:id/preview",
+  limiter(15 * 60 * 1000, 200),
+  publicInvoiceController.previewById,
+);
 router.get("/:id", requireInvoiceAccess, publicInvoiceController.getById);
 router.post(
   "/:id/claim",

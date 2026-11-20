@@ -23,6 +23,7 @@ import {
   maskEmail,
   normalizeIndianPhone,
   signInvoiceAccessToken,
+  toInvoicePreview,
   validateEmail,
 } from "../utils/invoiceAccess.js";
 
@@ -537,6 +538,30 @@ const list = async (req, res) => {
   });
 };
 
+// Logged-out quick view (no access token). Non-personal fields only; see
+// toInvoicePreview. Rate limited in the route because ids are guessable.
+const previewById = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id) || !/^[a-f\d]{24}$/i.test(id)) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Invoice not found" });
+  }
+  const invoice = await AquaInvoice.findById(id)
+    .select(
+      "invoiceNo date createdAt paidStatus quotation po gst customerDetails.name products.productName products.productQuantity products.productPrice",
+    )
+    .lean();
+  if (!invoice) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Invoice not found" });
+  }
+  return res
+    .status(200)
+    .json({ success: true, preview: toInvoicePreview(invoice) });
+};
+
 const getById = async (req, res) => {
   const { id } = req.params;
   const scopeState = classifyInvoiceAccessScope(
@@ -1008,6 +1033,7 @@ export default {
   loginDirectAccess,
   list,
   getById,
+  previewById,
   claimById,
   updateEmailById,
   emailById,
