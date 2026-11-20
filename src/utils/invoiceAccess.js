@@ -176,3 +176,37 @@ export const buildEmailDeliveryDedupeKey = ({
     )
     .digest("hex");
 };
+
+const PREVIEW_PRODUCTS = 3;
+
+// "Ravi Kumar" -> "Ra•••": enough for the customer to recognise their own
+// invoice on the logged-out screen without revealing the name to others.
+export const maskFirstName = (name = "") => {
+  const first = String(name).trim().split(/\s+/)[0] || "";
+  if (!first) return "";
+  return `${first.slice(0, first.length > 3 ? 2 : 1)}•••`;
+};
+
+// Logged-out quick view for "Login to download invoice". Whitelisted fields
+// only: no phone, email, address, GST details, line prices or serials.
+export const toInvoicePreview = (invoice = {}) => {
+  const products = Array.isArray(invoice.products) ? invoice.products : [];
+  return {
+    invoiceNo: invoice.invoiceNo || String(invoice._id || ""),
+    date: invoice.date || invoice.createdAt || null,
+    paidStatus: invoice.paidStatus || "",
+    documentType: invoice.quotation
+      ? "quotation"
+      : invoice.po
+        ? "purchase-order"
+        : "invoice",
+    gst: invoice.gst === true,
+    customerName: maskFirstName(invoice.customerDetails?.name),
+    itemCount: products.length,
+    products: products.slice(0, PREVIEW_PRODUCTS).map((product) => ({
+      name: String(product?.productName || "Item").slice(0, 120),
+      quantity: Number(product?.productQuantity) || 1,
+    })),
+    total_price: getInvoiceProductPriceTotal(invoice),
+  };
+};
