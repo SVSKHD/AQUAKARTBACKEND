@@ -1,4 +1,8 @@
 import bcrypt from "bcrypt";
+import {
+  isSessionRevoked,
+  REVOKED_MESSAGE,
+} from "../services/auth/sessionRevocation.js";
 import jwt from "jsonwebtoken";
 import AquaEcomUser from "../models/user.js";
 import sendEmail from "../notifications/email/send-email.js";
@@ -484,6 +488,10 @@ const checkLogin = async (req, res) => {
   try {
     const token = req.header("Authorization").replace("Bearer ", "");
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (await isSessionRevoked(token))
+      return res
+        .status(401)
+        .json({ message: REVOKED_MESSAGE, code: "SESSION_REVOKED" });
     const user = await AquaEcomUser.findById(decoded._id).select("-password");
 
     if (!user) {

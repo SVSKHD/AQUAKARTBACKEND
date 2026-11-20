@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 import AquaEcomUser from "../models/user.js";
 import AquaAdminUser from "../models/crm/adminUser.js";
+import {
+  isSessionRevoked,
+  REVOKED_MESSAGE,
+} from "../services/auth/sessionRevocation.js";
 
 const isLoggedIn = async (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -18,7 +22,16 @@ const isLoggedIn = async (req, res, next) => {
     }
 
     // With its role, which decides things like unlimited AI chats.
-    const user = await AquaEcomUser.findById(decoded._id).populate("roleRef");
+    const [user, revoked] = await Promise.all([
+      AquaEcomUser.findById(decoded._id).populate("roleRef"),
+      isSessionRevoked(token),
+    ]);
+
+    if (revoked) {
+      return res
+        .status(401)
+        .json({ message: REVOKED_MESSAGE, code: "SESSION_REVOKED" });
+    }
 
     if (!user) {
       console.log("User not found in DB"); // Additional log for missing user
@@ -54,9 +67,14 @@ const customerOrAdmin = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (!decoded?._id)
       return res.status(401).json({ message: "Token is not valid" });
-    const customer = await AquaEcomUser.findById(decoded._id).populate(
-      "roleRef",
-    );
+    const [customer, revoked] = await Promise.all([
+      AquaEcomUser.findById(decoded._id).populate("roleRef"),
+      isSessionRevoked(token),
+    ]);
+    if (revoked)
+      return res
+        .status(401)
+        .json({ message: REVOKED_MESSAGE, code: "SESSION_REVOKED" });
     if (customer) {
       req.user = customer;
       req.isAdmin = false;
