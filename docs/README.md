@@ -13,6 +13,7 @@ first. Read only the sections relevant to the task.
 | Understand recent changes or add a completed task record          | [CHANGELOG.md](CHANGELOG.md)                                                              |
 | Google/Firebase authentication                                    | [AUTH_GOOGLE_FIREBASE.md](AUTH_GOOGLE_FIREBASE.md)                                        |
 | Checkout, payments, coupons, referrals                            | [COMMERCE_PLATFORM_API.md](COMMERCE_PLATFORM_API.md)                                      |
+| PhonePe gateway: v1/v2 switch, credentials, webhook               | [PHONEPE_GATEWAY.md](PHONEPE_GATEWAY.md)                                                  |
 | Pre-invoices and offline payment links (`/pay/{token}`)           | [OFFLINE_PAYMENT_LINKS.md](OFFLINE_PAYMENT_LINKS.md)                                      |
 | Invoice reporting/export                                          | [INVOICE_REPORTS.md](INVOICE_REPORTS.md)                                                  |
 | Product maintenance reminders                                     | [PRODUCT_SERVICE_REMINDERS.md](PRODUCT_SERVICE_REMINDERS.md)                              |

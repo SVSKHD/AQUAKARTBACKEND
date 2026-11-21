@@ -120,3 +120,5 @@ quotations) use the same PhonePe service and webhook with
 - `API_BASE_URL` (defaults to `https://api.aquakart.co.in`)
 - Existing `PHONEPE_MERCHANTID`, `PHONEPE_KEY`
 - Optional `PHONEPE_KEY_INDEX`, `PHONEPE_BASE_URL`
+- PhonePe v2 (`PHONEPE_API_VERSION=v2` and its credentials): see
+  [PHONEPE_GATEWAY.md](PHONEPE_GATEWAY.md)

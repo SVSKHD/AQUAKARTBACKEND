@@ -5,6 +5,7 @@ import AquaInvoice from "../../models/crm/invoice.js";
 import AquaEcomUser from "../../models/user.js";
 import PaymentAttempt from "../../models/paymentAttempt.js";
 import PaymentGateway from "../../models/paymentGateway.js";
+import { isPhonePeConfigured } from "../gateways/phonepe.js";
 import OfflinePaymentLink from "../../models/offlinePaymentLink.js";
 
 // MongoDB implementation of the store used by the offline payment service
@@ -112,10 +113,7 @@ export const mongoOfflinePaymentStore = {
   isGatewayEnabled: async (key) => {
     const config = await PaymentGateway.findOne({ key }).lean();
     if (config) return Boolean(config.enabled);
-    return (
-      key === "phonepe" &&
-      Boolean(process.env.PHONEPE_MERCHANTID && process.env.PHONEPE_KEY)
-    );
+    return key === "phonepe" && isPhonePeConfigured();
   },
 
   // ---- Invoices and customers -----------------------------------------------
