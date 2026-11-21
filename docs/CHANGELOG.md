@@ -20,6 +20,28 @@ tests, or docs:
 
 ## 2026-11-21
 
+### Jenkinsfile: health check retries; secrets via env file
+
+- Request/problem: the deploy of PR #76 was marked FAILURE although the new
+  container came up: the check ran `curl /v1/status` once after a fixed 8 s,
+  before the app had connected to MongoDB and loaded aqua-env. The job's
+  inline script also passes every secret as `docker run -e NAME=value`, which
+  Jenkins prints in the build log.
+- Changes/result: new `Jenkinsfile` (same stages as the inline job). Verify
+  retries `/v1/status` every 2 s for up to 90 s and stops early if the
+  container exits; logs are printed only on failure. Secrets come from a
+  Secret-file credential via `--env-file`; every `sh` step starts with
+  `set +x`. Setup steps in `docs/DEPLOY_JENKINS.md`.
+- Files: `Jenkinsfile` (new), `docs/DEPLOY_JENKINS.md` (new),
+  `docs/README.md`.
+- Validation: static review only; the Jenkins job was not changed or run.
+  Live check of the previous deploy: `GET /v1/status` 200 and the new
+  PhonePe webhook route answering on 2026-11-21.
+- Limitations/follow-up: takes effect only after the job is switched to
+  "Pipeline script from SCM" and the `aquakart-backend-env` credential exists
+  (credential IDs may need adjusting). Secrets already printed in old build
+  logs still need rotating.
+
 ### PhonePe Standard Checkout v2 behind PHONEPE_API_VERSION
 
 - Request/problem: card and UPI payments fail on the PhonePe page for payment
