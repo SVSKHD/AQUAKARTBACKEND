@@ -38,6 +38,22 @@ const ACTIVE_ATTEMPT = ["created", "pending"];
 const FINAL_REFUND = ["refunded", "partially_refunded"];
 
 const id = (value) => (value ? String(value) : null);
+
+// A short, safe description of why the gateway refused: PhonePe's error code
+// and message (v1 or v2), or ours (not configured, sign-in failed).
+export const gatewayFailureReason = (error) => {
+  const data = error?.response?.data;
+  const code =
+    data?.code ||
+    (typeof error?.code === "string" && /^[A-Z0-9_]+$/.test(error.code)
+      ? error.code
+      : null) ||
+    (error?.status === 503 ? "NOT_CONFIGURED" : null) ||
+    "GATEWAY_CREATE_FAILED";
+  const message = String(data?.message || error?.message || "").slice(0, 300);
+  const cause = typeof error?.cause === "string" ? ` (${error.cause})` : "";
+  return { code: String(code).slice(0, 80), message: `${message}${cause}` };
+};
 const iso = (value) => (value ? new Date(value).toISOString() : null);
 
 export const createOfflinePaymentService = ({
@@ -952,16 +968,32 @@ export const createOfflinePaymentService = ({
           if (!result?.redirectUrl)
             throw new Error("No redirect URL from gateway");
         } catch (error) {
+          // PhonePe's reason, kept on the attempt and in the log so a failed
+          // start can be diagnosed (never the request or credentials).
+          const reason = gatewayFailureReason(error);
+          log.error("Offline payment could not start at the gateway", {
+            attemptId: id(attempt._id),
+            merchantTransactionId,
+            reason: reason.code,
+            message: reason.message,
+          });
           await store.updateAttempt(
             attempt._id,
             {},
             {
-              $set: { status: "failed" },
+              $set: {
+                status: "failed",
+                gatewayResponse: {
+                  error: reason.code,
+                  message: reason.message,
+                },
+              },
               $push: {
                 statusHistory: {
                   status: "failed",
                   at: now(),
                   source: "gateway-create",
+                  note: reason.code,
                 },
               },
             },
@@ -970,6 +1002,7 @@ export const createOfflinePaymentService = ({
             error?.status === 503 ? 503 : 502,
             "GATEWAY_ERROR",
             "Could not start the payment. Please try again.",
+            { reason: reason.code },
           );
         }
         await store.updateAttempt(
