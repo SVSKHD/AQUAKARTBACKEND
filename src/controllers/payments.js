@@ -16,6 +16,7 @@ import { writeAudit } from "../services/audit.js";
 import { installationFrom } from "../services/checkout.js";
 import { qualifyReferralForPaidOrder } from "../services/referrals.js";
 import { offlinePayments } from "../services/offlinePayments/index.js";
+import { gatewayFailureReason } from "../services/offlinePayments/service.js";
 import AquaEcomUser from "../models/user.js";
 import {
   fireAndForget,
@@ -175,6 +176,14 @@ export const createPayment = async (req, res) => {
       },
     });
   } catch (error) {
+    // Gateway refusals are logged with PhonePe's reason (never the request).
+    if (!error.status || error.status >= 500) {
+      const reason = gatewayFailureReason(error);
+      console.error("Checkout payment could not start", {
+        reason: reason.code,
+        message: reason.message,
+      });
+    }
     return res
       .status(error.status || 502)
       .json({ success: false, message: error.message });

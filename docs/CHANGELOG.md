@@ -20,6 +20,27 @@ tests, or docs:
 
 ## 2026-11-21
 
+### Keep PhonePe's reason when a payment can't start
+
+- Request/problem: a payment-link "initiate" failed after the v2 switch, but
+  the reason was thrown away: the customer saw "Could not start the payment",
+  nothing was logged, and the attempt kept no error. `statusHistory` entries
+  also silently dropped their `note` (not in the schema).
+- Changes/result: on a gateway refusal the payment-link service logs and
+  stores PhonePe's code and message on the attempt (`gatewayResponse.error`
+  / `.message`, `statusHistory[].note`) and returns
+  `details.reason` (for example `PHONEPE_AUTH_FAILED`, `KEY_NOT_CONFIGURED`)
+  with the 502. Checkout (`POST /v1/payments`) logs the same. `note` added to
+  the `PaymentAttempt.statusHistory` schema. No request bodies, headers or
+  credentials are logged.
+- Files: `src/services/offlinePayments/service.js`
+  (`gatewayFailureReason`), `src/controllers/payments.js`,
+  `src/models/paymentAttempt.js`, `test/offlinePayments.test.js`.
+- Validation: `npm test` 450/451 (same pre-existing `invoiceViews` failure);
+  2 new tests.
+- Limitations/follow-up: the failing initiate itself is not diagnosed yet;
+  the next failure will show its reason.
+
 ### Jenkinsfile: health check retries; secrets via env file
 
 - Request/problem: the deploy of PR #76 was marked FAILURE although the new

@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { createOfflinePaymentService } from "../src/services/offlinePayments/service.js";
+import {
+  createOfflinePaymentService,
+  gatewayFailureReason,
+} from "../src/services/offlinePayments/service.js";
 import { deriveLinkTokenKey } from "../src/services/offlinePayments/rules.js";
 import { createPreInvoiceService } from "../src/services/offlinePayments/preInvoices.js";
 import { hashLinkToken } from "../src/services/offlinePayments/rules.js";
@@ -732,6 +735,52 @@ test("initiate refuses out-of-stock items before payment and handles gateway err
   );
   assert.equal(env.store.db.attempts[0].status, "failed");
   assert.equal(env.store.db.links[0].initiateLockUntil, null);
+});
+
+test("a refused payment start keeps PhonePe's reason on the attempt", async () => {
+  const env = setup();
+  const { token, user } = await payReady(env, "quotation", addQuotation(env));
+  env.gateway.create = async () => {
+    throw Object.assign(new Error("PhonePe sign-in failed. Check the keys."), {
+      status: 502,
+      code: "PHONEPE_AUTH_FAILED",
+      cause: "INVALID_CLIENT",
+    });
+  };
+  const error = await env.payments
+    .initiate(token, { _id: user._id })
+    .catch((e) => e);
+  assert.equal(error.code, "GATEWAY_ERROR");
+  assert.deepEqual(error.details, { reason: "PHONEPE_AUTH_FAILED" });
+  const [attempt] = env.store.db.attempts;
+  assert.equal(attempt.gatewayResponse.error, "PHONEPE_AUTH_FAILED");
+  assert.match(attempt.gatewayResponse.message, /INVALID_CLIENT/);
+  assert.equal(attempt.statusHistory.at(-1).note, "PHONEPE_AUTH_FAILED");
+});
+
+test("gatewayFailureReason prefers PhonePe's own code and never needs the request", () => {
+  const axiosLike = Object.assign(
+    new Error("Request failed with status code 400"),
+    {
+      code: "ERR_BAD_REQUEST",
+      response: {
+        data: { code: "KEY_NOT_CONFIGURED", message: "Key not configured" },
+      },
+      config: { headers: { "X-VERIFY": "secret" } },
+    },
+  );
+  const reason = gatewayFailureReason(axiosLike);
+  assert.equal(reason.code, "KEY_NOT_CONFIGURED");
+  assert.equal(reason.message, "Key not configured");
+  assert.ok(!JSON.stringify(reason).includes("secret"));
+  assert.equal(
+    gatewayFailureReason(Object.assign(new Error("x"), { status: 503 })).code,
+    "NOT_CONFIGURED",
+  );
+  assert.equal(
+    gatewayFailureReason(new Error("down")).code,
+    "GATEWAY_CREATE_FAILED",
+  );
 });
 
 // ---- Verification and finalisation ------------------------------------------

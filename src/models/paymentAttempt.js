@@ -68,7 +68,13 @@ const PaymentAttemptSchema = new mongoose.Schema(
     redirectUrl: String,
     gatewayResponse: mongoose.Schema.Types.Mixed,
     statusHistory: [
-      { status: String, at: { type: Date, default: Date.now }, source: String },
+      {
+        status: String,
+        at: { type: Date, default: Date.now },
+        source: String,
+        // Why, when there is a reason (gateway error code, rejected checks).
+        note: String,
+      },
     ],
     verifiedAt: Date,
   },
