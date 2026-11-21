@@ -37,6 +37,9 @@ const query = (doc) => {
 
 const startApp = async (t) => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-orders";
+  // The shared PhonePe gateway (v1) refuses to run unconfigured.
+  process.env.PHONEPE_MERCHANTID ||= "TESTMERCHANT";
+  process.env.PHONEPE_KEY ||= "test-salt";
   const app = express();
   app.use(express.json());
   app.use("/v1", orderRoutes);
@@ -270,8 +273,8 @@ test("POST /order/cod: login required; user from the token; prices and totals fr
 test("POST /order/pay: login required; PhonePe is asked for the server total", async (t) => {
   const { call, saved, outbound } = await startApp(t);
   t.mock.method(AquaOrder, "exists", async () => null);
-  t.mock.method(axios, "request", async (options) => {
-    outbound.push({ method: "phonepe-pay", options });
+  t.mock.method(axios, "post", async (url, data) => {
+    outbound.push({ method: "phonepe-pay", options: { url, data } });
     return {
       data: {
         data: { instrumentResponse: { redirectInfo: { url: "https://pay" } } },

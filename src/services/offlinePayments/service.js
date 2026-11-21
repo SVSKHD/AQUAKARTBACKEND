@@ -946,6 +946,8 @@ export const createOfflinePaymentService = ({
             amount,
             phone: r.snapshot.phone,
             redirectUrl: `${payUrl(token)}?return=1`,
+            // v2 only: PhonePe closes the order when our attempt expires.
+            expireAfterSeconds: config.attemptTtlMinutes * 60,
           });
           if (!result?.redirectUrl)
             throw new Error("No redirect URL from gateway");

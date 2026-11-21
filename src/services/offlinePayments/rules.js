@@ -163,7 +163,8 @@ export const paymentModes = (instrumentType) => {
   const type = String(instrumentType || "").toUpperCase();
   if (type.startsWith("UPI")) return { invoice: "upi", document: "UPI" };
   if (type.includes("CARD")) return { invoice: "card", document: "Card" };
-  if (type === "NETBANKING")
+  // v1 says NETBANKING, v2 NET_BANKING.
+  if (type === "NETBANKING" || type === "NET_BANKING")
     return { invoice: "bank_transfer", document: "Bank Transfer" };
   return { invoice: "online", document: "Other" };
 };

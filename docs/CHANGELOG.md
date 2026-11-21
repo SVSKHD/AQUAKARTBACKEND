@@ -18,6 +18,69 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-21
+
+### PhonePe Standard Checkout v2 behind PHONEPE_API_VERSION
+
+- Request/problem: card and UPI payments fail on the PhonePe page for payment
+  links (and possibly checkout) on every device. The backend used PhonePe's
+  v1 API (`/pg/v1/pay`, salt-key `X-VERIFY`), which PhonePe has deprecated.
+  The exact PhonePe error has not been seen yet, so v1 is the likely cause,
+  not a confirmed one.
+- Changes/result: `src/services/gateways/phonepe.js` now has v1 (default) and
+  v2 (Standard Checkout: OAuth token, `/checkout/v2/pay`,
+  `/checkout/v2/order/{id}/status`) behind the same
+  `createPhonePePayment` / `verifyPhonePePayment` interface, chosen by
+  `PHONEPE_API_VERSION`. v2 token cached per process, renewed 5 min before
+  expiry, one retry on 401. New `isPhonePeConfigured()` replaces the
+  `PHONEPE_MERCHANTID && PHONEPE_KEY` checks. The legacy `/v1/order/pay` and
+  `/v1/phonepe-verify/:id` now use the shared gateway (logic moved into
+  `reconcileLegacyOrder`; behaviour unchanged on v1). New v2 webhook
+  `POST /v1/webhooks/payments/phonepe` (dashboard-configured, optional SHA
+  auth via `PHONEPE_WEBHOOK_USERNAME/PASSWORD`) settles checkout, payment
+  link and legacy orders from the status API. Payment links pass
+  `expireAfter` = attempt TTL. `paymentModes` accepts v2 `NET_BANKING`.
+- Files: `src/services/gateways/phonepe.js`,
+  `src/controllers/phonepeGateway.js`, `src/controllers/payments.js`,
+  `src/routes/payments.js`, `src/services/offlinePayments/mongoStore.js`,
+  `src/services/offlinePayments/rules.js`,
+  `src/services/offlinePayments/service.js`, `test/phonepeGateway.test.js`
+  (new), `test/legacyOrders.test.js`, `.env.example`,
+  `docs/PHONEPE_GATEWAY.md` (new), `docs/README.md`, `docs/PROJECT_MAP.md`,
+  `docs/COMMERCE_PLATFORM_API.md`.
+- Validation: `node --test test/phonepeGateway.test.js` 14/14;
+  `npm test` 448/449 (the failing `invoiceViews` "builds separate admin and
+  customer invoice destinations from one id" also fails on `main`);
+  `npm run swagger` lists the new route under Payments (generated file not
+  committed: it also carries unrelated drift). v2 request shapes come from
+  PhonePe's developer docs (Authorization, Create Payment, Order Status,
+  Webhook pages, read 2026-11-21); no call to PhonePe was made.
+- Limitations/follow-up: needs v2 credentials from PhonePe, the dashboard
+  webhook, and `PHONEPE_API_VERSION=v2` + restart. Not verified against
+  PhonePe sandbox or production. The webhook `Authorization` format is only
+  described as SHA256(username:password) in the docs; hex with or without a
+  `SHA256 ` prefix is accepted. `POST /v1/crm/phonepe/payment-link`
+  (`/v3/payLink/init`) stays v1.
+
+### Customer sign-out revokes the session token (logged late)
+
+- Request/problem: `POST /v1/auth/logout` did nothing, so a signed-out
+  customer's 30-day token kept working. Merged 2026-11-20 as PR #75 without a
+  log entry; recorded here.
+- Changes/result: `RevokedSession` (token SHA-256, TTL to the token's expiry);
+  customer auth middleware refuses revoked tokens (401 `SESSION_REVOKED`);
+  logout needs no valid session and always answers 200 (503 if the revoke
+  can't be stored).
+- Files: `src/models/revokedSession.js`,
+  `src/services/auth/sessionRevocation.js`, `src/controllers/googleAuth.js`,
+  `src/routes/googleAuth.js`, `src/middleware/user.js`,
+  `src/middleware/optionalUser.js`, `src/middleware/googleSession.js`,
+  `src/controllers/user.js`, `test/sessionRevocation.test.js`.
+- Validation: at the time, `npm test` 434/435 (same pre-existing failure).
+  Live: `POST https://api.aquakart.co.in/v1/auth/logout` without a token
+  answered 200 on 2026-11-20.
+- Limitations/follow-up: staff (CRM) tokens are not covered.
+
 ## 2026-11-20
 
 ### Payment-success notifications: admin order alert, order confirmation, payment receipt

@@ -7,8 +7,11 @@ import Coupon from "../models/coupon.js";
 import CouponRedemption from "../models/couponRedemption.js";
 import {
   createPhonePePayment,
+  isPhonePeConfigured,
+  isPhonePeWebhookAuthorized,
   verifyPhonePePayment,
 } from "../services/gateways/phonepe.js";
+import { reconcileLegacyOrder } from "./phonepeGateway.js";
 import { writeAudit } from "../services/audit.js";
 import { installationFrom } from "../services/checkout.js";
 import { qualifyReferralForPaidOrder } from "../services/referrals.js";
@@ -37,9 +40,7 @@ export const methods = async (_req, res) => {
     .sort({ priority: 1 })
     .select("key displayName methods")
     .lean();
-  const legacyPhonePeConfigured = Boolean(
-    process.env.PHONEPE_MERCHANTID && process.env.PHONEPE_KEY,
-  );
+  const legacyPhonePeConfigured = isPhonePeConfigured();
   const data = configured.length
     ? configured
     : legacyPhonePeConfigured
@@ -90,9 +91,7 @@ export const createPayment = async (req, res) => {
     const gatewayConfig = await PaymentGateway.findOne({ key }).lean();
     if (
       (gatewayConfig && !gatewayConfig.enabled) ||
-      (!gatewayConfig &&
-        key === "phonepe" &&
-        (!process.env.PHONEPE_MERCHANTID || !process.env.PHONEPE_KEY))
+      (!gatewayConfig && key === "phonepe" && !isPhonePeConfigured())
     ) {
       return res
         .status(503)
@@ -264,6 +263,22 @@ const finalize = async (attempt, verification, source) => {
   return attempt;
 };
 
+// A webhook only says "look at this payment": the status always comes from
+// PhonePe's status API with our credentials, never from the request body.
+const settleAttempt = async (attempt, source) => {
+  const verification = await verifyPhonePePayment(
+    attempt.merchantTransactionId,
+  );
+  if (isOffline(attempt))
+    return offlinePayments.processVerification(
+      plainAttempt(attempt),
+      verification,
+      source,
+    );
+  return finalize(attempt, verification, source);
+};
+
+// v1: PhonePe calls the callbackUrl set on each payment.
 export const phonePeWebhook = async (req, res) => {
   try {
     const attempt = await PaymentAttempt.findOne({
@@ -274,21 +289,56 @@ export const phonePeWebhook = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Payment not found" });
-    const verification = await verifyPhonePePayment(
-      attempt.merchantTransactionId,
-    );
-    if (isOffline(attempt)) {
-      await offlinePayments.processVerification(
-        plainAttempt(attempt),
-        verification,
-        "phonepe-webhook-verified",
-      );
-      return res.json({ success: true });
-    }
-    await finalize(attempt, verification, "phonepe-webhook-verified");
+    await settleAttempt(attempt, "phonepe-webhook-verified");
     return res.json({ success: true });
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const MERCHANT_ORDER_ID = /^[A-Za-z0-9_-]{1,63}$/;
+let warnedUnauthenticatedWebhook = false;
+
+// v2: one webhook for every payment, set up on the PhonePe Business
+// dashboard (events checkout.order.completed / checkout.order.failed) and
+// pointed at POST /v1/webhooks/payments/phonepe. Covers checkout and payment
+// link attempts, and legacy /checkout orders (no PaymentAttempt).
+export const phonePeWebhookV2 = async (req, res) => {
+  const authorized = isPhonePeWebhookAuthorized(req.get("authorization"));
+  if (authorized === false)
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  if (authorized === null && !warnedUnauthenticatedWebhook) {
+    warnedUnauthenticatedWebhook = true;
+    console.warn(
+      "PhonePe webhook credentials are not set (PHONEPE_WEBHOOK_USERNAME/PASSWORD); relying on the status API check only.",
+    );
+  }
+  const merchantOrderId = String(req.body?.payload?.merchantOrderId || "");
+  if (!MERCHANT_ORDER_ID.test(merchantOrderId))
+    return res
+      .status(400)
+      .json({ success: false, message: "merchantOrderId is missing" });
+  try {
+    const attempt = await PaymentAttempt.findOne({
+      merchantTransactionId: merchantOrderId,
+      gateway: "phonepe",
+    });
+    if (attempt) {
+      await settleAttempt(attempt, "phonepe-webhook-verified");
+      return res.json({ success: true });
+    }
+    if (await Order.exists({ transactionId: merchantOrderId })) {
+      const { status } = await reconcileLegacyOrder(merchantOrderId);
+      // 5xx asks PhonePe to retry; anything else is final for this event.
+      return res.status(status >= 500 ? status : 200).json({
+        success: status < 400,
+      });
+    }
+    // Not ours to settle (or already removed): acknowledge so it isn't retried.
+    return res.json({ success: true, ignored: true });
+  } catch (error) {
+    console.error("PhonePe webhook failed:", error?.message || error);
+    return res.status(500).json({ success: false });
   }
 };
 
