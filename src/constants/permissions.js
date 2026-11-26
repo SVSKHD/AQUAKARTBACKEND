@@ -46,6 +46,15 @@ export const PERMISSIONS = Object.freeze([
   "jobs.manage",
   "settings.read",
   "settings.manage",
+  // Transit (docs/TRANSIT.md). A transporter role gets transit.operate only:
+  // its own submissions, collections and payout status. transit.read sees
+  // every transporter's records and reports; transit.manage edits pricing,
+  // warehouse, benchmarks, verifies collections and records corrections;
+  // transit.settle pays transporters (never their own payouts).
+  "transit.operate",
+  "transit.read",
+  "transit.manage",
+  "transit.settle",
 ]);
 
 export const SUPER_ADMIN_ROLE = "super-admin";

@@ -327,19 +327,9 @@
     "/v1/auth/logout": {
       "post": {
         "description": "",
-        "parameters": [
-          {
-            "name": "Authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized"
+          "default": {
+            "description": ""
           }
         },
         "tags": ["Auth"]
@@ -3157,20 +3147,11 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
-          },
           "400": {
             "description": "Bad Request"
           },
-          "404": {
-            "description": "Not Found"
-          },
           "500": {
             "description": "Internal Server Error"
-          },
-          "502": {
-            "description": "Bad Gateway"
           }
         },
         "tags": ["Orders"]
@@ -4578,6 +4559,26 @@
           },
           "404": {
             "description": "Not Found"
+          }
+        },
+        "tags": ["Payments"]
+      }
+    },
+    "/v1/webhooks/payments/phonepe": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal Server Error"
           }
         },
         "tags": ["Payments"]
@@ -6944,6 +6945,28 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        },
+        "tags": ["Invoices / Public"]
+      }
+    },
+    "/v1/invoices/public/{id}/preview": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "tags": ["Invoices / Public"]
@@ -15241,6 +15264,34 @@
         "tags": ["General"]
       }
     },
+    "/v1/crm/ai/invoice/quick-draft": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "tags": ["General"]
+      }
+    },
     "/v1/crm/ai/invoice/sessions": {
       "get": {
         "description": "",
@@ -16344,6 +16395,338 @@
             }
           }
         }
+      }
+    },
+    "/v1/crm/transit/parse": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/preview": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}/collections": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}/invoice-delivery/retry": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/payouts/mine": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/warehouse": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      },
+      "put": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/pricing": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/pricing/{id}": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/benchmarks": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      },
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/benchmarks/{id}": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/comparisons": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}/collections/{collectionId}/review": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}/payment-exception": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}/corrections": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/transits/{id}/cancel": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/settlements": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      },
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
+      }
+    },
+    "/v1/crm/transit/reports/summary": {
+      "get": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "tags": ["CRM / Transit"]
       }
     },
     "/v1/admin/permissions": {
@@ -18165,6 +18548,10 @@
     {
       "name": "CRM / Stock",
       "description": "CRM / Stock endpoints"
+    },
+    {
+      "name": "CRM / Transit",
+      "description": "CRM / Transit endpoints"
     },
     {
       "name": "CRM / Users",

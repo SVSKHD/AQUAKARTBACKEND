@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { nanoid } from "nanoid";
-import AquaInvoice from "../../models/crm/invoice.js";
+import AquaInvoice, {
+  stripTransitOwnedFields,
+} from "../../models/crm/invoice.js";
 import AquaStock from "../../models/crm/stock.js";
 import NotificationLog from "../../models/crm/notificationLog.js";
 import { deliverInvoiceWithSmsFallback } from "../../services/invoiceSharing/invoiceDelivery.js";
@@ -319,7 +321,10 @@ const createInvoice = async (req, res) => {
         .status(400)
         .json({ status: false, message: "Validation failed", errors });
 
-    const { invoice, whatsappDelivery } = await persistInvoice(req.body);
+    // Transit links and delivery snapshots are only written by Transit.
+    const { invoice, whatsappDelivery } = await persistInvoice(
+      stripTransitOwnedFields({ ...req.body }),
+    );
     res.status(201).json({
       ...invoice,
       ...buildInvoiceViewLinks(invoice._id, invoice),
