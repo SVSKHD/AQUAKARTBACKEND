@@ -46,12 +46,26 @@ export const requirePermission = (...permissions) => [
       )
     )
       return next();
-    return res
-      .status(403)
-      .json({
-        success: false,
-        message: "Insufficient permission",
-        required: permissions,
-      });
+    return res.status(403).json({
+      success: false,
+      message: "Insufficient permission",
+      required: permissions,
+    });
+  },
+];
+
+// Like requirePermission, but any one of the permissions is enough.
+export const requireAnyPermission = (...permissions) => [
+  authenticateStaff,
+  (req, res, next) => {
+    if (
+      permissions.some((permission) => staffHasPermission(req.user, permission))
+    )
+      return next();
+    return res.status(403).json({
+      success: false,
+      message: "Insufficient permission",
+      requiredAny: permissions,
+    });
   },
 ];

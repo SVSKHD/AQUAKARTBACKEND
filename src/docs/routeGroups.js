@@ -32,6 +32,7 @@ const labels = {
   preInvoice: "Pre-invoices & Payment Links",
   offlinePayments: "Payments / Offline Links",
   socialPosts: "Social Posts",
+  transit: "Transit",
 };
 const humanize = (name) =>
   labels[name] ||

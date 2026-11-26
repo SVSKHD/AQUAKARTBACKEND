@@ -65,6 +65,7 @@ import AIRoutes from "./src/routes/ai.js";
 import CRMAIRoutes from "./src/routes/crm/ai.js";
 import CRMScheduledJobRoutes from "./src/routes/crm/scheduledJobs.js";
 import CRMAquaEnvRoutes from "./src/routes/crm/aquaEnv.js";
+import CRMTransitRoutes from "./src/routes/crm/transit.js";
 import McpRoutes, { mcpOAuthRouter } from "./src/routes/mcp.js";
 import { jsonErrorHandler } from "./src/middleware/jsonErrors.js";
 
@@ -192,6 +193,7 @@ app.use("/v1/crm/whatsapp", CRMWhatsAppRoutes);
 app.use("/v1/crm/ai", CRMAIRoutes);
 app.use("/v1/crm/jobs", CRMScheduledJobRoutes);
 app.use("/v1/crm/env", CRMAquaEnvRoutes);
+app.use("/v1/crm/transit", CRMTransitRoutes);
 app.use("/v1/admin", AccessControlRoutes);
 app.use("/v1/admin/coupons", AdminCouponRoutes);
 app.use("/v1/admin", AdminReferralRoutes);

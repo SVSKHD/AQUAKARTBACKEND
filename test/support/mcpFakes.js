@@ -65,6 +65,8 @@ export const matches = (doc, query = {}) =>
           return value !== null && value !== undefined && value < operand;
         if (op === "$lte")
           return value !== null && value !== undefined && value <= operand;
+        if (op === "$gte")
+          return value !== null && value !== undefined && value >= operand;
         if (op === "$gt")
           return value !== null && value !== undefined && value > operand;
         return false;

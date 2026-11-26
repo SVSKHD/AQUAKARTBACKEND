@@ -89,6 +89,19 @@ const AquaInvoiceSchema = new mongoose.Schema(
     // the partial index below), so one pre-invoice can never get two invoices.
     sourcePreInvoiceId: { type: ObjectId, ref: "AquaPreInvoice" },
     sourcePreInvoiceNo: { type: String },
+    // Set when a transporter created the invoice through Transit. Unique (see
+    // the partial index below): one transit can never get two invoices.
+    sourceTransitId: { type: ObjectId, ref: "AquaTransit" },
+    // Delivery snapshot copied from the transit. Not editable through invoice
+    // updates; only the audited transit correction may change it.
+    transitDelivery: {
+      address: { type: String },
+      warehouse: { lat: Number, lng: Number, name: String },
+      destination: { lat: Number, lng: Number, source: String },
+      distanceKm: { type: Number },
+      provider: { type: String },
+      snapshotHash: { type: String },
+    },
     productId: { type: ObjectId, ref: "AquaProduct" },
     paymentType: { type: String },
     migrated: { type: Boolean, default: false, index: true },
@@ -111,6 +124,44 @@ AquaInvoiceSchema.index(
     partialFilterExpression: { sourcePreInvoiceId: { $type: "objectId" } },
   },
 );
+
+AquaInvoiceSchema.index(
+  { sourceTransitId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { sourceTransitId: { $type: "objectId" } },
+  },
+);
+
+// Fields owned by Transit. Ordinary invoice updates (the CRM edit form sends
+// the whole invoice back) silently drop them; only a transit correction
+// (query option transitCorrection: true) may write them.
+export const TRANSIT_OWNED_INVOICE_PATHS = [
+  "sourceTransitId",
+  "transitDelivery",
+];
+
+export const stripTransitOwnedFields = (update = {}) => {
+  const owned = (key) =>
+    TRANSIT_OWNED_INVOICE_PATHS.some(
+      (path) => key === path || key.startsWith(`${path}.`),
+    );
+  for (const key of Object.keys(update)) {
+    if (key.startsWith("$") && update[key] && typeof update[key] === "object") {
+      for (const inner of Object.keys(update[key]))
+        if (owned(inner)) delete update[key][inner];
+    } else if (owned(key)) delete update[key];
+  }
+  return update;
+};
+
+function protectTransitFields() {
+  if (this.getOptions().transitCorrection === true) return;
+  stripTransitOwnedFields(this.getUpdate() || {});
+}
+AquaInvoiceSchema.pre("findOneAndUpdate", protectTransitFields);
+AquaInvoiceSchema.pre("updateOne", protectTransitFields);
+AquaInvoiceSchema.pre("updateMany", protectTransitFields);
 
 AquaInvoiceSchema.pre("save", function normalizeInvoiceOwnership() {
   this.customerPhoneNormalized = normalizeIndianPhone(

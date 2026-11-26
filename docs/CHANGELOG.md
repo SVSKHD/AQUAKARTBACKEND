@@ -18,6 +18,80 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-23
+
+### Transit V1: transporter deliveries, pricing, payments and settlement
+
+- Request/problem: transporters need to turn a free-text delivery note into a
+  customer invoice with a road-distance transport charge from the warehouse,
+  record what the customer paid, and get settled; admins need editable
+  pricing, verification, settlement, rate comparisons and reports.
+- Changes/result: new `/v1/crm/transit` module (docs/TRANSIT.md). Reuses
+  `persistInvoice`/`validateInvoicePayload`/`assertInvoiceStock` (invoice
+  numbering and stock), the CRM quick-paste Gemini extractor
+  (`buildQuickDraft`, `loadQuickCatalog`, `loadStock`), `toInvoicePayload`,
+  `deliverInvoiceWithSmsFallback`, `writeAudit`, and the storefront-account
+  invoice linking rule. New reusable pieces: routing provider interface with a
+  Google Maps implementation (`src/services/routing/`), pure pricing/payment
+  rules, rate comparison service, `requireAnyPermission` middleware. Rate
+  cards, warehouse and Porter/Rapido benchmarks live in MongoDB; the initial
+  V1 card (₹350 / ₹400 / ₹500, ₹100 cash incentive) is written only by
+  `npm run transit:seed-pricing -- --apply`. Transit route/price snapshots are
+  immutable outside an audited correction (model guard); invoices get optional
+  `sourceTransitId` (partial unique index) and `transitDelivery`, which invoice
+  create/update drop. New permissions `transit.operate/read/manage/settle`.
+  Regenerated `swagger-output.json`; it also picked up three existing routes
+  missing from the committed file (`/v1/webhooks/payments/phonepe`,
+  `/v1/invoices/public/{id}/preview`, `/v1/crm/ai/invoice/quick-draft`).
+- Files: `app.js`, `package.json`, `.env.example`, `swagger-output.json`,
+  `src/constants/permissions.js`, `src/middleware/permissions.js`,
+  `src/models/crm/invoice.js`, `src/controllers/crm/invoice.js`,
+  `src/docs/routeGroups.js`, `src/models/transit/*`, `src/services/transit/*`,
+  `src/services/routing/*`, `src/controllers/crm/transit.js`,
+  `src/routes/crm/transit.js`, `src/scripts/transit-seed-pricing.js`,
+  `test/transit.test.js`, `test/support/mcpFakes.js` (`$gte`),
+  `docs/TRANSIT.md`, `docs/PROJECT_MAP.md`.
+- Validation: `node --test test/transit.test.js`: 33/33 pass (in-memory store,
+  fake routing/Gemini/WhatsApp; route permission tests over HTTP with mocked
+  staff lookup). Model hooks checked against real Mongoose query objects
+  without a database. `npm test`: 483/484; the one failure is the existing
+  `test/invoiceViews.test.js` "builds separate admin and customer invoice
+  destinations from one id". `npm run swagger`: 19 transit operations under
+  "CRM / Transit". Not run: anything against MongoDB, Google Maps, Gemini or
+  Fast2SMS; nothing deployed or seeded.
+- Limitations/follow-up: needs `GOOGLE_MAPS_API_KEY` (Geocoding + Routes
+  API), the warehouse location, a rate card and a Transporter role before use.
+  No CRM screens yet. No official Porter/Rapido quote API (benchmarks are
+  admin-entered). UPI/card collections are verified by admins, not by the
+  payment provider. Correcting a delivery does not re-send the invoice.
+
+### Transit: keyless OpenStreetMap routing as the default
+
+- Request/problem: no Google Maps API key will be provided, so Transit could
+  not price any delivery (`ROUTING_NOT_CONFIGURED`).
+- Changes/result: new routing provider `osm` (`src/services/routing/osm.js`):
+  Nominatim geocoding (India only, biased 60 km around the warehouse, one
+  request per second queued per process, identifying User-Agent) and OSRM car
+  routing (`routing.openstreetmap.de`). Same rules as the Google provider:
+  imprecise (place_rank < 28) or several distinct matches are ambiguous, a
+  failed or missing route blocks pricing. Also refuses a route when either end
+  snaps more than 500 m to a road, so a distance is never short. OSRM returns
+  the same encoded-polyline format as Google. `TRANSIT_ROUTING_PROVIDER` now
+  defaults to `osm`; `google` still works with a key. Optional
+  `TRANSIT_NOMINATIM_URL`, `TRANSIT_OSRM_URL`, `TRANSIT_OSM_USER_AGENT`.
+- Files: `src/services/routing/osm.js` (new), `src/services/routing/index.js`,
+  `test/transit.test.js`, `.env.example`, `docs/TRANSIT.md`,
+  `docs/PROJECT_MAP.md`.
+- Validation: `node --test test/transit.test.js`: 34/34 pass (new test with a
+  fake HTTP client: default provider, classification, throttle, lng/lat order,
+  no-route, off-road snap, provider error, network failure). `npm test`:
+  484/485; the one failure is the existing `test/invoiceViews.test.js`
+  "builds separate admin and customer invoice destinations from one id"
+  (fails the same way on `main`). Not run: any live call to Nominatim or OSRM.
+- Limitations/follow-up: public OSM servers have no uptime guarantee and OSM
+  address coverage is thin outside cities, so most deliveries will need a
+  pinned location; self-host if volume grows.
+
 ## 2026-11-21
 
 ### Keep PhonePe's reason when a payment can't start
