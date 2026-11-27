@@ -12,6 +12,7 @@ import {
   QUICK_DRAFT_MAX_CHARS,
   buildQuickDraft,
 } from "../../services/aiInvoice/quickDraft.js";
+import { readInvoiceDocument } from "../../services/aiInvoice/readDocument.js";
 import { runAgentTurn } from "../../services/aiInvoice/agent.js";
 import {
   MAX_ITEMS,
@@ -471,6 +472,25 @@ const quickDraft = async (req, res) => {
   }
 };
 
+// Quick invoice from a photo or PDF: file -> text the CRM sends to quick-draft.
+// Read-only. The file is never written to disk, the database or logs: it
+// lives in memory for this request and is dropped as soon as it is read.
+const readDocument = async (req, res) => {
+  try {
+    const data = await readInvoiceDocument(req.file, {
+      generate: generateContent,
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    if (error?.statusCode && !(error instanceof GeminiError)) {
+      return fail(res, error.statusCode, error.message);
+    }
+    return sendAgentError(res, error);
+  } finally {
+    if (req.file) req.file.buffer = null; // discard the image
+  }
+};
+
 // Product picker for the CRM draft form (same limited fields as the AI sees).
 const searchProducts = async (req, res) => {
   try {
@@ -494,6 +514,7 @@ const AIInvoiceOperations = {
   cancelSession,
   searchProducts,
   quickDraft,
+  readDocument,
 };
 
 export default AIInvoiceOperations;
