@@ -18,6 +18,38 @@ tests, or docs:
 - Limitations/follow-up: ... (or None).
 ```
 
+## 2026-11-27
+
+### Easy invoice drafts shared across devices, one editor at a time
+
+- Request/problem: the CRM Easy invoice page (/invoice/easy) kept drafts in one
+  browser only. Staff want every unfinished draft visible on any device, which
+  devices were used, and to be told when someone else is editing.
+- Changes/result: new `EasyInvoiceDraft` model and
+  `/v1/crm/easy-invoice-drafts` routes (`invoices.manage`): list open drafts
+  (all staff), create, get, save, heartbeat, claim (force = take over),
+  release, complete (with invoiceId) and discard. One editor at a time: the
+  `editor` lock is held by one staff member on one device and is free after
+  45 s without a heartbeat (`LOCK_TTL_MS`). Saves/heartbeats only match an open
+  draft whose live lock this device holds; lock changes compare-and-set on
+  `rev`. Each draft records the devices used (label, staff, first/last seen)
+  and the last 30 events (created, claimed, taken_over with who lost it,
+  released, completed, discarded). Responses never include other devices' ids;
+  they flag `thisDevice` instead. Content is the CRM page state, max 64 KB.
+- Files: `src/models/crm/easyInvoiceDraft.js`, `src/services/crm/easyInvoiceDrafts.js`,
+  `src/controllers/crm/easyInvoiceDrafts.js`, `src/routes/crm/easyInvoiceDrafts.js`,
+  `app.js`, `src/docs/routeGroups.js`, `test/easyInvoiceDrafts.test.js`,
+  `swagger-output.json`.
+- Validation: `node --test test/easyInvoiceDrafts.test.js` 12/12 pass (model
+  mocked, no database). Full `node --test`: 496 pass, 1 fail ("builds separate
+  admin and customer invoice destinations from one id"), which fails the same
+  way on `origin/main`. `npm run swagger` regenerated; the new paths are under
+  "CRM / Invoices / Easy invoice drafts". The committed swagger file was
+  already behind `main`, so its diff also contains other routes.
+- Limitations/follow-up: presence is by polling (CRM: 15 s heartbeat while
+  editing, 5 s while viewing, 10 s list), so notices can lag a few seconds; no
+  push/bell notification. Open drafts are never deleted automatically.
+
 ## 2026-11-23
 
 ### Transit V1: transporter deliveries, pricing, payments and settlement
