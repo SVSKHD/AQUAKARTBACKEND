@@ -14,6 +14,7 @@ const labels = {
   invoice: "Invoices",
   publicInvoice: "Invoices / Public",
   invoiceReports: "Invoices / Reports",
+  easyInvoiceDrafts: "Invoices / Easy invoice drafts",
   quotation: "Quotations",
   adminUser: "Users",
   customer: "Customers",
