@@ -1,8 +1,10 @@
 import express from "express";
+import multer from "multer";
 import AIOperations from "../../controllers/ai.js";
 import AIInvoice from "../../controllers/crm/aiInvoice.js";
 import AIChats from "../../controllers/crm/aiChats.js";
 import AIUsers from "../../controllers/crm/aiUsers.js";
+import { DOCUMENT_MAX_BYTES } from "../../services/aiInvoice/readDocument.js";
 import {
   authenticateStaff,
   staffHasPermission,
@@ -77,6 +79,14 @@ const invoice = express.Router();
 invoice.use(canManageInvoices);
 invoice.get("/products", AIInvoice.searchProducts);
 invoice.post("/quick-draft", AIInvoice.quickDraft);
+invoice.post(
+  "/read-document",
+  multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: DOCUMENT_MAX_BYTES, files: 1 },
+  }).single("file"),
+  AIInvoice.readDocument,
+);
 invoice.get("/sessions", AIInvoice.listSessions);
 invoice.post("/sessions", AIInvoice.createSession);
 invoice.get("/sessions/:id", AIInvoice.getSession);
