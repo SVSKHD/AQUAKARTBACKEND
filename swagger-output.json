@@ -15292,6 +15292,20 @@
         "tags": ["General"]
       }
     },
+    "/v1/crm/ai/invoice/read-document": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "tags": ["General"]
+      }
+    },
     "/v1/crm/ai/invoice/sessions": {
       "get": {
         "description": "",
